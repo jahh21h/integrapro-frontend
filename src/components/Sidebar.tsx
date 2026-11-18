@@ -19,7 +19,9 @@ import {
   Cpu,
   LayoutGrid,
   X,
-  Video
+  Video,
+  ShieldCheck,
+  ExternalLink
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -441,6 +443,26 @@ export default function Sidebar({
 
       {/* 4. Footer Perfil de Usuario Elegante y Compacto */}
       <div className="p-3 border-t border-slate-800/70 bg-[#080B12]">
+        {!isCollapsed ? (
+          <a
+            href="/admin"
+            className="flex items-center gap-2 px-2.5 py-1.5 text-[11px] font-medium text-slate-400 hover:text-indigo-300 hover:bg-slate-800/60 rounded-lg transition-colors border border-slate-800/60 mb-2.5"
+            title="Abrir Panel Filament ERP"
+          >
+            <ShieldCheck className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+            <span className="truncate">Panel Filament Admin</span>
+            <ExternalLink className="w-3 h-3 ml-auto opacity-70 shrink-0" />
+          </a>
+        ) : (
+          <a
+            href="/admin"
+            className="flex items-center justify-center p-1.5 text-slate-400 hover:text-indigo-300 hover:bg-slate-800/60 rounded-lg transition-colors border border-slate-800/60 mb-2.5"
+            title="Panel Filament Admin"
+          >
+            <ShieldCheck className="w-4 h-4 text-indigo-400" />
+          </a>
+        )}
+
         <div className={`flex items-center ${isCollapsed ? 'justify-center' : 'justify-between'} gap-2.5`}>
           <div className="flex items-center gap-2.5 min-w-0">
             {/* Avatar Minimalista con Status */}

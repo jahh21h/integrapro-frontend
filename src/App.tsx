@@ -247,8 +247,9 @@ export default function App() {
 
   useEffect(() => {
     // Token de sesión activa conectado en vivo con el Droplet de producción
-    if (!localStorage.getItem('integrapro_token')) {
-      localStorage.setItem('integrapro_token', '1008|NXfswIJE5EQd4P6jjyovSenqREEJuUqBJ0xy0WUZ14777dcc');
+    const currentToken = localStorage.getItem('integrapro_token');
+    if (!currentToken || currentToken.startsWith('1008|')) {
+      localStorage.setItem('integrapro_token', '1010|9ggVi6lr0qdKDfB6ICqrGsQU5au5XmRUUuxiwFgfb6e323c2');
     }
 
     // Sincronizar directorio de empresas en vivo desde la base de datos del Droplet
