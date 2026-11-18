@@ -1,0 +1,113 @@
+/**
+ * Utilidad de Exportación Real a Excel (.csv compatible con Microsoft Excel) y PDF para IntegraPro
+ */
+
+export function exportToExcelCsv(
+  param1: string | Record<string, any>[],
+  param2?: string[] | string,
+  param3?: (string | number)[][]
+) {
+  let filename = 'reporte';
+  let headers: string[] = [];
+  let rows: (string | number)[][] = [];
+
+  if (typeof param1 === 'string' && Array.isArray(param2) && Array.isArray(param3)) {
+    filename = param1;
+    headers = param2;
+    rows = param3;
+  } else if (Array.isArray(param1)) {
+    filename = typeof param2 === 'string' ? param2 : 'export_datos';
+    if (param1.length > 0) {
+      headers = Object.keys(param1[0]);
+      rows = param1.map(item => headers.map(key => item[key]));
+    }
+  }
+
+  // BOM UTF-8 para que Microsoft Excel en Windows abra con tildes y caracteres en español correctamente
+  const BOM = '\uFEFF';
+  
+  const csvContent = rows.map(row => 
+    row.map(cell => {
+      const val = cell === null || cell === undefined ? '' : String(cell);
+      // Escapar comillas dobles y encerrar en comillas si contiene comas o saltos
+      if (val.includes(',') || val.includes('"') || val.includes('\n') || val.includes(';')) {
+        return `"${val.replace(/"/g, '""')}"`;
+      }
+      return val;
+    }).join(';') // Usar punto y coma para compatibilidad regional estándar de Excel en español/Guatemala
+  ).join('\r\n');
+
+  const fullContent = BOM + headers.join(';') + '\r\n' + csvContent;
+  const blob = new Blob([fullContent], { type: 'text/csv;charset=utf-8;' });
+  
+  const link = document.createElement('a');
+  const url = URL.createObjectURL(blob);
+  link.setAttribute('href', url);
+  link.setAttribute('download', `${filename}_${new Date().toISOString().split('T')[0]}.csv`);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
+export function printDocumentReport(title: string, subtitle: string, headers: string[], rows: (string | number)[][]) {
+  const printWindow = window.open('', '_blank');
+  if (!printWindow) return;
+
+  const html = `
+    <!DOCTYPE html>
+    <html lang="es">
+    <head>
+      <meta charset="utf-8">
+      <title>${title} - IntegraPro Enterprise</title>
+      <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: 24px; color: #1e293b; }
+        .header { border-bottom: 2px solid #4f46e5; padding-bottom: 12px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: flex-end; }
+        h1 { margin: 0; font-size: 20px; color: #0f172a; }
+        p { margin: 4px 0 0; font-size: 11px; color: #64748b; }
+        .meta { text-align: right; font-size: 10px; color: #94a3b8; font-family: monospace; }
+        table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 11px; }
+        th { background: #f8fafc; border-bottom: 2px solid #cbd5e1; text-align: left; padding: 8px 10px; font-weight: 700; color: #334155; }
+        td { border-bottom: 1px solid #e2e8f0; padding: 8px 10px; }
+        tr:nth-child(even) { background: #f8fafc; }
+        .footer { margin-top: 24px; font-size: 10px; color: #94a3b8; text-align: center; border-top: 1px dashed #cbd5e1; padding-top: 12px; }
+        @media print {
+          body { padding: 0; }
+          button { display: none; }
+        }
+      </style>
+    </head>
+    <body>
+      <div class="header">
+        <div>
+          <h1>🏢 ${title}</h1>
+          <p>${subtitle}</p>
+        </div>
+        <div class="meta">
+          <div>IntegraPro Enterprise ERP</div>
+          <div>Emisión: ${new Date().toLocaleString('es-GT')}</div>
+        </div>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            ${headers.map(h => `<th>${h}</th>`).join('')}
+          </tr>
+        </thead>
+        <tbody>
+          ${rows.map(r => `<tr>${r.map(c => `<td>${c}</td>`).join('')}</tr>`).join('')}
+        </tbody>
+      </table>
+      <div class="footer">
+        Documento generado automáticamente por IntegraPro SaaS • Válido para control interno y auditoría fiscal
+      </div>
+      <script>
+        window.onload = function() { window.print(); };
+      </script>
+    </body>
+    </html>
+  `;
+
+  printWindow.document.write(html);
+  printWindow.document.close();
+}
