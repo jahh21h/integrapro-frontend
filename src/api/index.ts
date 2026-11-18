@@ -132,16 +132,24 @@ export const quotationsApi = {
 // 6. COMPRAS & PROVEEDORES
 // ==========================================
 export const purchasesApi = {
-  getAll: async (params?: { search?: string; page?: number }) => {
+  getAll: async (params?: { search?: string; page?: number; all?: boolean }) => {
     const res = await apiClient.get('/purchases', { params });
     return res.data;
   },
-  getById: async (id: number) => {
+  getById: async (id: number | string) => {
     const res = await apiClient.get(`/purchases/${id}`);
     return res.data;
   },
   create: async (purchaseData: any) => {
     const res = await apiClient.post('/purchases', purchaseData);
+    return res.data;
+  },
+  update: async (id: number | string, purchaseData: any) => {
+    const res = await apiClient.put(`/purchases/${id}`, purchaseData);
+    return res.data;
+  },
+  delete: async (id: number | string) => {
+    const res = await apiClient.delete(`/purchases/${id}`);
     return res.data;
   }
 };

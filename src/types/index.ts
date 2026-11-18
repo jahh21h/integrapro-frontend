@@ -126,16 +126,21 @@ export interface Proveedor {
 export interface DetalleCompraItem {
   id?: number;
   descripcion: string;
+  nombre_producto?: string;
   sku?: string;
   cantidad: number;
   precio_unitario: number;
+  precio_compra?: number;
+  precio_origen?: number | null;
+  costo_con_envio?: number | null;
   subtotal: number;
-  foto?: string;
+  foto?: string | null;
   image_url?: string;
   talla?: string;
   color?: string;
-  precio_origen?: number; // En USD u otra divisa
   url_manual?: string;
+  categoria?: string;
+  [key: string]: any;
 }
 
 export interface Compra {
@@ -144,20 +149,21 @@ export interface Compra {
   nombre_proveedor: string;
   nit_proveedor: string;
   fecha: string;
-  tipo_documento: 'Factura Electrónica FEL' | 'Factura Cambiaria' | 'Recibo' | 'Nota de Crédito';
+  tipo_documento: string;
   serie: string;
   numero_documento: string;
   monto_total: number;
   monto_exento: number;
   monto_iva: number; // IVA Crédito Fiscal 12%
   descripcion: string;
-  tipo_compra: 'contado' | 'credito';
+  tipo_compra: string;
   total_pagado: number;
   saldo_pendiente: number;
-  estado_pago: 'pagado' | 'pendiente' | 'parcial';
-  moneda_compra?: 'GTQ' | 'USD';
+  estado_pago: 'pagado' | 'pendiente' | 'parcial' | 'anulado' | string;
+  moneda_compra?: 'GTQ' | 'USD' | string;
   tipo_cambio?: number;
   detalles: DetalleCompraItem[];
+  [key: string]: any;
 }
 
 export interface PagoProveedor {
