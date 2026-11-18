@@ -76,7 +76,8 @@ export type NavigationTab =
   | 'sucursales' 
   | 'configuracion'
   | 'fortexa_apps'
-  | 'live_sales';
+  | 'live_sales'
+  | 'token_scraper';
 
 export interface SoftwareLicenseItem {
   id: number;

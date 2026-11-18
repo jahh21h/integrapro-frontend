@@ -907,6 +907,20 @@ export default function LaunchpadHub({
       widgetType: 'security_system'
     });
 
+    cards.push({
+      id: 'token_scraper',
+      title: 'Token Scraper Chrome',
+      subtitle: 'Extensión para Shein, Temu & AliExpress',
+      description: 'Genera y administra tu clave de API personal para conectar la extensión de Chrome y extraer productos en 1 clic.',
+      icon: KeyRound,
+      gradient: 'from-amber-500 to-indigo-700',
+      glowColor: 'from-amber-500/40 to-indigo-500/40',
+      badge: { text: 'API Extensión', color: 'bg-amber-500/10 text-amber-700 border-amber-200' },
+      metric: 'Extracción Automatizada',
+      category: 'gestion',
+      widgetType: 'security_system'
+    });
+
     return cards.map(c => {
       let isLocked = false;
 

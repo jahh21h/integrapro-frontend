@@ -38,6 +38,7 @@ import {
 } from 'lucide-react';
 import { useTimeFormat } from '../context/TimeFormatContext';
 import SpecificTimePicker from '../components/SpecificTimePicker';
+import TokenExtensionScraper from '../components/TokenExtensionScraper';
 import { ConexionExterna, EmpresaSaaS } from '../types';
 import { externalConnectionsApi, empresaApi } from '../api';
 
@@ -67,7 +68,7 @@ interface SettingsViewProps {
 }
 
 export default function SettingsView({ currentEmpresa, onUpdateEmpresa }: SettingsViewProps = {}) {
-  const [activeTab, setActiveTab] = useState<'empresa' | 'moneda' | 'fel' | 'pasarelas' | 'modulos' | 'multiempresa' | 'roles' | 'api' | 'conexiones'>('empresa');
+  const [activeTab, setActiveTab] = useState<'empresa' | 'moneda' | 'fel' | 'pasarelas' | 'modulos' | 'multiempresa' | 'roles' | 'api' | 'conexiones' | 'token_scraper'>('empresa');
   const [notificationToast, setNotificationToast] = useState<string | null>(null);
   const { timeFormat, setTimeFormat } = useTimeFormat();
 
@@ -1464,6 +1465,19 @@ export default function SettingsView({ currentEmpresa, onUpdateEmpresa }: Settin
           <Database className="w-3.5 h-3.5 text-blue-400" />
           <span>Conexiones Externas</span>
         </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('token_scraper')}
+          className={`px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-2 cursor-pointer ${
+            activeTab === 'token_scraper'
+              ? 'bg-indigo-600 text-white shadow-sm'
+              : 'text-slate-600 hover:bg-slate-100'
+          }`}
+        >
+          <Key className="w-3.5 h-3.5 text-amber-400" />
+          <span>Token Scraper Chrome</span>
+        </button>
       </div>
 
       {/* PESTAÑA 1: Información de Empresa (General & Fiscal SAT Guatemala) */}
@@ -2683,6 +2697,29 @@ export default function SettingsView({ currentEmpresa, onUpdateEmpresa }: Settin
               </div>
             </div>
           </div>
+
+          {/* Tarjeta de Acceso Rápido al Token del Scraper */}
+          <div className="p-5 rounded-2xl bg-indigo-50 border border-indigo-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <span className="p-2.5 bg-indigo-600 text-white rounded-xl shadow-sm">
+                <Key className="w-5 h-5" />
+              </span>
+              <div>
+                <h4 className="text-xs font-black text-slate-900">Extensión Scraper Chrome (Shein, Temu, AliExpress)</h4>
+                <p className="text-[11px] text-slate-500">
+                  Genera la clave de API Bearer requerida para sincronizar productos directamente desde tu navegador.
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setActiveTab('token_scraper')}
+              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white font-black text-xs rounded-xl transition-all shadow-sm flex items-center gap-2 cursor-pointer shrink-0"
+            >
+              <Key className="w-3.5 h-3.5" />
+              <span>Gestionar Token Scraper</span>
+            </button>
+          </div>
         </div>
       )}
 
@@ -2810,6 +2847,11 @@ export default function SettingsView({ currentEmpresa, onUpdateEmpresa }: Settin
             </div>
           )}
         </div>
+      )}
+
+      {/* PESTAÑA 10: Token para Extensión Scraper (Chrome Extension) */}
+      {activeTab === 'token_scraper' && (
+        <TokenExtensionScraper />
       )}
 
       {/* MODAL: Nueva Conexión Externa */}

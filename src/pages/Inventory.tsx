@@ -28,8 +28,10 @@ import {
   Tag,
   FolderPlus,
   FolderTree,
-  Check
+  Check,
+  Key
 } from 'lucide-react';
+import TokenExtensionScraper from '../components/TokenExtensionScraper';
 import BarcodeSVG, { generateGuatemalaEan13 } from '../components/Barcode';
 import { UnidadMedida, UbicacionBodega, EmpresaSaaS } from '../types';
 import { exportToExcelCsv } from '../utils/export';
@@ -199,6 +201,7 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
   const [productScraperUrl, setProductScraperUrl] = useState('');
   const [isScrapingProduct, setIsScrapingProduct] = useState(false);
   const [showProductScraper, setShowProductScraper] = useState(false);
+  const [showTokenModal, setShowTokenModal] = useState(false);
 
   const handleScrapeProductLink = async (urlToScrape: string) => {
     if (!urlToScrape) return;
@@ -1241,6 +1244,15 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
                           <span>Traer de Extensión</span>
                         </>
                       )}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowTokenModal(true)}
+                      className="px-2.5 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-800 font-bold rounded-lg border border-amber-200 text-[11px] flex items-center gap-1 shadow-sm cursor-pointer"
+                      title="Generar o configurar clave de API para la extensión de Chrome"
+                    >
+                      <Key className="w-3 h-3 text-amber-600" />
+                      <span>Token API</span>
                     </button>
                   </div>
                 </div>
@@ -2426,6 +2438,22 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+      {/* Modal Flotante: Token para Extensión Scraper */}
+      {showTokenModal && (
+        <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+          <div className="max-w-4xl w-full bg-white rounded-3xl shadow-2xl border border-slate-200 p-6 sm:p-8 space-y-4 my-8 relative max-h-[90vh] overflow-y-auto animate-in zoom-in-95 duration-150">
+            <button
+              type="button"
+              onClick={() => setShowTokenModal(false)}
+              className="absolute top-5 right-5 p-2 text-slate-400 hover:text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition-all cursor-pointer z-10"
+              title="Cerrar"
+            >
+              <X className="w-5 h-5" />
+            </button>
+            <TokenExtensionScraper />
           </div>
         </div>
       )}

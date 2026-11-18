@@ -18,6 +18,7 @@ import {
   Settings,
   Cpu,
   LayoutGrid,
+  Key,
   X,
   Video,
   ShieldCheck,
@@ -158,6 +159,12 @@ export default function Sidebar({
       id: 'sucursales', 
       label: 'Red de Sucursales', 
       icon: Store,
+    },
+    { 
+      id: 'token_scraper', 
+      label: 'Token Scraper Chrome', 
+      icon: Key,
+      badge: { text: 'API', variant: 'indigo' }
     },
     { 
       id: 'configuracion', 

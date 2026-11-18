@@ -165,6 +165,18 @@ export const scraperApi = {
   extractFromUrl: async (url: string) => {
     const res = await apiClient.post('/scraper/extract', { url });
     return res.data;
+  },
+  getTokenInfo: async () => {
+    const res = await apiClient.get('/scraper/token');
+    return res.data;
+  },
+  generateToken: async () => {
+    const res = await apiClient.post('/scraper/token');
+    return res.data;
+  },
+  revokeTokens: async () => {
+    const res = await apiClient.delete('/scraper/token');
+    return res.data;
   }
 };
 

@@ -19,6 +19,7 @@ import FortexaAppsView from './pages/FortexaAppsView';
 import LiveSalesView from './pages/LiveSalesView';
 import LaunchpadHub from './components/LaunchpadHub';
 import LiveExpressShell from './components/LiveExpressShell';
+import TokenExtensionScraper from './components/TokenExtensionScraper';
 import { LiveSalesProvider } from './context/LiveSalesContext';
 import { 
   Package, 
@@ -238,6 +239,8 @@ export default function App() {
         return 'Red de Sucursales & Cajas';
       case 'configuracion':
         return 'Configuración Global de Empresa & SAT';
+      case 'token_scraper':
+        return 'Token & API para Extensión Scraper Chrome';
       case 'live_sales':
         return 'TikTok Live & Canastas Abiertas (Social Commerce)';
       default:
@@ -641,6 +644,9 @@ export default function App() {
                 onUpdateEmpresa={handleUpdateEmpresa} 
               />
             )}
+            {activeTab === 'token_scraper' && (
+              <TokenExtensionScraper />
+            )}
           </div>
         </main>
       </div>
@@ -749,6 +755,14 @@ export default function App() {
               >
                 <span className="flex items-center gap-2"><Building2 className="w-4 h-4 text-indigo-600" /> Configuración de Empresa (SAT & FEL)</span>
                 <span className="text-[10px] text-slate-400">Atajo</span>
+              </button>
+              <button 
+                type="button"
+                onClick={() => { setActiveTab('token_scraper'); setCommandPaletteOpen(false); }}
+                className="w-full px-3 py-2 text-left rounded-xl hover:bg-slate-100 flex items-center justify-between text-slate-700 font-medium"
+              >
+                <span className="flex items-center gap-2"><Sparkles className="w-4 h-4 text-amber-500" /> 🔑 Token para Extensión Scraper Chrome</span>
+                <span className="text-[10px] text-slate-400">API</span>
               </button>
             </div>
             <div className="p-2.5 bg-slate-50 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-400">

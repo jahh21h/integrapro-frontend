@@ -28,8 +28,10 @@ import {
   Eye,
   Edit2,
   Trash2,
-  Save
+  Save,
+  Key
 } from 'lucide-react';
+import TokenExtensionScraper from '../components/TokenExtensionScraper';
 import { Compra, Proveedor, DetalleCompraItem } from '../types';
 import { REAL_PROVEEDORES, REAL_COMPRAS } from '../data/realPurchases';
 import { purchasesApi } from '../api';
@@ -82,6 +84,7 @@ export default function Purchases() {
 
   // Escáner OCR / IA de Facturas (Laravel: InvoiceAIService.php con Gemini Vision)
   const [showInvoiceAiModal, setShowInvoiceAiModal] = useState(false);
+  const [showTokenModal, setShowTokenModal] = useState(false);
   const [isProcessingAiInvoice, setIsProcessingAiInvoice] = useState(false);
   const [invoiceAiFileName, setInvoiceAiFileName] = useState('');
   const [invoiceAiPreview, setInvoiceAiPreview] = useState<string | null>(null);
@@ -2356,6 +2359,17 @@ export default function Purchases() {
                         </>
                       )}
                     </button>
+
+                    {/* Botón Configurar Token de API */}
+                    <button
+                      type="button"
+                      onClick={() => setShowTokenModal(true)}
+                      className="px-3.5 py-2 bg-amber-50 hover:bg-amber-100 text-amber-800 font-bold rounded-xl border border-amber-200 shadow-sm flex items-center gap-1.5 text-xs transition-colors cursor-pointer"
+                      title="Generar o configurar clave de API para la extensión de Chrome"
+                    >
+                      <Key className="w-3.5 h-3.5 text-amber-600" />
+                      <span>Token Scraper</span>
+                    </button>
                   </div>
                 </div>
 
@@ -2968,6 +2982,23 @@ export default function Purchases() {
                 Cerrar Visor
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Flotante: Token para Extensión Scraper */}
+      {showTokenModal && (
+        <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+          <div className="max-w-4xl w-full bg-white rounded-3xl shadow-2xl border border-slate-200 p-6 sm:p-8 space-y-4 my-8 relative max-h-[90vh] overflow-y-auto animate-in zoom-in-95 duration-150">
+            <button
+              type="button"
+              onClick={() => setShowTokenModal(false)}
+              className="absolute top-5 right-5 p-2 text-slate-400 hover:text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition-all cursor-pointer z-10"
+              title="Cerrar"
+            >
+              <X className="w-5 h-5" />
+            </button>
+            <TokenExtensionScraper />
           </div>
         </div>
       )}
