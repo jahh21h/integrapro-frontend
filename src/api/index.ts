@@ -1,5 +1,7 @@
 import apiClient from './client';
 
+export { apiClient };
+
 // ==========================================
 // 1. AUTENTICACIÓN (Sanctum)
 // ==========================================

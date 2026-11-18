@@ -36,6 +36,7 @@ import BarcodeSVG, { generateGuatemalaEan13 } from '../components/Barcode';
 import { UnidadMedida, UbicacionBodega, EmpresaSaaS } from '../types';
 import { exportToExcelCsv } from '../utils/export';
 import { getTenantCatalog } from '../data/tenantProducts';
+import { scraperApi } from '../api';
 
 interface InventoryItem {
   id: number;
@@ -214,15 +215,8 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
 
       let data: any = null;
       try {
-        const res = await fetch('http://localhost:8000/api/scraper/extract', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ url })
-        });
-        if (res.ok) {
-          const json = await res.json();
-          if (json.data) data = json.data;
-        }
+        const res = await scraperApi.extractFromUrl(url);
+        if (res && res.data) data = res.data;
       } catch (e) {}
 
       if (!data) {
@@ -266,10 +260,12 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
     try {
       let extProduct: any = null;
       try {
-        const res = await fetch('http://localhost:8000/api/scraper/retrieve');
-        if (res.ok) {
-          const json = await res.json();
-          if (json.product) extProduct = json.product;
+        const res = await scraperApi.retrieveLatest();
+        const data = res?.data || res?.product || res;
+        if (data?.products && data.products.length > 0) {
+          extProduct = data.products[0];
+        } else if (data?.title || data?.name) {
+          extProduct = data;
         }
       } catch (e) {}
 

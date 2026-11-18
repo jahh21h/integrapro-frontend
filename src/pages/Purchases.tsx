@@ -34,7 +34,7 @@ import {
 import TokenExtensionScraper from '../components/TokenExtensionScraper';
 import { Compra, Proveedor, DetalleCompraItem } from '../types';
 import { REAL_PROVEEDORES, REAL_COMPRAS } from '../data/realPurchases';
-import { purchasesApi } from '../api';
+import { purchasesApi, scraperApi, apiClient } from '../api';
 
 function getProductPhotoUrl(foto?: string | null): string | null {
   if (!foto) return null;
@@ -446,70 +446,27 @@ export default function Purchases() {
     setIsScraping(true);
 
     try {
-      // 1. Intentar obtener datos reales del endpoint de Laravel (/api/scraper/retrieve)
-      const res = await fetch('http://localhost:8000/api/scraper/retrieve').catch(() => null);
-      let cartData = null;
+      // 1. Obtener datos reales del endpoint de Laravel (/api/scraper/retrieve)
+      const res = await scraperApi.retrieveLatest().catch(() => null);
+      let cartData: any = null;
 
-      if (res && res.ok) {
-        const json = await res.json();
-        if (json.cart) {
-          cartData = json.cart;
-        }
+      if (res && res.success && res.data) {
+        cartData = res.data;
+      } else if (res && res.data) {
+        cartData = res.data;
+      } else if (res && res.cart) {
+        cartData = res.cart;
+      } else if (res && res.products) {
+        cartData = res;
       }
 
-      // 2. Si no hay datos en caché en este instante, usar el set de prueba de la extensión Shein / Temu
-      if (!cartData) {
-        cartData = {
-          order_id: 'SH-CART-' + Math.floor(100000 + Math.random() * 900000),
-          order_date: new Date().toISOString().split('T')[0],
-          platform: 'Shein',
-          currency: 'USD',
-          products: [
-            {
-              title: 'Vestido Midi Plisado con Estampado Bohemio y Cinturón',
-              sku: 'SHEIN-WD-4481',
-              talla: 'M',
-              color: 'Terracota / Floral',
-              quantity: 12,
-              price: 6.80, // USD
-              image_url: 'https://images.unsplash.com/photo-1515372039744-b8f02a3ae446?w=600&auto=format&fit=crop&q=80',
-              url: 'https://shein.com/product/4481'
-            },
-            {
-              title: 'Top Corset Satinado con Tirantes Ajustables',
-              sku: 'SHEIN-TP-1102',
-              talla: 'S',
-              color: 'Champagne Perla',
-              quantity: 20,
-              price: 4.50, // USD
-              image_url: 'https://images.unsplash.com/photo-1503342217505-b0a15ec3261c?w=600&auto=format&fit=crop&q=80',
-              url: 'https://shein.com/product/1102'
-            },
-            {
-              title: 'Conjunto Deportivo Seamless Legging + Crop Top',
-              sku: 'SHEIN-SET-7734',
-              talla: 'L',
-              color: 'Verde Oliva',
-              quantity: 15,
-              price: 8.20, // USD
-              image_url: 'https://images.unsplash.com/photo-1518611012118-696072aa579a?w=600&auto=format&fit=crop&q=80',
-              url: 'https://shein.com/product/7734'
-            },
-            {
-              title: 'Gafas de Sol Estilo Cat-Eye Polarizadas con Estuche',
-              sku: 'SHEIN-ACC-9011',
-              talla: 'Única',
-              color: 'Negro Brillante',
-              quantity: 25,
-              price: 2.10, // USD
-              image_url: 'https://images.unsplash.com/photo-1511499767150-a48a237f0083?w=600&auto=format&fit=crop&q=80',
-              url: 'https://shein.com/product/9011'
-            }
-          ]
-        };
+      if (!cartData || !cartData.products || cartData.products.length === 0) {
+        showToast('No se encontraron productos recientes en el scraper. Extrae un pedido primero desde Shein con la extensión.');
+        setIsScraping(false);
+        return;
       }
 
-      const productsList = cartData.products || cartData;
+      const productsList = cartData.products || [];
       const isTemu = cartData.platform?.toLowerCase().includes('temu') || cartData.currency === 'GTQ';
       const tc = isTemu ? 1.00 : tipoCambio;
 
@@ -519,25 +476,27 @@ export default function Purchases() {
       // Auto-seleccionar proveedor
       const provMatch = proveedores.find(p => 
         p.nombre.toLowerCase().includes(isTemu ? 'temu' : 'shein')
-      ) || proveedores[4];
+      ) || proveedores[0] || { id_proveedor: 2 };
 
-      // Mapear cada producto con sus especificaciones, conversión de precio y fotografía
+      // Mapear cada producto con sus especificaciones reales, conversión de precio y fotografía
       const itemsMapeados: DetalleCompraItem[] = productsList.map((p: any) => {
-        const precioUSD = parseFloat(p.price || 0);
+        const precioUSD = parseFloat(p.price || p.precio || 0);
         const precioUnitarioQ = Number((precioUSD * tc).toFixed(2));
-        const cantidad = parseInt(p.quantity || 1);
+        const cantidad = parseInt(p.quantity || p.cantidad || 1);
 
         return {
-          descripcion: p.title || 'Producto Importado',
+          descripcion: p.title || p.name || p.nombre_producto || 'Producto Importado',
+          nombre_producto: p.title || p.name || p.nombre_producto || 'Producto Importado',
           sku: p.sku || `IMP-${Math.floor(Math.random() * 89999 + 10000)}`,
           talla: p.talla || 'Única',
           color: p.color || 'Varios',
           cantidad: cantidad,
           precio_origen: precioUSD,
           precio_unitario: precioUnitarioQ,
+          precio_compra: precioUnitarioQ,
           subtotal: Number((cantidad * precioUnitarioQ).toFixed(2)),
-          foto: p.image_url,
-          image_url: p.image_url,
+          foto: p.image_url || p.foto,
+          image_url: p.image_url || p.foto,
           url_manual: p.url
         };
       });
@@ -546,14 +505,14 @@ export default function Purchases() {
         ...newCompra,
         id_proveedor: provMatch.id_proveedor,
         numero_documento: cartData.order_id || newCompra.numero_documento || 'ORD-EXT-' + Date.now().toString().slice(-6),
-        fecha: cartData.order_date || newCompra.fecha,
-        descripcion: `Importación automática de carrito ${cartData.platform || 'Shein'} (${itemsMapeados.length} productos con fotos y tallas)`,
+        fecha: cartData.order_date || new Date().toISOString().split('T')[0],
+        descripcion: `Importación automática de pedido ${cartData.platform || 'Shein'} (${itemsMapeados.length} productos con fotos y tallas)`,
         items: itemsMapeados
       });
 
-      showToast(`¡Éxito! Se importaron ${itemsMapeados.length} productos desde la Extensión de Chrome con fotos, SKU, tallas y conversión cambiaria.`);
+      showToast(`¡Éxito! Se importaron ${itemsMapeados.length} productos reales desde Shein (${cartData.order_id || 'Pedido'}).`);
     } catch (err: any) {
-      showToast('Error al conectar con la extensión. Se usaron datos de muestra.');
+      showToast('Error al conectar con el servidor.');
     } finally {
       setIsScraping(false);
     }
@@ -578,19 +537,12 @@ export default function Purchases() {
 
       let scrapedData: any = null;
 
-      // 1. Intentar llamar al backend Laravel API si está encendido
+      // 1. Intentar llamar al backend Laravel API
       try {
-        const response = await fetch('http://localhost:8000/api/scraper/extract', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ url })
-        });
-        if (response.ok) {
-          const resJson = await response.json();
-          if (resJson.data) scrapedData = resJson.data;
-        }
+        const resJson = await scraperApi.extractFromUrl(url);
+        if (resJson && resJson.data) scrapedData = resJson.data;
       } catch (e) {
-        // Fallback local instantáneo para garantizar cero caídas
+        // Fallback
       }
 
       // 2. Si no respondió la API local, generar extracción inteligente con fotos HD
@@ -664,13 +616,11 @@ export default function Purchases() {
       let parsedData: any = null;
 
       try {
-        const resp = await fetch('http://localhost:8000/api/ai-invoices/process', {
-          method: 'POST',
-          body: formData
-        });
-        if (resp.ok) {
-          const json = await resp.json();
-          if (json.data) parsedData = json.data;
+        const resp = await apiClient.post('/invoices/process', formData, {
+          headers: { 'Content-Type': 'multipart/form-data' }
+        }).catch(() => null);
+        if (resp && resp.data) {
+          parsedData = resp.data.data || resp.data;
         }
       } catch (err) {
         // Fallback local robusto
