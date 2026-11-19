@@ -36,7 +36,55 @@ import BarcodeSVG, { generateGuatemalaEan13 } from '../components/Barcode';
 import { UnidadMedida, UbicacionBodega, EmpresaSaaS } from '../types';
 import { exportToExcelCsv } from '../utils/export';
 import { getTenantCatalog } from '../data/tenantProducts';
-import { scraperApi } from '../api';
+import { scraperApi, inventoryApi } from '../api';
+
+function getProductPhotoUrl(foto?: string | null): string {
+  if (!foto) return 'https://images.unsplash.com/photo-1542838132-92c53300491e?w=400&auto=format&fit=crop&q=80';
+  if (foto.startsWith('http://') || foto.startsWith('https://')) return foto;
+  if (foto.startsWith('/storage/')) return foto;
+  if (foto.startsWith('storage/')) return `/${foto}`;
+  if (foto.startsWith('/')) return foto;
+  return `/storage/${foto}`;
+}
+
+function mapApiProductToInventoryItem(p: any): InventoryItem {
+  const stockTot = parseInt(p.stock) || (Array.isArray(p.inventarios) ? p.inventarios.reduce((sum: number, inv: any) => sum + (parseInt(inv.stock) || 0), 0) : 0);
+  
+  let central = 0;
+  let norte = 0;
+  let sur = 0;
+  if (Array.isArray(p.inventarios) && p.inventarios.length > 0) {
+    p.inventarios.forEach((inv: any) => {
+      const sId = inv.id_sucursal;
+      const st = parseInt(inv.stock) || 0;
+      if (sId === 1) central += st;
+      else if (sId === 2) norte += st;
+      else if (sId === 3) sur += st;
+      else central += st;
+    });
+  } else {
+    central = stockTot;
+  }
+
+  return {
+    id: p.id_producto || p.id,
+    sku: p.sku || `PROD-${p.id_producto || p.id}`,
+    codigoBarras: p.codigo_barras || '',
+    nombre: p.nombre || 'Producto',
+    categoria: p.categoria?.nombre || p.categoria_nombre || 'General',
+    proveedor: p.proveedor?.nombre || p.proveedor_nombre || 'Distribuidor',
+    precioCompra: parseFloat(p.precio_compra) || 0,
+    precioVenta: parseFloat(p.precio_venta) || 0,
+    stockTotal: stockTot,
+    stockMinimo: parseInt(p.stock_minimo) || 5,
+    stockPorSucursal: {
+      central,
+      norte,
+      sur
+    },
+    imagen: getProductPhotoUrl(p.foto)
+  };
+}
 
 interface InventoryItem {
   id: number;
@@ -172,14 +220,55 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
   const initialCatalog = getTenantCatalog(currentEmpresa?.id);
   const [products, setProducts] = useState<InventoryItem[]>(initialCatalog.products);
   const [categories, setCategories] = useState<string[]>(initialCatalog.categories);
+  const [isLoadingLive, setIsLoadingLive] = useState(false);
+
+  // Función para cargar catálogo y productos en vivo desde la base de datos de producción
+  const fetchLiveProducts = async (queryTerm?: string) => {
+    setIsLoadingLive(true);
+    try {
+      const trimmedQuery = queryTerm ? queryTerm.trim() : '';
+      const res = await inventoryApi.getAll({
+        search: trimmedQuery || undefined,
+        per_page: trimmedQuery ? 100 : 250
+      });
+      const data = res?.data || (Array.isArray(res) ? res : []);
+      if (Array.isArray(data) && data.length > 0) {
+        const mapped = data.map(mapApiProductToInventoryItem);
+        setProducts(mapped);
+        
+        // Agregar nuevas categorías descubiertas en los productos reales de la base de datos
+        const discoveredCats = Array.from(new Set(mapped.map((it: InventoryItem) => it.categoria).filter(Boolean))) as string[];
+        if (discoveredCats.length > 0) {
+          setCategories(prev => Array.from(new Set([...prev, ...discoveredCats])));
+        }
+      } else if (trimmedQuery) {
+        // Si no encontró nada en la búsqueda en vivo por SKU o nombre, vaciar lista
+        setProducts([]);
+      } else {
+        // Fallback al catálogo del tenant si la API regresa vacío
+        const cat = getTenantCatalog(currentEmpresa?.id);
+        setProducts(cat.products);
+      }
+    } catch (err) {
+      console.warn('Error fetching live inventory from Droplet:', err);
+    } finally {
+      setIsLoadingLive(false);
+    }
+  };
 
   // Sincronizar automáticamente el catálogo cuando cambia la empresa activa
   useEffect(() => {
-    const cat = getTenantCatalog(currentEmpresa?.id);
-    setProducts(cat.products);
-    setCategories(cat.categories);
+    fetchLiveProducts();
     setSelectedCategory('Todas');
   }, [currentEmpresa?.id]);
+
+  // Búsqueda en vivo conectada con la base de datos MySQL (con debounce de 350ms)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      fetchLiveProducts(searchTerm);
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
 
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 30;
@@ -799,8 +888,11 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
                 placeholder="Buscar por nombre, código de barras o SKU..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all font-medium"
+                className="w-full pl-10 pr-9 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all font-medium"
               />
+              {isLoadingLive && (
+                <RefreshCw className="w-3.5 h-3.5 absolute right-3 top-3 text-indigo-500 animate-spin" />
+              )}
             </div>
 
             <div className="flex items-center gap-2 w-full sm:w-auto">

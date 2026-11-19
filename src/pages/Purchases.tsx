@@ -729,7 +729,7 @@ export default function Purchases() {
   const totalCalculadoNuevaCompra = newCompra.items.reduce((acc, it) => acc + it.subtotal, 0);
   const ivaCalculadoNuevaCompra = Number(((totalCalculadoNuevaCompra / 1.12) * 0.12).toFixed(2));
 
-  const handleSaveCompra = (e: React.FormEvent) => {
+  const handleSaveCompra = async (e: React.FormEvent) => {
     e.preventDefault();
     const prov = proveedores.find(p => p.id_proveedor === Number(newCompra.id_proveedor));
     if (!prov) return;
@@ -739,11 +739,25 @@ export default function Purchases() {
     const exento = prov.regimen_tributario === 'pequeno_contribuyente' ? total : 0;
     const esCredito = newCompra.tipo_compra === 'credito';
 
-    const creada: Compra = {
-      id_compra: Date.now(),
+    const cleanDetalles = newCompra.items.map(it => ({
+      nombre_producto: it.descripcion || it.nombre_producto || 'Producto Importado',
+      descripcion: it.descripcion || it.nombre_producto || 'Producto Importado',
+      sku: it.sku || `IMP-${Math.floor(Math.random() * 89999 + 10000)}`,
+      cantidad: it.cantidad || 1,
+      precio_compra: it.precio_unitario || it.precio_compra || 0,
+      precio_unitario: it.precio_unitario || it.precio_compra || 0,
+      precio_origen: it.precio_origen || 0,
+      subtotal: it.subtotal || ((it.cantidad || 1) * (it.precio_unitario || 0)),
+      foto: it.foto || it.image_url || undefined,
+      talla: it.talla || 'Única',
+      color: it.color || 'Varios',
+      url_manual: it.url_manual || undefined
+    }));
+
+    const payload = {
       id_proveedor: prov.id_proveedor,
       nombre_proveedor: prov.nombre,
-      nit_proveedor: prov.nit,
+      nit_proveedor: prov.nit || 'CF',
       fecha: newCompra.fecha,
       tipo_documento: newCompra.tipo_documento,
       serie: newCompra.serie,
@@ -758,18 +772,41 @@ export default function Purchases() {
       estado_pago: esCredito ? 'pendiente' : 'pagado',
       moneda_compra: monedaCompra,
       tipo_cambio: tipoCambio,
-      detalles: newCompra.items
+      detalles: cleanDetalles
     };
 
-    setCompras([creada, ...compras]);
-    if (esCredito) {
-      setProveedores(proveedores.map(p => 
-        p.id_proveedor === prov.id_proveedor ? { ...p, saldo_pendiente: p.saldo_pendiente + total } : p
-      ));
+    try {
+      const res = await purchasesApi.create(payload);
+      const compraGuardada = res?.compra || res;
+
+      const creada: Compra = {
+        id_compra: compraGuardada?.id_compra || Date.now(),
+        ...payload,
+        detalles: cleanDetalles
+      };
+
+      setCompras([creada, ...compras]);
+      if (esCredito) {
+        setProveedores(proveedores.map(p => 
+          p.id_proveedor === prov.id_proveedor ? { ...p, saldo_pendiente: p.saldo_pendiente + total } : p
+        ));
+      }
+
+      setShowNewCompraModal(false);
+      showToast(`¡Factura guardada con éxito! Se registraron ${cleanDetalles.length} productos y se ingresaron al inventario.`);
+    } catch (err: any) {
+      console.error('Error al guardar compra en backend:', err);
+      // Fallback local
+      const creada: Compra = {
+        id_compra: Date.now(),
+        ...payload,
+        detalles: cleanDetalles
+      };
+      setCompras([creada, ...compras]);
+      setShowNewCompraModal(false);
+      showToast(`Factura guardada localmente.`);
     }
 
-    setShowNewCompraModal(false);
-    showToast(`Factura de compra ${creada.serie} ${creada.numero_documento} guardada exitosamente.`);
     setNewCompra({
       id_proveedor: 5,
       serie: 'FAC-',
