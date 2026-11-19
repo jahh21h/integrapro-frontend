@@ -26,6 +26,7 @@ import {
   UserPlus,
   Phone,
   AlertCircle,
+  Loader2,
   Wifi,
   Video,
   Sparkles
@@ -167,6 +168,8 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
 
   // Modal de Venta Exitosa / Certificación SAT
   const [saleCompletedModal, setSaleCompletedModal] = useState<boolean>(false);
+  const [isProcessingSale, setIsProcessingSale] = useState<boolean>(false);
+  const [saleError, setSaleError] = useState<string | null>(null);
   const [dteCertificado, setDteCertificado] = useState<FELCertificadoDTE | null>(null);
   const [copiedUuid, setCopiedUuid] = useState<boolean>(false);
   const [ticketNumero, setTicketNumero] = useState<string>('TCK-1001');
@@ -485,39 +488,63 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
     return dte;
   };
 
-  const handleProcessPayment = (certificarFEL: boolean = false) => {
-    if (cart.length === 0) return;
+  const handleProcessPayment = async (certificarFEL: boolean = false) => {
+    if (cart.length === 0 || isProcessingSale) return;
 
-    // Generar número de ticket interno de caja
-    const randomTicket = 'TCK-' + Math.floor(100000 + Math.random() * 900000);
-    setTicketNumero(randomTicket);
+    setIsProcessingSale(true);
+    setSaleError(null);
 
-    if (certificarFEL || tipoComprobante === 'fel') {
-      const dte = generarDteFEL();
-      setDteCertificado(dte);
-    } else {
-      setDteCertificado(null);
+    try {
+      // 1. Sincronizar y registrar la venta en vivo en MySQL del servidor
+      const salePayload: any = {
+        id_cliente: selectedClient ? selectedClient.id_cliente : undefined,
+        metodo_pago: metodoPago,
+        detalles: cart.map(item => ({
+          id_producto: item.id,
+          cantidad: item.quantity,
+          descuento: item.discount || 0,
+          precio_unitario: item.price
+        })),
+        descuento: totalDiscount,
+        observaciones: `Venta POS en vivo - ${certificarFEL || tipoComprobante === 'fel' ? 'Factura FEL' : 'Ticket Caja'}`
+      };
+
+      const res = await salesApi.createSale(salePayload);
+      console.log('✓ Venta registrada exitosamente en MySQL:', res);
+
+      const serverSaleId = res?.id_venta || res?.venta?.id_venta;
+      const ticketReal = serverSaleId ? `TCK-${serverSaleId}` : ('TCK-' + Math.floor(100000 + Math.random() * 900000));
+      setTicketNumero(ticketReal);
+
+      if (certificarFEL || tipoComprobante === 'fel') {
+        const dte = generarDteFEL();
+        if (serverSaleId) {
+          dte.numero = String(serverSaleId);
+        }
+        setDteCertificado(dte);
+      } else {
+        setDteCertificado(null);
+      }
+
+      // Descontar existencias localmente para feedback inmediato en el inventario del POS
+      setLiveProducts(prev => prev.map(p => {
+        const inCart = cart.find(c => c.id === p.id);
+        if (inCart) {
+          return { ...p, stock: Math.max(0, p.stock - inCart.quantity) };
+        }
+        return p;
+      }));
+
+      // Abrir modal de venta exitosa
+      setSaleCompletedModal(true);
+    } catch (err: any) {
+      console.error('Error al registrar venta en el servidor:', err);
+      const errMsg = err?.response?.data?.message || err?.message || 'Error al conectar con el servidor para registrar la venta.';
+      setSaleError(errMsg);
+      alert(`⚠️ ERROR AL PROCESAR VENTA:\n\n${errMsg}\n\nLa venta NO se registró en la base de datos ni se descontó inventario.`);
+    } finally {
+      setIsProcessingSale(false);
     }
-
-    // Sincronizar la venta en vivo con la Base de Datos del Droplet
-    salesApi.createSale({
-      id_cliente: selectedClient ? selectedClient.id_cliente : 7442,
-      metodo_pago: metodoPago,
-      detalles: cart.map(item => ({
-        id_producto: item.id,
-        cantidad: item.quantity,
-        descuento: item.discount || 0,
-        precio_unitario: item.price
-      })),
-      descuento: totalDiscount,
-      observaciones: `Venta POS en vivo - ${tipoComprobante === 'fel' ? 'Factura FEL' : 'Ticket Caja'}`
-    }).then(res => {
-      console.log('✓ Venta sincronizada exitosamente en el Droplet:', res);
-    }).catch(err => {
-      console.warn('Venta registrada en caja con respaldo local:', err);
-    });
-
-    setSaleCompletedModal(true);
   };
 
   const handleCertificarFacturaSeparada = () => {
@@ -1320,26 +1347,62 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
             </div>
           )}
 
+          {/* Banner de error si falla la venta */}
+          {saleError && (
+            <div className="p-3 bg-rose-50 border border-rose-200 rounded-2xl flex items-start gap-2.5 text-rose-800 text-xs animate-in fade-in">
+              <AlertCircle className="w-4 h-4 text-rose-600 flex-shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <p className="font-bold">No se pudo procesar la venta:</p>
+                <p className="text-[11px] text-rose-700 mt-0.5">{saleError}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSaleError(null)}
+                className="text-rose-500 hover:text-rose-700 p-0.5 cursor-pointer"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
+
           {/* Botones de Cobro: Separación Clara de Cobro Directo vs Factura FEL */}
           <div className="space-y-2">
             <button
               type="button"
               onClick={() => handleProcessPayment(false)}
-              disabled={cart.length === 0}
+              disabled={cart.length === 0 || isProcessingSale}
               className="w-full py-3.5 bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 hover:from-slate-800 hover:to-slate-700 active:scale-98 text-white font-black text-xs rounded-2xl shadow-lg shadow-slate-900/25 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
             >
-              <Receipt className="w-4 h-4 text-emerald-400" />
-              <span>COBRAR VENTA (TICKET DE CAJA) • Q {total.toFixed(2)}</span>
+              {isProcessingSale ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin text-emerald-400" />
+                  <span>REGISTRANDO EN BASE DE DATOS...</span>
+                </>
+              ) : (
+                <>
+                  <Receipt className="w-4 h-4 text-emerald-400" />
+                  <span>COBRAR VENTA (TICKET DE CAJA) • Q {total.toFixed(2)}</span>
+                </>
+              )}
             </button>
 
             <button
               type="button"
               onClick={() => handleProcessPayment(true)}
-              disabled={cart.length === 0}
+              disabled={cart.length === 0 || isProcessingSale}
               className="w-full py-2 bg-emerald-50 hover:bg-emerald-100 active:scale-98 border border-emerald-300 text-emerald-900 font-bold text-xs rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
             >
-              <FileCheck2 className="w-3.5 h-3.5 text-emerald-700" />
-              <span>Cobrar y Certificar Factura FEL (SAT)</span>
+              {isProcessingSale ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-700" />
+                  <span>Certificando con SAT Infile...</span>
+                </>
+              ) : (
+                <>
+                  <FileCheck2 className="w-3.5 h-3.5 text-emerald-700" />
+                  <span>Cobrar y Certificar Factura FEL (SAT)</span>
+                </>
+              )}
             </button>
           </div>
         </div>
