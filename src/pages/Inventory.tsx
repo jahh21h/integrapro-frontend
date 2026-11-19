@@ -479,7 +479,7 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
     showToast(`Nuevo código EAN-13 generado: ${generated}`);
   };
 
-  const handleUpdateProduct = (e: React.FormEvent) => {
+  const handleUpdateProduct = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingProduct) return;
 
@@ -516,7 +516,22 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
     }));
 
     showToast(`Producto "${editFormData.nombre}" actualizado correctamente.`);
+    const prodIdToUpdate = editingProduct.id;
     setEditingProduct(null);
+
+    try {
+      await inventoryApi.update(prodIdToUpdate, {
+        nombre: editFormData.nombre,
+        sku: editFormData.sku,
+        codigo_barras: editFormData.codigoBarras,
+        precio_compra: compra,
+        precio_venta: venta,
+        stock_minimo: minimo,
+        foto: editFormData.imagen
+      });
+    } catch (err) {
+      console.warn('Error al persistir actualización de producto en backend:', err);
+    }
   };
 
   const handleDeleteProduct = (p: InventoryItem) => {
@@ -1098,7 +1113,12 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
                 </tr>
               ) : (
                 paginatedProducts.map((p) => {
-                const margen = (((p.precioVenta - p.precioCompra) / p.precioVenta) * 100).toFixed(1);
+                const hasSalePrice = p.precioVenta > 0;
+                let rawMargen = 0;
+                if (hasSalePrice && p.precioCompra >= 0) {
+                  const calculated = ((p.precioVenta - p.precioCompra) / p.precioVenta) * 100;
+                  rawMargen = isFinite(calculated) ? calculated : 0;
+                }
                 const isLowStock = p.stockTotal <= p.stockMinimo;
 
                 return (
@@ -1163,9 +1183,24 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
 
                     {/* Margen */}
                     <td className="py-3 px-4 text-center">
-                      <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-                        +{margen}%
-                      </span>
+                      {hasSalePrice ? (
+                        <span className={`inline-flex items-center text-[11px] font-bold px-2.5 py-0.5 rounded-full border whitespace-nowrap ${
+                          rawMargen > 0 
+                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200' 
+                            : rawMargen < 0 
+                              ? 'bg-rose-50 text-rose-700 border-rose-200' 
+                              : 'bg-slate-50 text-slate-600 border-slate-200'
+                        }`}>
+                          {rawMargen > 0 ? `+${rawMargen.toFixed(1)}%` : `${rawMargen.toFixed(1)}%`}
+                        </span>
+                      ) : (
+                        <span 
+                          className="inline-flex items-center text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-500 border border-slate-200 whitespace-nowrap"
+                          title="Precio de venta no asignado (Q0.00)"
+                        >
+                          0.0%
+                        </span>
+                      )}
                     </td>
 
                     {/* Stock Multi-Sucursal o Total */}
