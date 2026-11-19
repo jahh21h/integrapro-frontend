@@ -501,36 +501,12 @@ export default function Purchases() {
         };
       });
 
-      // Filtrar items válidos existentes en el formulario (ignorando la fila vacía inicial)
-      const validExisting = (newCompra.items || []).filter(item => 
-        (item.descripcion && item.descripcion.trim() !== '') || 
-        (item.sku && item.sku.trim() !== '') || 
-        (item.precio_unitario && item.precio_unitario > 0)
+      // Conservar únicamente líneas que el usuario haya agregado 100% manual (sin foto ni link del scraper)
+      const manualLines = (newCompra.items || []).filter(item => 
+        (item.descripcion && item.descripcion.trim() !== '') && !item.foto && !item.url_manual
       );
 
-      let finalItems: DetalleCompraItem[] = [];
-      let nuevosAgregados = 0;
-
-      if (validExisting.length === 0) {
-        finalItems = itemsMapeados;
-        nuevosAgregados = itemsMapeados.length;
-      } else {
-        // SUMAR / AGREGAR los productos de los paquetes sin duplicar
-        const existingKeySet = new Set(
-          validExisting.map(i => (i.sku?.trim() || i.descripcion?.trim() || '').toLowerCase())
-        );
-
-        finalItems = [...validExisting];
-
-        for (const item of itemsMapeados) {
-          const key = (item.sku?.trim() || item.descripcion?.trim() || '').toLowerCase();
-          if (!existingKeySet.has(key)) {
-            finalItems.push(item);
-            existingKeySet.add(key);
-            nuevosAgregados++;
-          }
-        }
-      }
+      const finalItems: DetalleCompraItem[] = [...itemsMapeados, ...manualLines];
 
       setNewCompra({
         ...newCompra,
@@ -541,13 +517,7 @@ export default function Purchases() {
         items: finalItems
       });
 
-      if (validExisting.length > 0 && nuevosAgregados > 0) {
-        showToast(`¡Éxito! Se sumaron ${nuevosAgregados} productos del paquete. Total en compra: ${finalItems.length} productos.`);
-      } else if (validExisting.length > 0 && nuevosAgregados === 0) {
-        showToast(`Todos los productos de este paquete ya estaban incluidos (${finalItems.length} productos en total).`);
-      } else {
-        showToast(`¡Éxito! Se importaron ${finalItems.length} productos reales desde Shein (${cartData.order_id || 'Pedido'}).`);
-      }
+      showToast(`¡Éxito! Se importaron ${finalItems.length} productos totales de tus paquetes de Shein (${cartData.order_id || 'Pedido'}).`);
     } catch (err: any) {
       showToast('Error al conectar con el servidor.');
     } finally {
