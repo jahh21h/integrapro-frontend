@@ -501,16 +501,53 @@ export default function Purchases() {
         };
       });
 
+      // Filtrar items válidos existentes en el formulario (ignorando la fila vacía inicial)
+      const validExisting = (newCompra.items || []).filter(item => 
+        (item.descripcion && item.descripcion.trim() !== '') || 
+        (item.sku && item.sku.trim() !== '') || 
+        (item.precio_unitario && item.precio_unitario > 0)
+      );
+
+      let finalItems: DetalleCompraItem[] = [];
+      let nuevosAgregados = 0;
+
+      if (validExisting.length === 0) {
+        finalItems = itemsMapeados;
+        nuevosAgregados = itemsMapeados.length;
+      } else {
+        // SUMAR / AGREGAR los productos de los paquetes sin duplicar
+        const existingKeySet = new Set(
+          validExisting.map(i => (i.sku?.trim() || i.descripcion?.trim() || '').toLowerCase())
+        );
+
+        finalItems = [...validExisting];
+
+        for (const item of itemsMapeados) {
+          const key = (item.sku?.trim() || item.descripcion?.trim() || '').toLowerCase();
+          if (!existingKeySet.has(key)) {
+            finalItems.push(item);
+            existingKeySet.add(key);
+            nuevosAgregados++;
+          }
+        }
+      }
+
       setNewCompra({
         ...newCompra,
         id_proveedor: provMatch.id_proveedor,
         numero_documento: cartData.order_id || newCompra.numero_documento || 'ORD-EXT-' + Date.now().toString().slice(-6),
         fecha: cartData.order_date || new Date().toISOString().split('T')[0],
-        descripcion: `Importación automática de pedido ${cartData.platform || 'Shein'} (${itemsMapeados.length} productos con fotos y tallas)`,
-        items: itemsMapeados
+        descripcion: `Importación automática de pedido ${cartData.platform || 'Shein'} (${finalItems.length} productos totales acumulados)`,
+        items: finalItems
       });
 
-      showToast(`¡Éxito! Se importaron ${itemsMapeados.length} productos reales desde Shein (${cartData.order_id || 'Pedido'}).`);
+      if (validExisting.length > 0 && nuevosAgregados > 0) {
+        showToast(`¡Éxito! Se sumaron ${nuevosAgregados} productos del paquete. Total en compra: ${finalItems.length} productos.`);
+      } else if (validExisting.length > 0 && nuevosAgregados === 0) {
+        showToast(`Todos los productos de este paquete ya estaban incluidos (${finalItems.length} productos en total).`);
+      } else {
+        showToast(`¡Éxito! Se importaron ${finalItems.length} productos reales desde Shein (${cartData.order_id || 'Pedido'}).`);
+      }
     } catch (err: any) {
       showToast('Error al conectar con el servidor.');
     } finally {
@@ -2475,13 +2512,32 @@ export default function Purchases() {
                     <Layers className="w-4 h-4 text-indigo-600" />
                     Líneas de la Factura & Productos Importados ({newCompra.items.length})
                   </h4>
-                  <button
-                    type="button"
-                    onClick={addItemRow}
-                    className="text-indigo-600 font-bold hover:underline flex items-center gap-1"
-                  >
-                    <Plus className="w-3.5 h-3.5" /> Agregar Línea Manual
-                  </button>
+                  <div className="flex items-center gap-3">
+                    {(newCompra.items.length > 1 || (newCompra.items[0]?.descripcion && newCompra.items[0].descripcion.trim() !== '')) && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (window.confirm('¿Deseas vaciar todas las líneas de la compra para empezar desde cero?')) {
+                            setNewCompra({
+                              ...newCompra,
+                              items: [{ descripcion: '', sku: '', talla: '', color: '', cantidad: 1, precio_origen: 0, precio_unitario: 0, subtotal: 0, foto: '' }]
+                            });
+                          }
+                        }}
+                        className="text-rose-500 font-semibold hover:text-rose-700 hover:underline flex items-center gap-1 text-xs cursor-pointer"
+                        title="Vaciar todos los productos cargados"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" /> Vaciar Lista
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={addItemRow}
+                      className="text-indigo-600 font-bold hover:underline flex items-center gap-1 cursor-pointer"
+                    >
+                      <Plus className="w-3.5 h-3.5" /> Agregar Línea Manual
+                    </button>
+                  </div>
                 </div>
 
                 <div className="space-y-3">
