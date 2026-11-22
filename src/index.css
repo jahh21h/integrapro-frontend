@@ -20,9 +20,10 @@
 /* Inputs en tema oscuro: el autollenado de Chrome mantiene texto blanco y fondo oscuro */
 .autofill-dark:-webkit-autofill,
 .autofill-dark:-webkit-autofill:hover,
-.autofill-dark:-webkit-autofill:focus {
-  -webkit-text-fill-color: #f8fafc;
-  -webkit-box-shadow: 0 0 0 1000px #1e293b inset;
+.autofill-dark:-webkit-autofill:focus,
+.autofill-dark:-webkit-autofill:active {
+  -webkit-text-fill-color: #f8fafc !important;
+  -webkit-box-shadow: 0 0 0 1000px #0d1428 inset !important;
   caret-color: #f8fafc;
   transition: background-color 9999s ease-out 0s;
 }
@@ -93,4 +94,101 @@
 }
 .animate-wave-4 {
   animation: waveBar 1.5s ease-in-out infinite 0.75s;
+}
+
+/* ========================================================= */
+/* LOGIN AURORA LIQUID GLASS (Animaciones lentas y suaves)   */
+/* ========================================================= */
+@keyframes loginOrbDrift1 {
+  0%, 100% { transform: translate(0px, 0px) scale(1); }
+  33% { transform: translate(40px, -30px) scale(1.08); }
+  66% { transform: translate(-28px, 22px) scale(0.96); }
+}
+@keyframes loginOrbDrift2 {
+  0%, 100% { transform: translate(0px, 0px) scale(1); }
+  33% { transform: translate(-42px, 26px) scale(1.1); }
+  66% { transform: translate(30px, -32px) scale(0.94); }
+}
+@keyframes loginOrbDrift3 {
+  0%, 100% { transform: translate(0px, 0px) scale(1); }
+  50% { transform: translate(26px, 34px) scale(1.12); }
+}
+@keyframes loginBorderBeam {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+@keyframes loginShimmerSlow {
+  0% { transform: translateX(-160%) skewX(-20deg); }
+  100% { transform: translateX(300%) skewX(-20deg); }
+}
+@keyframes loginHudFloat1 {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-8px); }
+}
+@keyframes loginHudFloat2 {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(7px); }
+}
+@keyframes loginBarBreath {
+  0%, 100% { transform: scaleY(0.55); opacity: 0.7; }
+  50% { transform: scaleY(1); opacity: 1; }
+}
+
+.login-orb-1 { animation: loginOrbDrift1 28s ease-in-out infinite; }
+.login-orb-2 { animation: loginOrbDrift2 34s ease-in-out infinite; }
+.login-orb-3 { animation: loginOrbDrift3 26s ease-in-out infinite; }
+.login-border-beam { animation: loginBorderBeam 20s linear infinite; }
+.login-shimmer-slow { animation: loginShimmerSlow 7s ease-in-out infinite; }
+.login-hud-float-1 { animation: loginHudFloat1 8s ease-in-out infinite; }
+.login-hud-float-2 { animation: loginHudFloat2 9.5s ease-in-out infinite; }
+.login-bar-1 { transform-origin: bottom; animation: loginBarBreath 4.2s ease-in-out infinite; }
+.login-bar-2 { transform-origin: bottom; animation: loginBarBreath 4.8s ease-in-out 0.5s infinite; }
+.login-bar-3 { transform-origin: bottom; animation: loginBarBreath 3.9s ease-in-out 1.0s infinite; }
+.login-bar-4 { transform-origin: bottom; animation: loginBarBreath 4.5s ease-in-out 0.3s infinite; }
+.login-bar-5 { transform-origin: bottom; animation: loginBarBreath 4.1s ease-in-out 0.8s infinite; }
+.login-bar-6 { transform-origin: bottom; animation: loginBarBreath 5.0s ease-in-out 1.2s infinite; }
+
+.login-grid-bg {
+  background-image:
+    linear-gradient(to right, rgba(255, 255, 255, 0.045) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.045) 1px, transparent 1px);
+  background-size: 40px 40px;
+  mask-image: radial-gradient(ellipse 72% 72% at 50% 50%, black 35%, transparent 100%);
+  -webkit-mask-image: radial-gradient(ellipse 72% 72% at 50% 50%, black 35%, transparent 100%);
+}
+
+.login-glass-card {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.11), rgba(15, 23, 42, 0.65));
+  backdrop-filter: blur(26px);
+  -webkit-backdrop-filter: blur(26px);
+  box-shadow:
+    0 28px 65px -16px rgba(0, 0, 0, 0.72),
+    inset 0 1px 1px rgba(255, 255, 255, 0.28),
+    inset 0 -1px 1px rgba(255, 255, 255, 0.06);
+}
+
+.login-glass-chip {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.04));
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  box-shadow:
+    0 18px 36px -14px rgba(0, 0, 0, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.24);
+}
+
+.login-glass-input {
+  background: rgba(10, 16, 34, 0.62);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #f8fafc;
+  transition: border-color 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease;
+}
+.login-glass-input::placeholder {
+  color: rgba(148, 163, 184, 0.75);
+}
+.login-glass-input:focus {
+  outline: none;
+  border-color: rgba(56, 189, 248, 0.7);
+  background: rgba(10, 16, 34, 0.82);
+  box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.16), 0 0 22px rgba(99, 102, 241, 0.18);
 }

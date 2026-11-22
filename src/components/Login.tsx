@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { User, UserRole, EmpresaSaaS } from '../types';
 import { authApi } from '../api';
 import { formatRegimenLabel } from '../utils/tax';
@@ -7,6 +7,7 @@ import {
   Lock,
   Mail,
   ArrowRight,
+  ArrowLeft,
   ShieldCheck,
   Store,
   Clock,
@@ -15,7 +16,12 @@ import {
   User as UserIcon,
   Phone,
   Globe,
-  CheckCircle2
+  CheckCircle2,
+  Eye,
+  EyeOff,
+  FileText,
+  CreditCard,
+  Zap
 } from 'lucide-react';
 
 interface LoginProps {
@@ -39,12 +45,25 @@ const PLAN_PRICES_USD: Record<string, number> = {
   enterprise: 99,
 };
 
+const PRESET_OPTIONS = [
+  { id: 'retail' as const, label: 'Tienda / POS', desc: 'Caja + Inventario + Ventas' },
+  { id: 'admin_only' as const, label: 'Admin (Sin POS)', desc: 'ERP + Compras + Facturas' },
+  { id: 'standard' as const, label: 'PyME Completa', desc: 'POS + Contabilidad + RRHH' },
+  { id: 'live_express' as const, label: 'Solo TikTok Live', desc: 'Canastas + WhatsApp + Stock' },
+];
+
 export default function Login({ onLogin, inactivityNotice }: LoginProps) {
   const [mode, setMode] = useState<'login' | 'register'>('login');
+  const [registerStep, setRegisterStep] = useState<1 | 2>(1);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showRegPassword, setShowRegPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  const stageRef = useRef<HTMLDivElement>(null);
+  const spotlightRef = useRef<HTMLDivElement>(null);
 
   // Formulario Fase 2: Registro Self-Service (14 días gratis)
   const [regForm, setRegForm] = useState({
@@ -60,10 +79,20 @@ export default function Login({ onLogin, inactivityNotice }: LoginProps) {
 
   const regCurrency = regForm.pais === 'GT' ? 'GTQ' : 'USD';
   const regSymbol = regCurrency === 'GTQ' ? 'Q' : '$';
-  const regBaseMonthly = regCurrency === 'GTQ'
-    ? (PLAN_PRICES_GTQ[regForm.preset] ?? 299)
-    : (PLAN_PRICES_USD[regForm.preset] ?? 39);
+  const regBaseMonthly =
+    regCurrency === 'GTQ'
+      ? (PLAN_PRICES_GTQ[regForm.preset] ?? 299)
+      : (PLAN_PRICES_USD[regForm.preset] ?? 39);
   const regPrice = regForm.billing_cycle === 'annual' ? regBaseMonthly * 10 : regBaseMonthly;
+  const selectedPresetMeta = PRESET_OPTIONS.find((p) => p.id === regForm.preset) || PRESET_OPTIONS[0];
+
+  const handleStageMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!stageRef.current || !spotlightRef.current) return;
+    const rect = stageRef.current.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    spotlightRef.current.style.background = `radial-gradient(520px circle at ${x}px ${y}px, rgba(56, 189, 248, 0.14), transparent 70%)`;
+  };
 
   const mapBackendEmpresa = (empObj: any, fallbackId: number, fallbackNombre: string): EmpresaSaaS | undefined => {
     if (!empObj) return undefined;
@@ -143,8 +172,21 @@ export default function Login({ onLogin, inactivityNotice }: LoginProps) {
     }
   };
 
+  const handleNextRegisterStep = () => {
+    if (!regForm.nombre.trim()) {
+      setErrorMsg('Ingresa el nombre comercial de tu negocio para continuar.');
+      return;
+    }
+    setErrorMsg(null);
+    setRegisterStep(2);
+  };
+
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (registerStep === 1) {
+      handleNextRegisterStep();
+      return;
+    }
     setLoading(true);
     setErrorMsg(null);
 
@@ -190,318 +232,487 @@ export default function Login({ onLogin, inactivityNotice }: LoginProps) {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 p-4 relative overflow-hidden">
-      {/* Luces y efectos de fondo */}
-      <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-indigo-600/10 rounded-full blur-3xl pointer-events-none" />
-      <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-emerald-600/10 rounded-full blur-3xl pointer-events-none" />
+    <div
+      ref={stageRef}
+      onMouseMove={handleStageMouseMove}
+      className="min-h-screen w-full bg-[#050816] text-white relative overflow-hidden flex items-center justify-center p-4 sm:p-6 lg:p-10"
+    >
+      {/* Orbes Aurora de movimiento muy lento y suave */}
+      <div className="login-orb-1 absolute -top-28 -left-20 w-[440px] h-[440px] rounded-full bg-indigo-600/40 blur-[110px] pointer-events-none" />
+      <div className="login-orb-2 absolute top-1/4 -right-24 w-[480px] h-[480px] rounded-full bg-cyan-500/25 blur-[120px] pointer-events-none" />
+      <div className="login-orb-3 absolute -bottom-28 left-1/3 w-[420px] h-[420px] rounded-full bg-emerald-500/25 blur-[115px] pointer-events-none" />
 
+      {/* Cuadrícula tecnológica radial */}
+      <div className="login-grid-bg absolute inset-0 pointer-events-none" />
+
+      {/* Spotlight interactivo siguiendo el cursor */}
       <div
-        className={`${
-          mode === 'register' ? 'max-w-lg' : 'max-w-md'
-        } w-full bg-slate-900/90 backdrop-blur-xl rounded-3xl shadow-2xl p-5 sm:p-8 border border-slate-800 relative z-10 text-white transition-all`}
-      >
-        {/* Barra superior de acento */}
-        <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-indigo-500 via-sky-400 to-emerald-400 rounded-t-3xl" />
+        ref={spotlightRef}
+        className="pointer-events-none absolute inset-0 transition-opacity duration-500"
+        style={{ background: 'radial-gradient(520px circle at 50% 40%, rgba(99, 102, 241, 0.14), transparent 70%)' }}
+      />
 
-        {/* Encabezado */}
-        <div className="text-center mb-5 pt-2">
-          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-to-tr from-indigo-600 to-indigo-400 text-white mb-2.5 shadow-lg shadow-indigo-500/25">
-            <Building2 className="w-7 h-7" />
-          </div>
-          <h1 className="text-2xl font-black tracking-tight text-white flex items-center justify-center gap-1.5">
-            Integra<span className="text-indigo-400">Pro</span>
-            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
-              ENTERPRISE
+      {/* Contenedor Principal Split-Screen */}
+      <div className="relative z-10 w-full max-w-6xl grid grid-cols-1 lg:grid-cols-12 items-center gap-8 lg:gap-12">
+        {/* COLUMNA IZQUIERDA: Marca + HUD de Tarjetas de Cristal Flotantes */}
+        <div className="lg:col-span-6 hidden lg:flex flex-col space-y-7 pr-2">
+          <div className="inline-flex items-center gap-2.5 px-3.5 py-1.5 rounded-full login-glass-chip text-[11px] font-bold text-cyan-200 w-fit">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400" />
             </span>
-          </h1>
-          <p className="text-xs text-slate-400 font-medium mt-1">
-            Plataforma Cloud Multi-Empresa • Fortexa Technologies
-          </p>
-        </div>
+            <span>Fortexa Cloud OS • Plataforma Empresarial en Vivo</span>
+          </div>
 
-        {/* Selector Iniciar Sesión / Crear Cuenta Gratis */}
-        <div className="grid grid-cols-2 gap-1.5 p-1 bg-slate-800/80 border border-slate-700/80 rounded-2xl mb-5">
-          <button
-            type="button"
-            onClick={() => {
-              setMode('login');
-              setErrorMsg(null);
-            }}
-            className={`py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-              mode === 'login'
-                ? 'bg-indigo-600 text-white shadow-md'
-                : 'text-slate-400 hover:text-white'
-            }`}
-          >
-            Iniciar Sesión
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setMode('register');
-              setErrorMsg(null);
-            }}
-            className={`py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1 cursor-pointer ${
-              mode === 'register'
-                ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-md'
-                : 'text-emerald-300 hover:text-white'
-            }`}
-          >
-            <Sparkles className="w-3.5 h-3.5" />
-            <span>Prueba Gratis 14 Días</span>
-          </button>
-        </div>
+          <div className="space-y-3">
+            <h1 className="text-4xl xl:text-5xl font-black tracking-tight leading-[1.06]">
+              Integra
+              <span className="bg-gradient-to-r from-indigo-400 via-cyan-300 to-emerald-300 bg-clip-text text-transparent">
+                Pro
+              </span>
+              <span className="block text-2xl xl:text-[28px] text-slate-200 font-extrabold mt-2">
+                Tu negocio en tiempo real.
+              </span>
+            </h1>
+            <p className="text-sm text-slate-300/90 max-w-lg leading-relaxed">
+              Punto de Venta rápido, inventario multi-sucursal, cuentas por cobrar con abonos parciales y comprobantes PDF elegantes en un entorno 100% privado.
+            </p>
+          </div>
 
-        {/* Aviso de Inactividad */}
-        {inactivityNotice && mode === 'login' && (
-          <div className="mb-4 p-3.5 rounded-2xl bg-amber-500/15 border border-amber-500/40 text-amber-200 text-xs flex items-center gap-3">
-            <div className="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center shrink-0">
-              <Clock className="w-4 h-4" />
+          {/* Tarjetas HUD de Cristal Flotando suavemente */}
+          <div className="grid grid-cols-2 gap-4 max-w-lg pt-1">
+            <div className="login-glass-chip rounded-2xl p-4 login-hud-float-1">
+              <div className="flex items-center justify-between text-[10px] text-slate-300">
+                <span className="font-bold tracking-wider">VENTAS EN VIVO</span>
+                <span className="text-emerald-300 font-black px-1.5 py-0.5 rounded-md bg-emerald-500/15 border border-emerald-400/25">
+                  +28%
+                </span>
+              </div>
+              <div className="text-xl font-black text-white mt-1.5 font-mono">Q 18,450</div>
+              <div className="flex items-end gap-1.5 h-10 mt-2.5">
+                <div className="flex-1 h-full bg-indigo-400/75 rounded-t login-bar-1" />
+                <div className="flex-1 h-full bg-cyan-400/80 rounded-t login-bar-2" />
+                <div className="flex-1 h-full bg-indigo-300/80 rounded-t login-bar-3" />
+                <div className="flex-1 h-full bg-emerald-400 rounded-t login-bar-4" />
+                <div className="flex-1 h-full bg-cyan-300/90 rounded-t login-bar-5" />
+                <div className="flex-1 h-full bg-gradient-to-t from-indigo-500 to-emerald-300 rounded-t login-bar-6" />
+              </div>
             </div>
-            <div>
-              <p className="font-bold text-amber-300">Sesión Cerrada por Inactividad</p>
-              <p className="text-[11px] text-amber-200/90 leading-tight mt-0.5">{inactivityNotice}</p>
+
+            <div className="login-glass-chip rounded-2xl p-4 login-hud-float-2 flex flex-col justify-between">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-bold tracking-wider text-cyan-200">ABONO PARCIAL CxC</span>
+                <span className="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_8px_#34d399]" />
+              </div>
+              <div className="my-2">
+                <div className="text-xs font-black text-white">Comprobante #003217</div>
+                <div className="text-xs text-emerald-300 font-mono font-bold mt-0.5">+ Q 350.00 • PDF 1 hoja</div>
+              </div>
+              <div className="text-[10px] text-slate-300 flex items-center justify-between border-t border-white/10 pt-2">
+                <span>Saldo actualizado</span>
+                <span className="text-emerald-300 font-bold">En línea ✓</span>
+              </div>
             </div>
           </div>
-        )}
 
-        {/* Mensaje de Error */}
-        {errorMsg && (
-          <div className="mb-4 p-3.5 rounded-2xl bg-rose-500/15 border border-rose-500/40 text-rose-200 text-xs flex items-center gap-3">
-            <div className="w-8 h-8 rounded-xl bg-rose-500/20 text-rose-400 flex items-center justify-center shrink-0">
-              <AlertCircle className="w-4 h-4" />
-            </div>
-            <div>
-              <p className="font-bold text-rose-300">{mode === 'login' ? 'Acceso Denegado' : 'No se pudo completar el registro'}</p>
-              <p className="text-[11px] text-rose-200/90 leading-tight mt-0.5">{errorMsg}</p>
-            </div>
+          {/* Cápsulas de capacidades clave */}
+          <div className="flex flex-wrap items-center gap-2.5 pt-1 text-[11px] font-bold text-slate-200">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/5 border border-white/10">
+              <Zap className="w-3.5 h-3.5 text-amber-300" /> POS Ultrarrápido
+            </span>
+            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/5 border border-white/10">
+              <FileText className="w-3.5 h-3.5 text-emerald-300" /> Comprobante PDF
+            </span>
+            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/5 border border-white/10">
+              <CreditCard className="w-3.5 h-3.5 text-cyan-300" /> Abonos CxC
+            </span>
           </div>
-        )}
+        </div>
 
-        {mode === 'login' ? (
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
-                Correo Corporativo
-              </label>
-              <div className="relative">
-                <Mail className="absolute left-3.5 top-3 w-4 h-4 text-slate-400" />
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                  className="autofill-dark w-full pl-10 pr-4 py-2.5 bg-slate-800/80 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-400 focus:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
-                  placeholder="usuario@empresa.com"
-                />
-              </div>
-            </div>
+        {/* COLUMNA DERECHA: Tarjeta Liquid Glass con Borde de Luz Giratorio Muy Lento */}
+        <div className="lg:col-span-6 flex justify-center w-full">
+          <div className="relative w-full max-w-[470px] p-[1.5px] rounded-[28px] overflow-hidden shadow-2xl">
+            {/* Haz de luz girando suavemente (20s por vuelta) */}
+            <div className="login-border-beam absolute -inset-[130%] bg-[conic-gradient(from_0deg,transparent_0deg,rgba(99,102,241,0.85)_65deg,rgba(34,211,238,0.9)_115deg,rgba(16,185,129,0.85)_165deg,transparent_220deg)] pointer-events-none" />
 
-            <div>
-              <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
-                Contraseña
-              </label>
-              <div className="relative">
-                <Lock className="absolute left-3.5 top-3 w-4 h-4 text-slate-400" />
-                <input
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                  className="autofill-dark w-full pl-10 pr-4 py-2.5 bg-slate-800/80 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-400 focus:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
-                  placeholder="••••••••"
-                />
-              </div>
-            </div>
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full mt-2 py-3 px-4 bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-500 hover:to-indigo-600 text-white font-semibold rounded-xl shadow-lg shadow-indigo-600/30 transition-all flex items-center justify-center gap-2 group disabled:opacity-50 cursor-pointer"
-            >
-              <span>{loading ? 'Accediendo...' : 'Iniciar Sesión'}</span>
-              <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-            </button>
-          </form>
-        ) : (
-          <form onSubmit={handleRegister} className="space-y-3.5 text-xs">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="block font-semibold text-slate-300 mb-1">Nombre de tu Negocio *</label>
-                <div className="relative">
-                  <Building2 className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
-                  <input
-                    type="text"
-                    required
-                    value={regForm.nombre}
-                    onChange={(e) => setRegForm({ ...regForm, nombre: e.target.value })}
-                    placeholder="Ej. Mi Tienda / Empresa"
-                    className="w-full pl-9 pr-3 py-2 bg-slate-800/80 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                  />
+            {/* Superficie de Vidrio Esmerilado */}
+            <div className="relative login-glass-card rounded-[26.5px] p-6 sm:p-8 space-y-5">
+              {/* Encabezado de marca */}
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-indigo-500 via-blue-500 to-emerald-400 flex items-center justify-center text-white shadow-lg shadow-indigo-500/30 shrink-0">
+                    <Building2 className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <div className="font-black text-lg tracking-tight text-white flex items-center gap-1.5 leading-none">
+                      <span>
+                        Integra<span className="text-cyan-300">Pro</span>
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-300/90 mt-1">
+                      Fortexa Technologies • Cloud Multi-Empresa
+                    </p>
+                  </div>
                 </div>
+                <span className="px-2.5 py-1 rounded-full bg-white/10 border border-white/20 text-[10px] font-black tracking-wider text-cyan-200 shrink-0">
+                  ENTERPRISE
+                </span>
               </div>
-              <div>
-                <label className="block font-semibold text-slate-300 mb-1">País & Moneda *</label>
-                <div className="relative">
-                  <Globe className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
-                  <select
-                    value={regForm.pais}
-                    onChange={(e) => setRegForm({ ...regForm, pais: e.target.value })}
-                    className="w-full pl-9 pr-3 py-2 bg-slate-800/80 border border-slate-700 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                  >
-                    <option value="GT">🇬🇹 Guatemala (Quetzales - Q)</option>
-                    <option value="SV">🇸🇻 El Salvador (Dólares - $)</option>
-                    <option value="HN">🇭🇳 Honduras (Dólares - $)</option>
-                    <option value="CR">🇨🇷 Costa Rica (Dólares - $)</option>
-                    <option value="PA">🇵🇦 Panamá (Dólares - $)</option>
-                    <option value="MX">🇲🇽 México (Dólares - $)</option>
-                    <option value="US">🇺🇸 Estados Unidos (Dólares - $)</option>
-                    <option value="OT">🌎 Otro País (Dólares - $)</option>
-                  </select>
-                </div>
-              </div>
-            </div>
 
-            {/* Perfil del Negocio */}
-            <div>
-              <label className="block font-semibold text-slate-300 mb-1.5">¿Cómo usarás IntegraPro?</label>
-              <div className="grid grid-cols-2 gap-1.5">
-                {[
-                  { id: 'retail', label: 'Tienda / POS', desc: 'Caja + Inventario + Ventas' },
-                  { id: 'admin_only', label: 'Administrativo (Sin POS)', desc: 'ERP + Compras + Facturación' },
-                  { id: 'standard', label: 'PyME Completa', desc: 'POS + Contabilidad + RRHH' },
-                  { id: 'live_express', label: 'Solo TikTok Live', desc: 'Canastas + WhatsApp + Stock' },
-                ].map((opt) => (
+              {/* Selector Iniciar Sesión / Prueba Gratis 14 Días */}
+              <div className="grid grid-cols-2 gap-1.5 p-1 rounded-2xl bg-slate-950/60 border border-white/15">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMode('login');
+                    setRegisterStep(1);
+                    setErrorMsg(null);
+                  }}
+                  className={`py-2.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer ${
+                    mode === 'login'
+                      ? 'bg-white/15 text-white shadow-sm border border-white/20'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  Iniciar Sesión
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMode('register');
+                    setRegisterStep(1);
+                    setErrorMsg(null);
+                  }}
+                  className={`py-2.5 rounded-xl text-xs font-extrabold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                    mode === 'register'
+                      ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-slate-950 shadow-md shadow-emerald-500/25'
+                      : 'text-emerald-300 hover:text-white'
+                  }`}
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>Prueba Gratis 14 Días</span>
+                </button>
+              </div>
+
+              {/* Aviso de Inactividad */}
+              {inactivityNotice && mode === 'login' && (
+                <div className="p-3.5 rounded-2xl bg-amber-500/15 border border-amber-400/35 text-amber-100 text-xs flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-300 flex items-center justify-center shrink-0">
+                    <Clock className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <p className="font-bold text-amber-200">Sesión Cerrada por Inactividad</p>
+                    <p className="text-[11px] text-amber-100/85 leading-tight mt-0.5">{inactivityNotice}</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Mensaje de Error */}
+              {errorMsg && (
+                <div className="p-3.5 rounded-2xl bg-rose-500/15 border border-rose-400/40 text-rose-100 text-xs flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-xl bg-rose-500/20 text-rose-300 flex items-center justify-center shrink-0">
+                    <AlertCircle className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <p className="font-bold text-rose-200">
+                      {mode === 'login' ? 'Acceso Denegado' : 'No se pudo completar el registro'}
+                    </p>
+                    <p className="text-[11px] text-rose-100/90 leading-tight mt-0.5">{errorMsg}</p>
+                  </div>
+                </div>
+              )}
+
+              {mode === 'login' ? (
+                <form onSubmit={handleSubmit} className="space-y-4">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-300 uppercase tracking-wider mb-1.5">
+                      Correo Corporativo
+                    </label>
+                    <div className="relative">
+                      <Mail className="absolute left-3.5 top-3 w-4 h-4 text-slate-400 pointer-events-none" />
+                      <input
+                        type="email"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        required
+                        autoComplete="username"
+                        className="autofill-dark login-glass-input w-full pl-10 pr-4 py-2.5 rounded-xl text-sm"
+                        placeholder="usuario@empresa.com"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-300 uppercase tracking-wider mb-1.5">
+                      Contraseña
+                    </label>
+                    <div className="relative">
+                      <Lock className="absolute left-3.5 top-3 w-4 h-4 text-slate-400 pointer-events-none" />
+                      <input
+                        type={showPassword ? 'text' : 'password'}
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        required
+                        autoComplete="current-password"
+                        className="autofill-dark login-glass-input w-full pl-10 pr-10 py-2.5 rounded-xl text-sm"
+                        placeholder="••••••••"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword((prev) => !prev)}
+                        className="absolute right-3 top-2.5 p-0.5 text-slate-400 hover:text-white transition-colors cursor-pointer"
+                        title={showPassword ? 'Ocultar contraseña' : 'Ver contraseña'}
+                      >
+                        {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                  </div>
+
                   <button
-                    key={opt.id}
-                    type="button"
-                    onClick={() => setRegForm({ ...regForm, preset: opt.id as any })}
-                    className={`p-2 rounded-xl border text-left transition-all cursor-pointer ${
-                      regForm.preset === opt.id
-                        ? 'bg-emerald-500/20 border-emerald-400 text-white'
-                        : 'bg-slate-800/60 border-slate-700 text-slate-300 hover:bg-slate-800'
-                    }`}
+                    type="submit"
+                    disabled={loading}
+                    className="relative overflow-hidden w-full mt-2 py-3 px-4 bg-gradient-to-r from-indigo-500 via-blue-500 to-cyan-500 hover:from-indigo-400 hover:via-blue-400 hover:to-cyan-400 text-white font-black text-sm rounded-xl shadow-lg shadow-indigo-500/30 transition-all flex items-center justify-center gap-2 group disabled:opacity-50 cursor-pointer"
                   >
-                    <p className="font-bold text-[11px] leading-tight">{opt.label}</p>
-                    <p className="text-[10px] text-slate-400 mt-0.5">{opt.desc}</p>
+                    <span className="login-shimmer-slow absolute inset-0 w-1/3 bg-gradient-to-r from-transparent via-white/30 to-transparent pointer-events-none" />
+                    <span className="relative">{loading ? 'Accediendo...' : 'Iniciar Sesión'}</span>
+                    <ArrowRight className="relative w-4 h-4 group-hover:translate-x-1 transition-transform" />
                   </button>
-                ))}
+                </form>
+              ) : (
+                <form onSubmit={handleRegister} className="space-y-3.5 text-xs">
+                  {/* Indicador de Paso (2 pasos limpios) */}
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-bold text-cyan-200">
+                      {registerStep === 1 ? 'Paso 1 de 2 • Configura tu Negocio' : 'Paso 2 de 2 • Credenciales de Dueño'}
+                    </span>
+                    <div className="flex items-center gap-1.5">
+                      <span className={`h-1.5 w-6 rounded-full transition-all ${registerStep === 1 ? 'bg-emerald-400' : 'bg-emerald-400/50'}`} />
+                      <span className={`h-1.5 w-6 rounded-full transition-all ${registerStep === 2 ? 'bg-emerald-400' : 'bg-white/15'}`} />
+                    </div>
+                  </div>
+
+                  {registerStep === 1 ? (
+                    <>
+                      <div className="space-y-3">
+                        <div>
+                          <label className="block font-semibold text-slate-300 mb-1">Nombre de tu Negocio *</label>
+                          <div className="relative">
+                            <Building2 className="absolute left-3 top-2.5 w-4 h-4 text-slate-400 pointer-events-none" />
+                            <input
+                              type="text"
+                              required
+                              value={regForm.nombre}
+                              onChange={(e) => setRegForm({ ...regForm, nombre: e.target.value })}
+                              placeholder="Ej. Mi Tienda / Empresa"
+                              className="autofill-dark login-glass-input w-full pl-9 pr-3 py-2.5 rounded-xl text-xs"
+                            />
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="block font-semibold text-slate-300 mb-1">País & Moneda *</label>
+                          <div className="relative">
+                            <Globe className="absolute left-3 top-2.5 w-4 h-4 text-slate-400 pointer-events-none" />
+                            <select
+                              value={regForm.pais}
+                              onChange={(e) => setRegForm({ ...regForm, pais: e.target.value })}
+                              className="login-glass-input w-full pl-9 pr-3 py-2.5 rounded-xl text-xs font-semibold"
+                            >
+                              <option value="GT" className="bg-slate-900 text-white">🇬🇹 Guatemala — Quetzales (Q / GTQ)</option>
+                              <option value="SV" className="bg-slate-900 text-white">🇸🇻 El Salvador — Dólares ($ / USD)</option>
+                              <option value="HN" className="bg-slate-900 text-white">🇭🇳 Honduras — Dólares ($ / USD)</option>
+                              <option value="CR" className="bg-slate-900 text-white">🇨🇷 Costa Rica — Dólares ($ / USD)</option>
+                              <option value="PA" className="bg-slate-900 text-white">🇵🇦 Panamá — Dólares ($ / USD)</option>
+                              <option value="MX" className="bg-slate-900 text-white">🇲🇽 México — Dólares ($ / USD)</option>
+                              <option value="US" className="bg-slate-900 text-white">🇺🇸 Estados Unidos — Dólares ($ / USD)</option>
+                              <option value="OT" className="bg-slate-900 text-white">🌎 Otro País — Dólares ($ / USD)</option>
+                            </select>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Perfil del Negocio */}
+                      <div>
+                        <label className="block font-semibold text-slate-300 mb-1.5">¿Cómo usarás IntegraPro?</label>
+                        <div className="grid grid-cols-2 gap-2">
+                          {PRESET_OPTIONS.map((opt) => (
+                            <button
+                              key={opt.id}
+                              type="button"
+                              onClick={() => setRegForm({ ...regForm, preset: opt.id })}
+                              className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                                regForm.preset === opt.id
+                                  ? 'bg-emerald-500/20 border-emerald-400/80 text-white shadow-inner'
+                                  : 'bg-white/5 border-white/15 text-slate-200 hover:bg-white/10'
+                              }`}
+                            >
+                              <p className="font-bold text-[11px] leading-tight">{opt.label}</p>
+                              <p className="text-[10px] text-slate-300/80 mt-0.5">{opt.desc}</p>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Ciclo + Resumen Precio Trial */}
+                      <div className="p-3 rounded-2xl bg-emerald-500/12 border border-emerald-400/30 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <div>
+                          <p className="font-black text-emerald-300 text-xs flex items-center gap-1">
+                            <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                            <span>Hoy pagas {regSymbol} 0.00 (14 días gratis)</span>
+                          </p>
+                          <p className="text-[10.5px] text-emerald-100/80 mt-0.5">
+                            Luego: <strong>{regSymbol} {regPrice}.00 {regCurrency} / {regForm.billing_cycle === 'annual' ? 'año' : 'mes'}</strong>
+                          </p>
+                        </div>
+                        <div className="flex gap-1 bg-slate-950/65 p-1 rounded-xl border border-white/15 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => setRegForm({ ...regForm, billing_cycle: 'monthly' })}
+                            className={`px-2.5 py-1 rounded-lg text-[10px] font-bold cursor-pointer ${
+                              regForm.billing_cycle === 'monthly' ? 'bg-emerald-500 text-slate-950' : 'text-slate-300'
+                            }`}
+                          >
+                            Mensual
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setRegForm({ ...regForm, billing_cycle: 'annual' })}
+                            className={`px-2.5 py-1 rounded-lg text-[10px] font-bold cursor-pointer ${
+                              regForm.billing_cycle === 'annual' ? 'bg-emerald-500 text-slate-950' : 'text-slate-300'
+                            }`}
+                          >
+                            Anual (-2m)
+                          </button>
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={handleNextRegisterStep}
+                        className="relative overflow-hidden w-full py-3 px-4 bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 hover:from-emerald-400 hover:to-cyan-400 text-slate-950 font-black text-xs rounded-xl shadow-lg shadow-emerald-500/25 transition-all flex items-center justify-center gap-2 group cursor-pointer"
+                      >
+                        <span className="login-shimmer-slow absolute inset-0 w-1/3 bg-gradient-to-r from-transparent via-white/40 to-transparent pointer-events-none" />
+                        <span className="relative">Continuar: Tus Datos de Acceso</span>
+                        <ArrowRight className="relative w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      {/* Resumen compacto del Paso 1 */}
+                      <div className="p-2.5 rounded-xl bg-white/5 border border-white/15 flex items-center justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="font-bold text-white truncate">{regForm.nombre}</p>
+                          <p className="text-[10.5px] text-emerald-300">
+                            {selectedPresetMeta.label} • 14 días gratis (luego {regSymbol} {regPrice}/{regForm.billing_cycle === 'annual' ? 'año' : 'mes'})
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setRegisterStep(1);
+                            setErrorMsg(null);
+                          }}
+                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/15 text-cyan-200 font-bold text-[11px] shrink-0 cursor-pointer"
+                        >
+                          <ArrowLeft className="w-3 h-3" /> Cambiar
+                        </button>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label className="block font-semibold text-slate-300 mb-1">Tu Nombre *</label>
+                          <div className="relative">
+                            <UserIcon className="absolute left-3 top-2.5 w-4 h-4 text-slate-400 pointer-events-none" />
+                            <input
+                              type="text"
+                              required
+                              autoFocus
+                              value={regForm.admin_name}
+                              onChange={(e) => setRegForm({ ...regForm, admin_name: e.target.value })}
+                              placeholder="Nombre completo"
+                              className="autofill-dark login-glass-input w-full pl-9 pr-3 py-2.5 rounded-xl text-xs"
+                            />
+                          </div>
+                        </div>
+                        <div>
+                          <label className="block font-semibold text-slate-300 mb-1">WhatsApp / Teléfono</label>
+                          <div className="relative">
+                            <Phone className="absolute left-3 top-2.5 w-4 h-4 text-slate-400 pointer-events-none" />
+                            <input
+                              type="text"
+                              value={regForm.telefono}
+                              onChange={(e) => setRegForm({ ...regForm, telefono: e.target.value })}
+                              placeholder={regForm.pais === 'GT' ? '5555-1234' : '+1 555-1234'}
+                              className="autofill-dark login-glass-input w-full pl-9 pr-3 py-2.5 rounded-xl text-xs"
+                            />
+                          </div>
+                        </div>
+                        <div>
+                          <label className="block font-semibold text-slate-300 mb-1">Correo Electrónico *</label>
+                          <div className="relative">
+                            <Mail className="absolute left-3 top-2.5 w-4 h-4 text-slate-400 pointer-events-none" />
+                            <input
+                              type="email"
+                              required
+                              autoComplete="email"
+                              value={regForm.admin_email}
+                              onChange={(e) => setRegForm({ ...regForm, admin_email: e.target.value })}
+                              placeholder="tu@negocio.com"
+                              className="autofill-dark login-glass-input w-full pl-9 pr-3 py-2.5 rounded-xl text-xs"
+                            />
+                          </div>
+                        </div>
+                        <div>
+                          <label className="block font-semibold text-slate-300 mb-1">Contraseña (mín. 6) *</label>
+                          <div className="relative">
+                            <Lock className="absolute left-3 top-2.5 w-4 h-4 text-slate-400 pointer-events-none" />
+                            <input
+                              type={showRegPassword ? 'text' : 'password'}
+                              required
+                              minLength={6}
+                              autoComplete="new-password"
+                              value={regForm.admin_password}
+                              onChange={(e) => setRegForm({ ...regForm, admin_password: e.target.value })}
+                              placeholder="••••••••"
+                              className="autofill-dark login-glass-input w-full pl-9 pr-9 py-2.5 rounded-xl text-xs"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setShowRegPassword((prev) => !prev)}
+                              className="absolute right-2.5 top-2.5 text-slate-400 hover:text-white cursor-pointer"
+                            >
+                              {showRegPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+
+                      <button
+                        type="submit"
+                        disabled={loading}
+                        className="relative overflow-hidden w-full py-3 px-4 bg-gradient-to-r from-emerald-500 via-teal-400 to-cyan-500 hover:from-emerald-400 hover:to-cyan-400 text-slate-950 font-black text-xs rounded-xl shadow-lg shadow-emerald-500/25 transition-all flex items-center justify-center gap-2 group disabled:opacity-50 cursor-pointer"
+                      >
+                        <span className="login-shimmer-slow absolute inset-0 w-1/3 bg-gradient-to-r from-transparent via-white/45 to-transparent pointer-events-none" />
+                        <span className="relative">{loading ? 'Creando tu espacio privado...' : 'Crear Cuenta Gratis (14 Días)'}</span>
+                        <ArrowRight className="relative w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                      </button>
+                    </>
+                  )}
+                </form>
+              )}
+
+              {/* Badges de seguridad */}
+              <div className="pt-2 border-t border-white/10 flex items-center justify-center gap-3 text-[11px] text-slate-300/80">
+                <span className="flex items-center gap-1">
+                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" /> Cifrado 256-bit
+                </span>
+                <span className="text-white/25">•</span>
+                <span className="flex items-center gap-1">
+                  <Store className="w-3.5 h-3.5 text-cyan-300" /> Multi-Tenancy Aislado
+                </span>
               </div>
             </div>
-
-            {/* Ciclo + Resumen Precio Trial */}
-            <div className="p-3 rounded-2xl bg-emerald-950/50 border border-emerald-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-              <div>
-                <p className="font-black text-emerald-300 text-xs flex items-center gap-1">
-                  <CheckCircle2 className="w-3.5 h-3.5" />
-                  Hoy pagas {regSymbol} 0.00 (14 días gratis)
-                </p>
-                <p className="text-[10px] text-emerald-200/80 mt-0.5">
-                  Luego: <strong>{regSymbol} {regPrice}.00 {regCurrency} / {regForm.billing_cycle === 'annual' ? 'año' : 'mes'}</strong>
-                </p>
-              </div>
-              <div className="flex gap-1 bg-slate-900/80 p-1 rounded-xl border border-slate-700 shrink-0">
-                <button
-                  type="button"
-                  onClick={() => setRegForm({ ...regForm, billing_cycle: 'monthly' })}
-                  className={`px-2.5 py-1 rounded-lg text-[10px] font-bold cursor-pointer ${
-                    regForm.billing_cycle === 'monthly' ? 'bg-emerald-600 text-white' : 'text-slate-400'
-                  }`}
-                >
-                  Mensual
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setRegForm({ ...regForm, billing_cycle: 'annual' })}
-                  className={`px-2.5 py-1 rounded-lg text-[10px] font-bold cursor-pointer ${
-                    regForm.billing_cycle === 'annual' ? 'bg-emerald-600 text-white' : 'text-slate-400'
-                  }`}
-                >
-                  Anual (-2m)
-                </button>
-              </div>
-            </div>
-
-            {/* Datos de Acceso */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="block font-semibold text-slate-300 mb-1">Tu Nombre *</label>
-                <div className="relative">
-                  <UserIcon className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
-                  <input
-                    type="text"
-                    required
-                    value={regForm.admin_name}
-                    onChange={(e) => setRegForm({ ...regForm, admin_name: e.target.value })}
-                    placeholder="Nombre completo"
-                    className="w-full pl-9 pr-3 py-2 bg-slate-800/80 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="block font-semibold text-slate-300 mb-1">WhatsApp / Teléfono</label>
-                <div className="relative">
-                  <Phone className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
-                  <input
-                    type="text"
-                    value={regForm.telefono}
-                    onChange={(e) => setRegForm({ ...regForm, telefono: e.target.value })}
-                    placeholder={regForm.pais === 'GT' ? '5555-1234' : '+1 555-1234'}
-                    className="w-full pl-9 pr-3 py-2 bg-slate-800/80 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="block font-semibold text-slate-300 mb-1">Correo Electrónico *</label>
-                <div className="relative">
-                  <Mail className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
-                  <input
-                    type="email"
-                    required
-                    value={regForm.admin_email}
-                    onChange={(e) => setRegForm({ ...regForm, admin_email: e.target.value })}
-                    placeholder="tu@negocio.com"
-                    className="w-full pl-9 pr-3 py-2 bg-slate-800/80 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="block font-semibold text-slate-300 mb-1">Contraseña (mín. 6) *</label>
-                <div className="relative">
-                  <Lock className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
-                  <input
-                    type="password"
-                    required
-                    minLength={6}
-                    value={regForm.admin_password}
-                    onChange={(e) => setRegForm({ ...regForm, admin_password: e.target.value })}
-                    placeholder="••••••••"
-                    className="w-full pl-9 pr-3 py-2 bg-slate-800/80 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                  />
-                </div>
-              </div>
-            </div>
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full py-3 px-4 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold rounded-xl shadow-lg shadow-emerald-600/25 transition-all flex items-center justify-center gap-2 group disabled:opacity-50 cursor-pointer"
-            >
-              <span>{loading ? 'Creando tu espacio privado...' : 'Crear Cuenta Gratis (14 Días)'}</span>
-              <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-            </button>
-          </form>
-        )}
-
-        {/* Badges de seguridad */}
-        <div className="mt-5 flex items-center justify-center gap-3 text-[11px] text-slate-400">
-          <span className="flex items-center gap-1">
-            <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" /> Cifrado 256-bit
-          </span>
-          <span>•</span>
-          <span className="flex items-center gap-1">
-            <Store className="w-3.5 h-3.5 text-indigo-400" /> Multi-Tenancy Aislado
-          </span>
+          </div>
         </div>
       </div>
     </div>
