@@ -629,6 +629,22 @@ export default function Sales({ currentEmpresa }: SalesProps = {}) {
 
                           <button
                             type="button"
+                            onClick={() => {
+                              const targetId = Number(s.rawId || s.id);
+                              if (!targetId || isNaN(targetId)) return;
+                              salesApi.downloadSalePdf(targetId).catch((err: any) => {
+                                showToast(`⚠️ No se pudo abrir el PDF: ${err?.response?.data?.message || err?.message}`);
+                              });
+                            }}
+                            className="p-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold rounded-xl text-xs transition-colors inline-flex items-center gap-1 cursor-pointer"
+                            title="Descargar Comprobante PDF Elegante"
+                          >
+                            <FileText className="w-3.5 h-3.5 text-emerald-600" />
+                            <span className="hidden xl:inline">PDF</span>
+                          </button>
+
+                          <button
+                            type="button"
                             onClick={() => handleOpenEditSale(s)}
                             className="p-1.5 bg-amber-50 hover:bg-amber-100 text-amber-700 font-bold rounded-xl text-xs transition-colors inline-flex items-center gap-1 cursor-pointer"
                             title="Modificar Venta"
@@ -938,16 +954,18 @@ export default function Sales({ currentEmpresa }: SalesProps = {}) {
             {/* Simulación del Ticket Térmico / FEL Oficial */}
             <div className="p-6 font-mono text-xs text-slate-700 space-y-4 max-h-[70vh] overflow-y-auto">
               <div className="text-center pb-3 border-b border-dashed border-slate-300">
-                <div className="flex justify-center mb-2">
-                  <img
-                    src="/img/logo_fashion_styles.jpg"
-                    alt="Logo Fashion Styles"
-                    className="h-14 w-auto max-w-[180px] object-contain rounded-xl border border-slate-200/90 shadow-xs p-1 bg-white"
-                  />
-                </div>
-                <p className="font-extrabold text-sm text-slate-900 uppercase tracking-tight">Fashion Styles</p>
-                <p className="text-[10px] text-slate-500 font-medium">Boutique & Variedades • {empresaActiva.razon_social || 'Fashion Styles S.A.'}</p>
-                <p className="text-[11px] text-slate-500">NIT Emisor: {empresaActiva.nit || '6322012-1'}</p>
+                {empresaActiva.id === 1 && (
+                  <div className="flex justify-center mb-2">
+                    <img
+                      src="/img/logo_fashion_styles.jpg"
+                      alt={`Logo ${empresaActiva.nombre}`}
+                      className="h-14 w-auto max-w-[180px] object-contain rounded-xl border border-slate-200/90 shadow-xs p-1 bg-white"
+                    />
+                  </div>
+                )}
+                <p className="font-extrabold text-sm text-slate-900 uppercase tracking-tight">{empresaActiva.nombre}</p>
+                <p className="text-[10px] text-slate-500 font-medium">{empresaActiva.razon_social || empresaActiva.nombre}</p>
+                <p className="text-[11px] text-slate-500">NIT Emisor: {empresaActiva.nit || 'CF'}</p>
                 <p className="text-[11px]">{selectedSaleDetail.sucursal}</p>
                 <p className="text-[11px]">{selectedSaleDetail.fecha}</p>
               </div>
@@ -1009,40 +1027,17 @@ export default function Sales({ currentEmpresa }: SalesProps = {}) {
                 </table>
               </div>
 
-              {(() => {
-                const totalCalculadoGross = selectedSaleDetail.productos.reduce((acc, p) => {
-                  const uPrice = p.precioUnitario || (p.subtotal / (p.cantidad || 1));
-                  return acc + (uPrice * p.cantidad);
-                }, 0);
-                const totalDesc = Math.max(0, totalCalculadoGross - selectedSaleDetail.total);
-                const tax = calculateSaleTaxes(selectedSaleDetail.total, empresaActiva.regimen);
-
-                return (
-                  <div className="pt-3 border-t border-dashed border-slate-300 space-y-1 text-right">
-                    {totalDesc > 0 && (
-                      <>
-                        <p className="text-xs text-slate-500">Subtotal Bruto: Q {totalCalculadoGross.toFixed(2)}</p>
-                        <p className="text-xs font-bold text-amber-700">Descuento Total: -Q {totalDesc.toFixed(2)}</p>
-                      </>
-                    )}
-                    <p className="text-xs text-slate-600">
-                      {tax.tipoRegimen === 'general' ? 'Subtotal Neto (Sin IVA):' : 'Base Gravada:'} Q {tax.subtotalNeto.toFixed(2)}
-                    </p>
-                    {tax.tipoRegimen === 'general' ? (
-                      <p className="text-xs text-indigo-700 font-semibold">IVA Débito Fiscal (12%): Q {tax.ivaMonto.toFixed(2)}</p>
-                    ) : tax.tipoRegimen === 'pequeno_contribuyente' ? (
-                      <>
-                        <p className="text-xs text-slate-400">IVA Trasladable (0%): Q 0.00</p>
-                        <p className="text-xs text-purple-700 font-black">Impuesto Pequeño Contribuyente (5% SAT): Q {tax.impuestoCalculadoSAT.toFixed(2)}</p>
-                      </>
-                    ) : (
-                      <p className="text-xs text-slate-500 font-medium">Venta Informal (Exenta de IVA / Sin retención SAT)</p>
-                    )}
-                    <p className="text-sm font-black text-slate-900 pt-1 border-t border-slate-100">TOTAL: Q {selectedSaleDetail.total.toFixed(2)}</p>
-                    <p className="text-[9px] text-slate-400 italic font-sans text-center pt-1">{tax.fraseFiscalFEL}</p>
-                  </div>
-                );
-              })()}
+              {/* Total limpio al cliente (sin desglose de IVA ni descuento global; el descuento es individual por producto) */}
+              <div className="pt-3 border-t border-dashed border-slate-300 space-y-1 text-right">
+                <p className="text-sm font-black text-slate-900">
+                  TOTAL A PAGAR: Q {selectedSaleDetail.total.toFixed(2)}
+                </p>
+                {selectedSaleDetail.estado === 'Crédito' && (
+                  <p className="text-[10px] font-bold text-amber-700">
+                    Venta al Crédito — Ver detalle de abonos y saldo en PDF Elegante o Cuentas por Cobrar
+                  </p>
+                )}
+              </div>
 
               {selectedSaleDetail.dte && (
                 <div className="pt-3 border-t border-dashed border-slate-300 flex items-center justify-between gap-3 bg-slate-50 p-2.5 rounded-xl">
@@ -1063,23 +1058,39 @@ export default function Sales({ currentEmpresa }: SalesProps = {}) {
               </p>
             </div>
 
-            <div className="p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
+            <div className="p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between gap-2">
               <button
                 onClick={() => setSelectedSaleDetail(null)}
-                className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-200 rounded-xl transition-colors"
+                className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-200 rounded-xl transition-colors cursor-pointer"
               >
                 Cerrar
               </button>
-              <button
-                onClick={() => {
-                  window.print();
-                  setSelectedSaleDetail(null);
-                }}
-                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 shadow-sm"
-              >
-                <Printer className="w-3.5 h-3.5" />
-                <span>Imprimir Ticket</span>
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const targetId = Number(selectedSaleDetail.rawId || selectedSaleDetail.id);
+                    if (!targetId || isNaN(targetId)) return;
+                    salesApi.downloadSalePdf(targetId).catch((err: any) => {
+                      showToast(`⚠️ No se pudo generar el PDF: ${err?.response?.data?.message || err?.message}`);
+                    });
+                  }}
+                  className="px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 shadow-sm cursor-pointer"
+                >
+                  <FileText className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>PDF Elegante</span>
+                </button>
+                <button
+                  onClick={() => {
+                    window.print();
+                    setSelectedSaleDetail(null);
+                  }}
+                  className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 shadow-sm cursor-pointer"
+                >
+                  <Printer className="w-3.5 h-3.5" />
+                  <span>Ticket</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>

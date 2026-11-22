@@ -176,13 +176,34 @@ export const salesApi = {
     const res = await apiClient.post('/clients/store', clientData);
     return res.data;
   },
-  getCredits: async () => {
-    const res = await apiClient.get('/sales/credits', { params: withTenantParam() });
+  getCredits: async (params?: { search?: string; id_empresa?: number }) => {
+    const res = await apiClient.get('/sales/credits', { params: withTenantParam(params) });
     return res.data;
   },
-  addPayment: async (saleId: number, paymentData: { monto: number; metodo_pago: string; referencia?: string }) => {
+  addPayment: async (
+    saleId: number,
+    paymentData: { monto: number; metodo_pago: 'efectivo' | 'tarjeta' | 'transferencia'; referencia?: string; fecha_pago?: string }
+  ) => {
     const res = await apiClient.post(`/sales/${saleId}/payment`, paymentData);
     return res.data;
+  },
+  downloadSalePdf: async (saleId: number) => {
+    const res = await apiClient.get(`/sales/${saleId}/pdf`, {
+      params: withTenantParam(),
+      responseType: 'blob'
+    });
+    const blob = new Blob([res.data], { type: 'application/pdf' });
+    const url = window.URL.createObjectURL(blob);
+    const win = window.open(url, '_blank');
+    if (!win) {
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `comprobante-venta-${saleId}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    }
+    setTimeout(() => window.URL.revokeObjectURL(url), 60_000);
   }
 };
 

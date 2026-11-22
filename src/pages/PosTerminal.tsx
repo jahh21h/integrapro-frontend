@@ -29,7 +29,8 @@ import {
   Loader2,
   Wifi,
   Video,
-  Sparkles
+  Sparkles,
+  FileText
 } from 'lucide-react';
 import { FELCertificadoDTE, EmpresaSaaS, Cliente } from '../types';
 import { useTimeFormat } from '../context/TimeFormatContext';
@@ -146,10 +147,12 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
   const [nombreReceptor, setNombreReceptor] = useState<string>('Consumidor Final');
   const [direccionReceptor, setDireccionReceptor] = useState<string>('Ciudad de Guatemala');
   
-  // Método de Pago & Cálculo de Cambio
+  // Método de Pago & Cálculo de Cambio / Abono Inicial en Crédito
   const [metodoPago, setMetodoPago] = useState<'efectivo' | 'tarjeta' | 'transferencia' | 'credito'>('efectivo');
   const [efectivoRecibido, setEfectivoRecibido] = useState<string>('');
   const [referenciaPago, setReferenciaPago] = useState<string>('');
+  const [abonoInicial, setAbonoInicial] = useState<string>('');
+  const [abonoMetodo, setAbonoMetodo] = useState<'efectivo' | 'tarjeta' | 'transferencia'>('efectivo');
 
   // Modal de Venta Exitosa / Certificación SAT
   const [saleCompletedModal, setSaleCompletedModal] = useState<boolean>(false);
@@ -158,6 +161,8 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
   const [dteCertificado, setDteCertificado] = useState<FELCertificadoDTE | null>(null);
   const [copiedUuid, setCopiedUuid] = useState<boolean>(false);
   const [ticketNumero, setTicketNumero] = useState<string>('TCK-1001');
+  const [lastSaleId, setLastSaleId] = useState<number | null>(null);
+  const [isDownloadingPdf, setIsDownloadingPdf] = useState<boolean>(false);
   const [showCertificarForm, setShowCertificarForm] = useState<boolean>(false);
   const [enlargedProduct, setEnlargedProduct] = useState<Product | null>(null);
 
@@ -438,10 +443,8 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
   const totalDiscount = cart.reduce((sum, item) => sum + (item.discount || 0), 0);
   const total = Math.max(0, grossSubtotal - totalDiscount);
   
-  // Cálculo de Impuestos SAT dinámico según el Régimen asignado a la empresa
+  // Cálculo de Impuestos SAT dinámico según el Régimen asignado a la empresa (control interno)
   const taxInfo = calculateSaleTaxes(total, empresaActiva.regimen);
-  const iva = taxInfo.ivaMonto;
-  const subtotal = taxInfo.subtotalNeto;
 
   const efectivoNum = parseFloat(efectivoRecibido) || 0;
   const cambio = efectivoNum > total ? efectivoNum - total : 0;
@@ -658,22 +661,59 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
   const handleProcessPayment = async (certificarFEL: boolean = false) => {
     if (cart.length === 0 || isProcessingSale) return;
 
+    const abonoInicialNum = metodoPago === 'credito' ? (parseFloat(abonoInicial) || 0) : 0;
+
+    if (metodoPago === 'efectivo' && efectivoRecibido.trim() !== '' && efectivoNum < total) {
+      setSaleError(`El efectivo recibido (Q ${efectivoNum.toFixed(2)}) es menor al total a cobrar (Q ${total.toFixed(2)}).`);
+      return;
+    }
+
+    if (metodoPago === 'credito') {
+      if (!selectedClient) {
+        setSaleError('Para registrar una venta al crédito debes asignar primero un cliente de tu cartera (no Consumidor Final).');
+        setClientModalOpen(true);
+        return;
+      }
+      if (abonoInicialNum < 0) {
+        setSaleError('El abono inicial no puede ser negativo.');
+        return;
+      }
+      if (abonoInicialNum >= total && total > 0) {
+        setSaleError('El abono inicial cubre el 100% de la venta. Selecciona Efectivo, Tarjeta o Transferencia para cobrar al contado.');
+        return;
+      }
+      const saldoFinanciar = Math.max(0, total - abonoInicialNum);
+      if (selectedClient.limite_credito > 0) {
+        const disponible = Math.max(0, selectedClient.limite_credito - selectedClient.saldo_actual);
+        if (saldoFinanciar > disponible + 0.01) {
+          setSaleError(
+            `El monto al crédito (Q ${saldoFinanciar.toFixed(2)}) excede el límite disponible de ${selectedClient.nombre_completo} (Q ${disponible.toFixed(2)}).`
+          );
+          return;
+        }
+      }
+    }
+
     setIsProcessingSale(true);
     setSaleError(null);
 
     try {
       // 1. Sincronizar y registrar la venta en vivo en MySQL del servidor
+      // Descuentos estrictamente individuales por producto (sin descuento global duplicado)
       const salePayload: any = {
         id_empresa: empresaActiva.id,
         id_cliente: selectedClient ? selectedClient.id_cliente : undefined,
         metodo_pago: metodoPago,
+        referencia_pago: referenciaPago.trim() || undefined,
+        abono_inicial: metodoPago === 'credito' && abonoInicialNum > 0 ? abonoInicialNum : undefined,
+        abono_metodo_pago: metodoPago === 'credito' && abonoInicialNum > 0 ? abonoMetodo : undefined,
         detalles: cart.map(item => ({
           id_producto: item.id,
           cantidad: item.quantity,
           descuento: item.discount || 0,
           precio_unitario: item.price
         })),
-        descuento: totalDiscount,
+        descuento: 0,
         observaciones: `Venta POS en vivo - ${certificarFEL || tipoComprobante === 'fel' ? 'Factura FEL' : 'Ticket Caja'}`
       };
 
@@ -681,6 +721,7 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
       console.log('✓ Venta registrada exitosamente en MySQL:', res);
 
       const serverSaleId = res?.id_venta || res?.venta?.id_venta;
+      setLastSaleId(serverSaleId ? Number(serverSaleId) : null);
       const ticketReal = serverSaleId ? `TCK-${serverSaleId}` : ('TCK-' + Math.floor(100000 + Math.random() * 900000));
       setTicketNumero(ticketReal);
 
@@ -727,6 +768,9 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
     setDteCertificado(null);
     setEfectivoRecibido('');
     setReferenciaPago('');
+    setAbonoInicial('');
+    setAbonoMetodo('efectivo');
+    setLastSaleId(null);
     setSelectedClient(null);
     setNitReceptor('CF');
     setNombreReceptor('Consumidor Final');
@@ -734,6 +778,18 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
     setShowCertificarForm(false);
     setTipoComprobante('ticket');
     setEditingDiscountId(null);
+  };
+
+  const handleOpenSalePdf = async () => {
+    if (!lastSaleId || isDownloadingPdf) return;
+    setIsDownloadingPdf(true);
+    try {
+      await salesApi.downloadSalePdf(lastSaleId);
+    } catch (err: any) {
+      alert(`No se pudo generar el PDF: ${err?.response?.data?.message || err?.message || 'Error de conexión'}`);
+    } finally {
+      setIsDownloadingPdf(false);
+    }
   };
 
   const copyToClipboard = (text: string) => {
@@ -1311,69 +1367,42 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
         {/* Resumen de Totales y Formas de Pago */}
         <div className="pt-3 border-t border-slate-100 space-y-3">
           <div className="space-y-1.5 text-xs">
-            {/* Indicador de Régimen Tributario Emisor */}
+            {/* Indicador interno de Régimen Emisor (el IVA se registra internamente en Contabilidad, sin desglose en el recibo del cliente) */}
             <div className="flex items-center justify-between pb-1.5 border-b border-slate-100">
               <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Régimen Emisor:</span>
-              <span className={`text-[10px] font-black px-2 py-0.5 rounded-full border ${
-                taxInfo.tipoRegimen === 'general'
-                  ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
-                  : taxInfo.tipoRegimen === 'pequeno_contribuyente'
-                  ? 'bg-purple-50 text-purple-800 border-purple-200'
-                  : 'bg-amber-50 text-amber-800 border-amber-200'
-              }`}>
+              <span
+                className={`text-[10px] font-black px-2 py-0.5 rounded-full border ${
+                  taxInfo.tipoRegimen === 'general'
+                    ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                    : taxInfo.tipoRegimen === 'pequeno_contribuyente'
+                    ? 'bg-purple-50 text-purple-800 border-purple-200'
+                    : 'bg-amber-50 text-amber-800 border-amber-200'
+                }`}
+                title="El impuesto correspondiente a este régimen se registra internamente en Contabilidad y Reportes SAT; no se desglosa en el comprobante del cliente."
+              >
                 {taxInfo.regimenLabel}
               </span>
             </div>
 
             {totalDiscount > 0 && (
-              <div className="flex justify-between text-slate-500">
-                <span>Subtotal Bruto</span>
-                <span className="font-semibold text-slate-700">Q {grossSubtotal.toFixed(2)}</span>
-              </div>
-            )}
-
-            {totalDiscount > 0 && (
-              <div className="flex justify-between text-amber-800 font-bold bg-amber-50 px-2 py-1 rounded-xl border border-amber-200">
+              <div className="flex justify-between text-[11px] text-amber-800 font-bold bg-amber-50 px-2.5 py-1 rounded-xl border border-amber-200">
                 <span className="flex items-center gap-1">
                   <Tag className="w-3 h-3 text-amber-600" />
-                  Descuento Total
+                  Ahorro en productos (desc. individual)
                 </span>
                 <span>- Q {totalDiscount.toFixed(2)}</span>
               </div>
             )}
 
-            <div className="flex justify-between text-slate-500">
-              <span>{taxInfo.tipoRegimen === 'general' ? 'Subtotal Neto (Sin IVA)' : 'Subtotal / Base'}</span>
-              <span className="font-semibold text-slate-700">Q {subtotal.toFixed(2)}</span>
-            </div>
-
-            {taxInfo.tipoRegimen === 'general' ? (
-              <div className="flex justify-between text-indigo-700 font-semibold">
-                <span>IVA Débito Fiscal (12% SAT)</span>
-                <span>Q {iva.toFixed(2)}</span>
-              </div>
-            ) : taxInfo.tipoRegimen === 'pequeno_contribuyente' ? (
-              <div className="space-y-1 bg-purple-50/50 p-2 rounded-xl border border-purple-100">
-                <div className="flex justify-between text-[11px] text-slate-500">
-                  <span>IVA Trasladable (Crédito Fiscal)</span>
-                  <span className="font-bold text-slate-400">Q 0.00 (Exento CF)</span>
-                </div>
-                <div className="flex justify-between text-[11px] text-purple-900 font-black">
-                  <span>Impuesto Retención Pequeño Contribuyente (5% SAT)</span>
-                  <span>Q {taxInfo.impuestoCalculadoSAT.toFixed(2)}</span>
-                </div>
-              </div>
-            ) : (
-              <div className="flex justify-between text-amber-800 font-medium bg-amber-50/50 p-1.5 rounded-xl border border-amber-100">
-                <span>Régimen Informal (Sin IVA)</span>
-                <span className="font-bold">Q 0.00</span>
-              </div>
-            )}
-
-            <div className="flex justify-between text-base font-black text-slate-900 pt-1.5 border-t border-slate-100">
+            <div className="flex justify-between items-baseline text-base font-black text-slate-900 pt-1">
               <span>Total a Cobrar</span>
               <span className="text-emerald-700">Q {total.toFixed(2)}</span>
             </div>
+            {taxInfo.tipoRegimen !== 'exento' && total > 0 && (
+              <p className="text-[10px] text-slate-400 text-right">
+                Impuesto interno registrado en sistema ({taxInfo.tipoRegimen === 'general' ? 'IVA 12%' : 'SAT 5%'} — no visible en recibo)
+              </p>
+            )}
           </div>
 
           {/* Selector de Método de Pago */}
@@ -1495,14 +1524,68 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
                   </div>
                   <div className="flex justify-between pt-1 border-t border-slate-100 font-bold">
                     <span>Crédito Disponible:</span>
-                    <span className={selectedClient.limite_credito - selectedClient.saldo_actual >= total ? 'text-emerald-700' : 'text-rose-600'}>
+                    <span className={selectedClient.limite_credito - selectedClient.saldo_actual >= Math.max(0, total - (parseFloat(abonoInicial) || 0)) ? 'text-emerald-700' : 'text-rose-600'}>
                       Q {Math.max(0, selectedClient.limite_credito - selectedClient.saldo_actual).toFixed(2)}
                     </span>
                   </div>
-                  {total > (selectedClient.limite_credito - selectedClient.saldo_actual) && (
+
+                  {/* Abono Inicial / Enganche Opcional */}
+                  <div className="pt-2 mt-1 border-t border-amber-100 space-y-1.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <label className="text-[10px] font-bold text-amber-900">Abono inicial hoy (opcional):</label>
+                      <div className="relative w-28">
+                        <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-400">Q</span>
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          max={Math.max(0, total - 0.01)}
+                          placeholder="0.00"
+                          value={abonoInicial}
+                          onChange={(e) => setAbonoInicial(e.target.value)}
+                          className="w-full pl-5 pr-2 py-1 bg-slate-50 border border-amber-300 rounded-lg text-[11px] font-black text-slate-900 focus:bg-white focus:outline-none"
+                        />
+                      </div>
+                    </div>
+                    {(parseFloat(abonoInicial) || 0) > 0 && (
+                      <div className="space-y-1.5">
+                        <div className="flex items-center gap-1">
+                          {(['efectivo', 'tarjeta', 'transferencia'] as const).map((m) => (
+                            <button
+                              key={m}
+                              type="button"
+                              onClick={() => setAbonoMetodo(m)}
+                              className={`flex-1 py-1 rounded-lg text-[10px] font-bold border capitalize cursor-pointer ${
+                                abonoMetodo === m
+                                  ? 'bg-amber-600 text-white border-amber-600'
+                                  : 'bg-slate-50 text-slate-600 border-slate-200'
+                              }`}
+                            >
+                              {m === 'transferencia' ? 'Transf.' : m}
+                            </button>
+                          ))}
+                        </div>
+                        {abonoMetodo !== 'efectivo' && (
+                          <input
+                            type="text"
+                            placeholder="Ref. del abono inicial..."
+                            value={referenciaPago}
+                            onChange={(e) => setReferenciaPago(e.target.value)}
+                            className="w-full px-2.5 py-1 bg-slate-50 border border-slate-200 rounded-lg text-[10px] font-medium focus:bg-white focus:outline-none"
+                          />
+                        )}
+                        <div className="flex justify-between text-[10px] font-black text-amber-900 bg-amber-50 px-2 py-1 rounded-lg">
+                          <span>Queda en Cuentas por Cobrar:</span>
+                          <span>Q {Math.max(0, total - (parseFloat(abonoInicial) || 0)).toFixed(2)}</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {selectedClient.limite_credito > 0 && Math.max(0, total - (parseFloat(abonoInicial) || 0)) > (selectedClient.limite_credito - selectedClient.saldo_actual) && (
                     <div className="p-1.5 bg-rose-50 rounded-lg border border-rose-200 flex items-center gap-1 text-[10px] text-rose-700 font-bold mt-1">
                       <AlertCircle className="w-3 h-3 shrink-0" />
-                      <span>Atención: La venta excede el límite disponible del cliente.</span>
+                      <span>La venta excede el límite disponible del cliente.</span>
                     </div>
                   )}
                 </div>
@@ -1630,19 +1713,21 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
             {/* Simulación del Comprobante Térmico / FEL Oficial de Guatemala */}
             <div className="p-5 font-mono text-[11px] text-slate-700 space-y-3 max-h-[60vh] overflow-y-auto">
               <div className="text-center pb-2 border-b border-dashed border-slate-300">
-                {/* Logo de Fashion Styles */}
-                <div className="flex justify-center mb-2">
-                  <img
-                    src="/img/logo_fashion_styles.jpg"
-                    alt="Logo Fashion Styles"
-                    className="h-16 w-auto max-w-[200px] object-contain rounded-xl border border-slate-200/90 shadow-xs p-1 bg-white"
-                  />
-                </div>
-                <p className="font-black text-sm text-slate-900 uppercase tracking-tight">Fashion Styles</p>
-                <p className="text-[10px] text-slate-500 font-medium">Boutique & Variedades • {empresaActiva.razon_social || 'Fashion Styles S.A.'}</p>
-                <p className="text-[10px] text-slate-500">NIT: {empresaActiva.nit || '6322012-1'} • {taxInfo.regimenLabel}</p>
-                <p className="text-[10px] text-slate-500">{empresaActiva.direccion || 'Ciudad de Guatemala'}</p>
-                <p className="text-[10px] text-slate-500">PBX / WhatsApp: {empresaActiva.telefono || '59440491'}</p>
+                {/* Logo dinámico por empresa activa */}
+                {empresaActiva.id === 1 && (
+                  <div className="flex justify-center mb-2">
+                    <img
+                      src="/img/logo_fashion_styles.jpg"
+                      alt={`Logo ${empresaActiva.nombre}`}
+                      className="h-16 w-auto max-w-[200px] object-contain rounded-xl border border-slate-200/90 shadow-xs p-1 bg-white"
+                    />
+                  </div>
+                )}
+                <p className="font-black text-sm text-slate-900 uppercase tracking-tight">{empresaActiva.nombre}</p>
+                <p className="text-[10px] text-slate-500 font-medium">{empresaActiva.razon_social || empresaActiva.nombre}</p>
+                <p className="text-[10px] text-slate-500">NIT: {empresaActiva.nit || 'CF'}</p>
+                {empresaActiva.direccion && <p className="text-[10px] text-slate-500">{empresaActiva.direccion}</p>}
+                {empresaActiva.telefono && <p className="text-[10px] text-slate-500">PBX / WhatsApp: {empresaActiva.telefono}</p>}
               </div>
 
               {dteCertificado ? (
@@ -1789,31 +1874,25 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
                 </table>
               </div>
 
-              {/* Subtotales, Descuento e IVA según Régimen Tributario */}
-              <div className="pt-2 border-t border-dashed border-slate-300 space-y-0.5 text-right text-[11px]">
-                {totalDiscount > 0 && (
-                  <>
-                    <p className="text-slate-500">Subtotal Bruto: Q {grossSubtotal.toFixed(2)}</p>
-                    <p className="font-bold text-amber-700">Descuento Total: -Q {totalDiscount.toFixed(2)}</p>
-                  </>
-                )}
-                <p className="text-slate-600">{taxInfo.tipoRegimen === 'general' ? 'Subtotal Neto (Sin IVA):' : 'Subtotal / Base:'} Q {subtotal.toFixed(2)}</p>
-                {taxInfo.tipoRegimen === 'general' ? (
-                  <p className="text-slate-600">IVA 12% SAT: Q {iva.toFixed(2)}</p>
-                ) : taxInfo.tipoRegimen === 'pequeno_contribuyente' ? (
-                  <>
-                    <p className="text-slate-400">IVA Crédito Fiscal (0%): Q 0.00</p>
-                    <p className="text-purple-700 font-bold">Impuesto Pequeño Contribuyente (5% SAT): Q {taxInfo.impuestoCalculadoSAT.toFixed(2)}</p>
-                  </>
-                ) : (
-                  <p className="text-slate-500 font-medium">Venta Informal (Exenta de IVA / 0% SAT)</p>
-                )}
-                <p className="text-xs font-black text-slate-900 pt-1 border-t border-slate-200">
+              {/* Total limpio sin desglose de IVA al cliente (el descuento ya está visible individualmente en cada producto) */}
+              <div className="pt-2 border-t border-dashed border-slate-300 space-y-1 text-right text-[11px]">
+                <p className="text-xs font-black text-slate-900">
                   TOTAL A PAGAR: Q {total.toFixed(2)}
                 </p>
-                <p className="text-[8.5px] text-slate-500 italic text-center pt-1 font-sans">
-                  {taxInfo.fraseFiscalFEL}
-                </p>
+                {metodoPago === 'credito' ? (
+                  <>
+                    <p className="text-[11px] font-bold text-emerald-700">
+                      Abonado hoy: Q {(parseFloat(abonoInicial) || 0).toFixed(2)}
+                    </p>
+                    <p className="text-[11px] font-black text-rose-600">
+                      Saldo Pendiente (CxC): Q {Math.max(0, total - (parseFloat(abonoInicial) || 0)).toFixed(2)}
+                    </p>
+                  </>
+                ) : (
+                  <p className="text-[10px] font-bold text-emerald-700">
+                    Estado: PAGADO COMPLETAMENTE
+                  </p>
+                )}
               </div>
 
               {/* Código QR Verificador SAT */}
@@ -1847,16 +1926,28 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
                 <span>Regresar</span>
               </button>
 
+              {lastSaleId && (
+                <button
+                  type="button"
+                  disabled={isDownloadingPdf}
+                  onClick={handleOpenSalePdf}
+                  className="px-3 py-2.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white text-xs font-black rounded-xl transition-all flex items-center gap-1.5 shadow-sm cursor-pointer disabled:opacity-50"
+                  title="Descargar comprobante PDF elegante (con descuentos individuales y estado de cuenta)"
+                >
+                  {isDownloadingPdf ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileText className="w-3.5 h-3.5" />}
+                  <span>PDF</span>
+                </button>
+              )}
+
               <button
                 type="button"
                 onClick={() => {
                   window.print();
                 }}
-                className="px-3.5 py-2.5 bg-slate-200 hover:bg-slate-300 active:scale-95 text-slate-800 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 cursor-pointer"
+                className="px-3 py-2.5 bg-slate-200 hover:bg-slate-300 active:scale-95 text-slate-800 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 cursor-pointer"
               >
                 <Printer className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Imprimir Ticket</span>
-                <span className="sm:hidden">Imprimir</span>
+                <span className="hidden sm:inline">Ticket</span>
               </button>
               
               <button
