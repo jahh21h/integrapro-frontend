@@ -93,7 +93,69 @@ export default function FortexaAppsView({
   const allEmpresas = empresas && empresas.length > 0 ? empresas : saasEmpresas;
   const liveEnabledCount = allEmpresas.filter(e => e.plan === 'live_express' || e.modules?.live_sales).length;
 
-  // Modal para configurar Plan SaaS & Módulos de una Empresa
+  // Helpers de Moneda (Guatemala => GTQ 'Q', Otros países => USD '$') y Cobranza SaaS
+  const getCurrencyForCountry = (pais?: string): 'GTQ' | 'USD' =>
+    (pais || 'GT').toUpperCase() === 'GT' ? 'GTQ' : 'USD';
+
+  const getCurrencySymbol = (currency?: string, pais?: string): string => {
+    const cur = currency || getCurrencyForCountry(pais);
+    return cur === 'GTQ' ? 'Q' : '$';
+  };
+
+  const getSuggestedTenantPrice = (
+    preset: 'retail' | 'admin_only' | 'standard' | 'enterprise' | 'live_express',
+    cycle: 'monthly' | 'annual',
+    currency: 'GTQ' | 'USD'
+  ): number => {
+    const monthlyGTQ: Record<string, number> = {
+      live_express: 199,
+      retail: 299,
+      admin_only: 349,
+      standard: 499,
+      enterprise: 799,
+    };
+    const monthlyUSD: Record<string, number> = {
+      live_express: 25,
+      retail: 39,
+      admin_only: 45,
+      standard: 65,
+      enterprise: 99,
+    };
+    const base = currency === 'GTQ' ? (monthlyGTQ[preset] ?? 299) : (monthlyUSD[preset] ?? 39);
+    // Anual: 10 meses (2 meses gratis)
+    return cycle === 'annual' ? base * 10 : base;
+  };
+
+  const computeNextBillingDate = (
+    status: 'active' | 'trial' | 'pending',
+    cycle: 'monthly' | 'annual',
+    trialDays: number = 14,
+    fromDateStr?: string
+  ): string => {
+    const base = fromDateStr ? new Date(fromDateStr + 'T12:00:00') : new Date();
+    if (isNaN(base.getTime())) return new Date().toISOString().slice(0, 10);
+    if (status === 'trial') {
+      base.setDate(base.getDate() + (trialDays > 0 ? trialDays : 14));
+    } else if (status === 'pending') {
+      // Cobro inmediato (hoy)
+    } else if (cycle === 'annual') {
+      base.setFullYear(base.getFullYear() + 1);
+    } else {
+      base.setMonth(base.getMonth() + 1);
+    }
+    return base.toISOString().slice(0, 10);
+  };
+
+  const getBillingDaysInfo = (dateStr?: string | null) => {
+    if (!dateStr) return null;
+    const clean = String(dateStr).slice(0, 10);
+    const target = new Date(clean + 'T23:59:59');
+    if (isNaN(target.getTime())) return null;
+    const diffDays = Math.ceil((target.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+    return { date: clean, diffDays };
+  };
+
+  // Modal para configurar Plan SaaS, Módulos & Cobranza de una Empresa
   const [editingEmpresaSaaS, setEditingEmpresaSaaS] = useState<EmpresaSaaS | null>(null);
   const [saasPlanForm, setSaasPlanForm] = useState({
     plan: 'standard' as 'live_express' | 'basic' | 'standard' | 'enterprise',
@@ -105,12 +167,18 @@ export default function FortexaAppsView({
     hasHr: true,
     hasPurchases: true,
     hasInventory: true,
-    hasClients: true
+    hasClients: true,
+    billingCycle: 'monthly' as 'monthly' | 'annual',
+    billingCurrency: 'GTQ' as 'GTQ' | 'USD',
+    billingAmount: 299,
+    nextBillingDate: computeNextBillingDate('active', 'monthly'),
   });
 
   const handleOpenSaaSModal = (emp: EmpresaSaaS) => {
     setEditingEmpresaSaaS(emp);
     const planVal = (emp.plan as any) || 'standard';
+    const cur = emp.billing?.currency || getCurrencyForCountry(emp.pais);
+    const cyc = emp.billing?.cycle || 'monthly';
     setSaasPlanForm({
       plan: planVal === 'live_express' ? 'live_express' : (planVal === 'basic' ? 'basic' : (planVal === 'enterprise' ? 'enterprise' : 'standard')),
       hasLiveAddon: Boolean(emp.modules?.live_sales),
@@ -121,7 +189,15 @@ export default function FortexaAppsView({
       hasHr: emp.modules?.hr !== false && emp.modules?.rrhh !== false,
       hasPurchases: emp.modules?.purchases !== false && emp.modules?.compras !== false,
       hasInventory: emp.modules?.inventory !== false && emp.modules?.inventario !== false,
-      hasClients: emp.modules?.clients !== false && emp.modules?.clientes !== false
+      hasClients: emp.modules?.clients !== false && emp.modules?.clientes !== false,
+      billingCycle: cyc,
+      billingCurrency: cur,
+      billingAmount: emp.billing?.amount ?? getSuggestedTenantPrice(
+        planVal === 'live_express' ? 'live_express' : planVal === 'enterprise' ? 'enterprise' : planVal === 'standard' ? 'standard' : 'retail',
+        cyc,
+        cur
+      ),
+      nextBillingDate: emp.billing?.next_billing_date?.slice(0, 10) || computeNextBillingDate('active', cyc),
     });
   };
 
@@ -179,17 +255,26 @@ export default function FortexaAppsView({
     };
 
     const nextPlan = isForceLiveOnly ? 'live_express' : saasPlanForm.plan;
+    const updatedBilling = {
+      ...(editingEmpresaSaaS.billing || {}),
+      cycle: saasPlanForm.billingCycle,
+      currency: saasPlanForm.billingCurrency,
+      amount: Number(saasPlanForm.billingAmount) || 0,
+      next_billing_date: saasPlanForm.nextBillingDate || computeNextBillingDate('active', saasPlanForm.billingCycle),
+    };
     const updatedEmpresa: EmpresaSaaS = {
       ...editingEmpresaSaaS,
       plan: nextPlan,
-      modules: updatedModules
+      modules: updatedModules,
+      billing: updatedBilling,
     };
 
-    // Persistir plan y módulos en vivo en MySQL (excepto demo local #99)
+    // Persistir plan, módulos y cobranza en vivo en MySQL (excepto demo local #99)
     if (updatedEmpresa.id !== 99) {
       empresaApi.update(updatedEmpresa.id, {
         plan_type: nextPlan,
-        modules: updatedModules
+        modules: updatedModules,
+        billing: updatedBilling,
       }).catch(err => {
         console.error('Error guardando plan/módulos en servidor:', err);
         showToast(`⚠️ Cambio aplicado localmente pero falló sincronización en BD: ${err?.response?.data?.message || err.message}`);
@@ -239,13 +324,19 @@ export default function FortexaAppsView({
     nombre: '',
     razon_social: '',
     nit: 'CF',
+    pais: 'GT',
     regimen_tributario: 'general' as 'general' | 'pequeno_contribuyente' | 'informal',
     telefono: '',
     direccion: 'Ciudad de Guatemala',
     sucursal_nombre: 'Sucursal Principal',
     preset: 'retail' as 'retail' | 'admin_only' | 'standard' | 'enterprise' | 'live_express',
     plan_type: 'basic' as 'live_express' | 'basic' | 'standard' | 'enterprise',
-    subscription_status: 'active' as 'active' | 'trial',
+    subscription_status: 'active' as 'active' | 'trial' | 'pending',
+    billing_cycle: 'monthly' as 'monthly' | 'annual',
+    billing_currency: 'GTQ' as 'GTQ' | 'USD',
+    billing_amount: 299,
+    next_billing_date: computeNextBillingDate('active', 'monthly'),
+    payment_method: 'Transferencia / Depósito',
     trial_days: 14,
     hasPos: true,
     hasLiveSales: false,
@@ -263,68 +354,78 @@ export default function FortexaAppsView({
   const [newTenantForm, setNewTenantForm] = useState(getInitialNewTenantForm);
 
   const applyTenantPreset = (preset: 'retail' | 'admin_only' | 'standard' | 'enterprise' | 'live_express') => {
-    if (preset === 'live_express') {
-      setNewTenantForm(prev => ({
-        ...prev,
-        preset,
-        plan_type: 'live_express',
-        regimen_tributario: 'informal',
-        hasPos: false,
-        hasLiveSales: true,
-        hasFel: false,
-        hasInventory: true,
-        hasClients: true,
-        hasPurchases: false,
-        hasAccounting: false,
-        hasHr: false,
-      }));
-    } else if (preset === 'admin_only') {
-      setNewTenantForm(prev => ({
-        ...prev,
-        preset,
-        plan_type: 'standard',
-        hasPos: false,
-        hasLiveSales: false,
-        hasFel: true,
-        hasInventory: true,
-        hasClients: true,
-        hasPurchases: true,
-        hasAccounting: true,
-        hasHr: true,
-      }));
-    } else if (preset === 'retail') {
-      setNewTenantForm(prev => ({
-        ...prev,
-        preset,
-        plan_type: 'basic',
-        hasPos: true,
-        hasLiveSales: false,
-        hasFel: true,
-        hasInventory: true,
-        hasClients: true,
-        hasPurchases: true,
-        hasAccounting: false,
-        hasHr: false,
-      }));
-    } else if (preset === 'standard') {
-      setNewTenantForm(prev => ({
-        ...prev,
-        preset,
-        plan_type: 'standard',
-        hasPos: true,
-        hasLiveSales: false,
-        hasFel: true,
-        hasInventory: true,
-        hasClients: true,
-        hasPurchases: true,
-        hasAccounting: true,
-        hasHr: true,
-      }));
-    } else {
-      setNewTenantForm(prev => ({
+    setNewTenantForm(prev => {
+      const suggestedAmount = getSuggestedTenantPrice(preset, prev.billing_cycle, prev.billing_currency);
+      if (preset === 'live_express') {
+        return {
+          ...prev,
+          preset,
+          plan_type: 'live_express',
+          regimen_tributario: 'informal',
+          billing_amount: suggestedAmount,
+          hasPos: false,
+          hasLiveSales: true,
+          hasFel: false,
+          hasInventory: true,
+          hasClients: true,
+          hasPurchases: false,
+          hasAccounting: false,
+          hasHr: false,
+        };
+      }
+      if (preset === 'admin_only') {
+        return {
+          ...prev,
+          preset,
+          plan_type: 'standard',
+          billing_amount: suggestedAmount,
+          hasPos: false,
+          hasLiveSales: false,
+          hasFel: true,
+          hasInventory: true,
+          hasClients: true,
+          hasPurchases: true,
+          hasAccounting: true,
+          hasHr: true,
+        };
+      }
+      if (preset === 'retail') {
+        return {
+          ...prev,
+          preset,
+          plan_type: 'basic',
+          billing_amount: suggestedAmount,
+          hasPos: true,
+          hasLiveSales: false,
+          hasFel: true,
+          hasInventory: true,
+          hasClients: true,
+          hasPurchases: true,
+          hasAccounting: false,
+          hasHr: false,
+        };
+      }
+      if (preset === 'standard') {
+        return {
+          ...prev,
+          preset,
+          plan_type: 'standard',
+          billing_amount: suggestedAmount,
+          hasPos: true,
+          hasLiveSales: false,
+          hasFel: true,
+          hasInventory: true,
+          hasClients: true,
+          hasPurchases: true,
+          hasAccounting: true,
+          hasHr: true,
+        };
+      }
+      return {
         ...prev,
         preset: 'enterprise',
         plan_type: 'enterprise',
+        billing_amount: suggestedAmount,
         hasPos: true,
         hasLiveSales: true,
         hasFel: true,
@@ -333,8 +434,35 @@ export default function FortexaAppsView({
         hasPurchases: true,
         hasAccounting: true,
         hasHr: true,
-      }));
-    }
+      };
+    });
+  };
+
+  const handleTenantCountryChange = (newPais: string) => {
+    const nextCurrency = getCurrencyForCountry(newPais);
+    setNewTenantForm(prev => ({
+      ...prev,
+      pais: newPais,
+      billing_currency: nextCurrency,
+      billing_amount: getSuggestedTenantPrice(prev.preset, prev.billing_cycle, nextCurrency),
+    }));
+  };
+
+  const handleTenantCycleChange = (newCycle: 'monthly' | 'annual') => {
+    setNewTenantForm(prev => ({
+      ...prev,
+      billing_cycle: newCycle,
+      billing_amount: getSuggestedTenantPrice(prev.preset, newCycle, prev.billing_currency),
+      next_billing_date: computeNextBillingDate(prev.subscription_status, newCycle, prev.trial_days),
+    }));
+  };
+
+  const handleTenantStatusChange = (newStatus: 'active' | 'trial' | 'pending') => {
+    setNewTenantForm(prev => ({
+      ...prev,
+      subscription_status: newStatus,
+      next_billing_date: computeNextBillingDate(newStatus, prev.billing_cycle, prev.trial_days),
+    }));
   };
 
   const handleOpenNewTenantModal = () => {
@@ -379,20 +507,34 @@ export default function FortexaAppsView({
     };
 
     try {
+      const billingPayload = {
+        cycle: newTenantForm.billing_cycle,
+        amount: Number(newTenantForm.billing_amount) || 0,
+        currency: newTenantForm.billing_currency,
+        next_billing_date: newTenantForm.next_billing_date || computeNextBillingDate(
+          newTenantForm.subscription_status,
+          newTenantForm.billing_cycle,
+          newTenantForm.trial_days
+        ),
+        payment_method: newTenantForm.payment_method,
+        last_paid_at: newTenantForm.subscription_status === 'active' ? new Date().toISOString().slice(0, 10) : null,
+      };
+
       const res = await empresaApi.create({
         nombre: newTenantForm.nombre.trim(),
         razon_social: newTenantForm.razon_social.trim() || newTenantForm.nombre.trim(),
         nit: newTenantForm.nit.trim() || 'CF',
-        pais: 'GT',
+        pais: newTenantForm.pais || 'GT',
         regimen_tributario: newTenantForm.regimen_tributario,
         telefono: newTenantForm.telefono.trim(),
         email: newTenantForm.admin_email.trim().toLowerCase(),
-        direccion: newTenantForm.direccion.trim() || 'Ciudad de Guatemala',
+        direccion: newTenantForm.direccion.trim() || (newTenantForm.pais === 'GT' ? 'Ciudad de Guatemala' : 'Oficina Central'),
         sucursal_nombre: newTenantForm.sucursal_nombre.trim() || 'Sucursal Principal',
         plan_type: newTenantForm.plan_type,
         subscription_status: newTenantForm.subscription_status,
         trial_days: newTenantForm.subscription_status === 'trial' ? newTenantForm.trial_days : 0,
         modules,
+        billing: billingPayload,
         admin_name: newTenantForm.admin_name.trim(),
         admin_email: newTenantForm.admin_email.trim().toLowerCase(),
         admin_password: newTenantForm.admin_password.trim() || undefined,
@@ -404,7 +546,7 @@ export default function FortexaAppsView({
         nombre: createdEmp?.nombre || newTenantForm.nombre.trim(),
         razon_social: createdEmp?.razon_social || newTenantForm.razon_social.trim() || newTenantForm.nombre.trim(),
         nit: createdEmp?.nit || newTenantForm.nit.trim() || 'CF',
-        pais: createdEmp?.pais || 'GT',
+        pais: createdEmp?.pais || newTenantForm.pais || 'GT',
         regimen: createdEmp?.regimen_tributario === 'pequeno_contribuyente'
           ? 'Pequeño Contribuyente (5%)'
           : createdEmp?.regimen_tributario === 'informal'
@@ -412,6 +554,8 @@ export default function FortexaAppsView({
           : 'General (IVA 12%)',
         plan: (createdEmp?.plan_type as any) || newTenantForm.plan_type,
         activa: createdEmp?.activa !== false,
+        subscription_status: createdEmp?.subscription_status || newTenantForm.subscription_status,
+        billing: billingPayload,
         telefono: createdEmp?.telefono || '',
         email: createdEmp?.email || newTenantForm.admin_email.trim(),
         direccion: createdEmp?.direccion || '',
@@ -480,14 +624,96 @@ export default function FortexaAppsView({
     }
   };
 
+  const handleRenewEmpresa = async (emp: EmpresaSaaS) => {
+    const cycle = emp.billing?.cycle || 'monthly';
+    const currency = emp.billing?.currency || getCurrencyForCountry(emp.pais);
+    const amount = emp.billing?.amount ?? 0;
+    const sym = getCurrencySymbol(currency, emp.pais);
+    const currentDate = emp.billing?.next_billing_date?.slice(0, 10);
+    const todayStr = new Date().toISOString().slice(0, 10);
+    // Si ya venció, renovar desde hoy; si aún está vigente, sumar desde su fecha actual de corte
+    const baseDate = currentDate && currentDate > todayStr ? currentDate : todayStr;
+    const nextDate = computeNextBillingDate('active', cycle, 0, baseDate);
+
+    if (!window.confirm(`¿Registrar pago (${sym} ${amount.toFixed(2)} ${cycle === 'annual' ? 'Anual' : 'Mensual'}) y renovar "${emp.nombre}" hasta ${nextDate}?`)) {
+      return;
+    }
+
+    setTogglingTenantId(emp.id);
+    try {
+      const nextBilling = {
+        ...(emp.billing || {}),
+        cycle,
+        currency,
+        amount,
+        next_billing_date: nextDate,
+        last_paid_at: todayStr,
+      };
+      if (emp.id !== 99) {
+        await empresaApi.update(emp.id, {
+          activa: true,
+          subscription_status: 'active',
+          billing: nextBilling,
+        });
+      }
+      const updatedEmp: EmpresaSaaS = {
+        ...emp,
+        activa: true,
+        subscription_status: 'active',
+        billing: nextBilling,
+      };
+      setSaasEmpresas(prev => prev.map(e => e.id === emp.id ? updatedEmp : e));
+      if (onUpdateEmpresa) {
+        onUpdateEmpresa(updatedEmp);
+      }
+      showToast(`💳 Pago registrado para "${emp.nombre}". Próximo cobro: ${nextDate}.`);
+    } catch (err: any) {
+      showToast(`⚠️ Error renovando suscripción: ${err?.response?.data?.message || err.message}`);
+    } finally {
+      setTogglingTenantId(null);
+    }
+  };
+
+  const handleSendBillingWhatsApp = (emp: EmpresaSaaS) => {
+    const cur = emp.billing?.currency || getCurrencyForCountry(emp.pais);
+    const sym = getCurrencySymbol(cur, emp.pais);
+    const amt = emp.billing?.amount ?? 0;
+    const cyc = emp.billing?.cycle === 'annual' ? 'Anual' : 'Mensual';
+    const nextDate = emp.billing?.next_billing_date?.slice(0, 10) || 'Próximo corte';
+    const msg = [
+      `Hola equipo de *${emp.nombre}* 👋`,
+      `Te saludamos de *Fortexa Technologies (IntegraPro Cloud)*.`,
+      ``,
+      `📅 *Recordatorio de Renovación de Suscripción*`,
+      `• *Plan:* ${(emp.plan || 'Estándar').toUpperCase()} (${cyc})`,
+      `• *Cuota:* *${sym} ${amt.toFixed(2)} ${cur}*`,
+      `• *Fecha de Corte:* ${nextDate}`,
+      ``,
+      `Por favor compártenos tu comprobante de pago por este medio para renovar tu servicio sin interrupciones. ¡Gracias por tu confianza! 🚀`,
+    ].join('\n');
+    const rawPhone = (emp.telefono || '').replace(/\D/g, '');
+    const waPhone = rawPhone ? (emp.pais === 'GT' && !rawPhone.startsWith('502') ? `502${rawPhone}` : rawPhone) : '';
+    const url = waPhone
+      ? `https://api.whatsapp.com/send?phone=${waPhone}&text=${encodeURIComponent(msg)}`
+      : `https://api.whatsapp.com/send?text=${encodeURIComponent(msg)}`;
+    window.open(url, '_blank');
+  };
+
   const getTenantWelcomeText = () => {
     if (!createdTenantResult) return '';
+    const b = createdTenantResult.empresa.billing;
+    const sym = getCurrencySymbol(b?.currency, createdTenantResult.empresa.pais);
+    const cycleLabel = b?.cycle === 'annual' ? 'Anual' : 'Mensual';
+    const billingLine = b && b.amount > 0
+      ? `💳 *Suscripción:* ${sym} ${Number(b.amount).toFixed(2)} ${b.currency} (${cycleLabel})${b.next_billing_date ? ` • Próximo cobro: ${b.next_billing_date}` : ''}`
+      : '';
     return [
       `🚀 *¡Bienvenido a IntegraPro Cloud!*`,
       `Tu espacio privado ya está activo y configurado por *Fortexa Technologies*.`,
       ``,
       `🏢 *Empresa:* ${createdTenantResult.empresa.nombre} (ID #${createdTenantResult.empresa.id})`,
       `📍 *Sucursal Inicial:* ${createdTenantResult.sucursalNombre}`,
+      ...(billingLine ? [billingLine] : []),
       `🌐 *Enlace de Acceso:* https://app.integrapro.app`,
       `👤 *Usuario:* ${createdTenantResult.adminEmail}`,
       `🔑 *Contraseña Temporal:* ${createdTenantResult.plainPassword}`,
@@ -2294,6 +2520,7 @@ export default function FortexaAppsView({
                         <th className="py-3 px-3.5">Plan SaaS Contratado</th>
                         <th className="py-3 px-3.5">Módulo TikTok Live</th>
                         <th className="py-3 px-3.5">Entorno de Usuario</th>
+                        <th className="py-3 px-3.5">Cuota & Próximo Cobro</th>
                         <th className="py-3 px-3.5">Estado</th>
                         <th className="py-3 px-3.5 text-right">Gestión SaaS</th>
                       </tr>
@@ -2361,10 +2588,52 @@ export default function FortexaAppsView({
                               )}
                             </td>
                             <td className="py-3.5 px-3.5">
+                              {(() => {
+                                const b = emp.billing;
+                                const cur = b?.currency || getCurrencyForCountry(emp.pais);
+                                const sym = getCurrencySymbol(cur, emp.pais);
+                                const amt = b?.amount ?? 0;
+                                const cycLabel = b?.cycle === 'annual' ? 'año' : 'mes';
+                                const dueInfo = getBillingDaysInfo(b?.next_billing_date || emp.trial_ends_at);
+
+                                if (emp.id === 1 || emp.id === 22) {
+                                  return (
+                                    <span className="text-[10px] font-bold text-slate-400">Empresa Propia</span>
+                                  );
+                                }
+
+                                return (
+                                  <div className="space-y-0.5">
+                                    <div className="font-mono font-black text-slate-900 text-[11px]">
+                                      {amt > 0 ? `${sym} ${Number(amt).toFixed(2)} / ${cycLabel}` : 'Sin tarifa'}
+                                      <span className="ml-1 text-[9px] font-bold text-slate-400">{cur}</span>
+                                    </div>
+                                    {dueInfo ? (
+                                      <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-extrabold ${
+                                        dueInfo.diffDays < 0
+                                          ? 'bg-rose-100 text-rose-700'
+                                          : dueInfo.diffDays <= 5
+                                          ? 'bg-amber-100 text-amber-800'
+                                          : 'bg-emerald-50 text-emerald-700'
+                                      }`}>
+                                        {dueInfo.diffDays < 0
+                                          ? `Vencida (${dueInfo.date})`
+                                          : dueInfo.diffDays <= 5
+                                          ? `Vence en ${dueInfo.diffDays}d (${dueInfo.date})`
+                                          : `Corte: ${dueInfo.date}`}
+                                      </span>
+                                    ) : (
+                                      <span className="text-[10px] text-slate-400">Sin fecha de corte</span>
+                                    )}
+                                  </div>
+                                );
+                              })()}
+                            </td>
+                            <td className="py-3.5 px-3.5">
                               {emp.activa !== false ? (
                                 <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 inline-flex items-center gap-1">
                                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                                  Activa
+                                  {emp.subscription_status === 'trial' ? 'Trial' : emp.subscription_status === 'pending' ? 'Por Cobrar' : 'Activa'}
                                 </span>
                               ) : (
                                 <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200 inline-flex items-center gap-1">
@@ -2374,31 +2643,52 @@ export default function FortexaAppsView({
                               )}
                             </td>
                             <td className="py-3.5 px-3.5 text-right">
-                              <div className="flex items-center justify-end gap-1.5">
+                              <div className="flex items-center justify-end gap-1.5 flex-wrap">
                                 <button
                                   type="button"
                                   onClick={() => handleOpenSaaSModal(emp)}
                                   className="px-2.5 py-1 bg-slate-900 hover:bg-slate-800 text-white text-[11px] font-bold rounded-lg transition-all flex items-center gap-1 cursor-pointer shadow-xs"
-                                  title="Editar plan de suscripción y activar o desactivar módulos"
+                                  title="Editar plan, cuota, fecha de cobro y módulos"
                                 >
                                   <Sliders className="w-3 h-3 text-indigo-400" />
                                   <span>Configurar</span>
                                 </button>
                                 {emp.id !== 1 && emp.id !== 22 && (
-                                  <button
-                                    type="button"
-                                    disabled={togglingTenantId === emp.id}
-                                    onClick={() => handleToggleEmpresaStatus(emp)}
-                                    className={`px-2 py-1 text-[11px] font-bold rounded-lg transition-all flex items-center gap-1 cursor-pointer border disabled:opacity-50 ${
-                                      emp.activa !== false
-                                        ? 'bg-rose-50 hover:bg-rose-100 text-rose-700 border-rose-200'
-                                        : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border-emerald-200'
-                                    }`}
-                                    title={emp.activa !== false ? 'Suspender acceso del cliente y cerrar sesiones' : 'Reactivar servicio del cliente'}
-                                  >
-                                    <Power className="w-3 h-3" />
-                                    <span>{emp.activa !== false ? 'Suspender' : 'Reactivar'}</span>
-                                  </button>
+                                  <>
+                                    <button
+                                      type="button"
+                                      disabled={togglingTenantId === emp.id}
+                                      onClick={() => handleRenewEmpresa(emp)}
+                                      className="px-2 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 text-[11px] font-bold rounded-lg transition-all flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                                      title="Registrar pago recibido y extender fecha de corte (+1 mes o +1 año)"
+                                    >
+                                      <CreditCard className="w-3 h-3" />
+                                      <span>Renovar</span>
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleSendBillingWhatsApp(emp)}
+                                      className="px-2 py-1 bg-sky-50 hover:bg-sky-100 text-sky-700 border border-sky-200 text-[11px] font-bold rounded-lg transition-all flex items-center gap-1 cursor-pointer"
+                                      title="Enviar recordatorio de cobro por WhatsApp"
+                                    >
+                                      <Send className="w-3 h-3" />
+                                      <span>Cobrar</span>
+                                    </button>
+                                    <button
+                                      type="button"
+                                      disabled={togglingTenantId === emp.id}
+                                      onClick={() => handleToggleEmpresaStatus(emp)}
+                                      className={`px-2 py-1 text-[11px] font-bold rounded-lg transition-all flex items-center gap-1 cursor-pointer border disabled:opacity-50 ${
+                                        emp.activa !== false
+                                          ? 'bg-rose-50 hover:bg-rose-100 text-rose-700 border-rose-200'
+                                          : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border-emerald-200'
+                                      }`}
+                                      title={emp.activa !== false ? 'Suspender acceso del cliente y cerrar sesiones' : 'Reactivar servicio del cliente'}
+                                    >
+                                      <Power className="w-3 h-3" />
+                                      <span>{emp.activa !== false ? 'Suspender' : 'Reactivar'}</span>
+                                    </button>
+                                  </>
                                 )}
                                 {onSelectEmpresa && isOwnerOperableEmpresa(emp.id) ? (
                                   <button
@@ -3431,6 +3721,60 @@ export default function FortexaAppsView({
                 </div>
               )}
 
+              {/* 5. Tarifa, Ciclo & Próxima Fecha de Cobro */}
+              <div className="p-4 bg-indigo-50/60 border border-indigo-200/80 rounded-2xl space-y-3 text-xs">
+                <p className="font-black text-indigo-950 uppercase tracking-wider text-[11px] flex items-center gap-1.5">
+                  <CreditCard className="w-3.5 h-3.5 text-indigo-600" />
+                  Facturación & Fecha de Corte (GT = Q / Otros países = $)
+                </p>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1 text-[11px]">Ciclo</label>
+                    <select
+                      value={saasPlanForm.billingCycle}
+                      onChange={(e) => setSaasPlanForm({ ...saasPlanForm, billingCycle: e.target.value as 'monthly' | 'annual' })}
+                      className="w-full px-2.5 py-2 bg-white border border-slate-200 rounded-xl font-bold text-xs"
+                    >
+                      <option value="monthly">Mensual</option>
+                      <option value="annual">Anual</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1 text-[11px]">Moneda</label>
+                    <select
+                      value={saasPlanForm.billingCurrency}
+                      onChange={(e) => setSaasPlanForm({ ...saasPlanForm, billingCurrency: e.target.value as 'GTQ' | 'USD' })}
+                      className="w-full px-2.5 py-2 bg-white border border-slate-200 rounded-xl font-bold text-xs"
+                    >
+                      <option value="GTQ">GTQ (Q)</option>
+                      <option value="USD">USD ($)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1 text-[11px]">
+                      Cuota ({saasPlanForm.billingCurrency === 'GTQ' ? 'Q' : '$'})
+                    </label>
+                    <input
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      value={saasPlanForm.billingAmount}
+                      onChange={(e) => setSaasPlanForm({ ...saasPlanForm, billingAmount: Number(e.target.value) })}
+                      className="w-full px-2.5 py-2 bg-white border border-slate-200 rounded-xl font-mono font-bold text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1 text-[11px]">Próximo Cobro</label>
+                    <input
+                      type="date"
+                      value={saasPlanForm.nextBillingDate}
+                      onChange={(e) => setSaasPlanForm({ ...saasPlanForm, nextBillingDate: e.target.value })}
+                      className="w-full px-2.5 py-2 bg-white border border-slate-200 rounded-xl font-mono font-bold text-xs"
+                    />
+                  </div>
+                </div>
+              </div>
+
             </div>
 
             {/* Modal Footer */}
@@ -3629,16 +3973,33 @@ export default function FortexaAppsView({
                       </select>
                     </div>
                     <div>
+                      <label className="block font-bold text-slate-700 mb-1">País & Moneda de Cobro</label>
+                      <select
+                        value={newTenantForm.pais}
+                        onChange={(e) => handleTenantCountryChange(e.target.value)}
+                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-semibold focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      >
+                        <option value="GT">🇬🇹 Guatemala (Quetzales - Q)</option>
+                        <option value="SV">🇸🇻 El Salvador (Dólares - $)</option>
+                        <option value="HN">🇭🇳 Honduras (Dólares - $)</option>
+                        <option value="CR">🇨🇷 Costa Rica (Dólares - $)</option>
+                        <option value="PA">🇵🇦 Panamá (Dólares - $)</option>
+                        <option value="MX">🇲🇽 México (Dólares - $)</option>
+                        <option value="US">🇺🇸 Estados Unidos (Dólares - $)</option>
+                        <option value="OT">🌎 Otro País (Dólares - $)</option>
+                      </select>
+                    </div>
+                    <div>
                       <label className="block font-bold text-slate-700 mb-1">Teléfono / WhatsApp</label>
                       <input
                         type="text"
                         value={newTenantForm.telefono}
                         onChange={(e) => setNewTenantForm({ ...newTenantForm, telefono: e.target.value })}
-                        placeholder="Ej. 5555-1234"
+                        placeholder={newTenantForm.pais === 'GT' ? 'Ej. 5555-1234' : 'Ej. +1 555-1234'}
                         className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-semibold focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                       />
                     </div>
-                    <div>
+                    <div className="sm:col-span-2">
                       <label className="block font-bold text-slate-700 mb-1">Sucursal Inicial</label>
                       <input
                         type="text"
@@ -3706,31 +4067,133 @@ export default function FortexaAppsView({
                     ))}
                   </div>
 
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block font-bold text-slate-700 mb-1">Estado Inicial de Suscripción</label>
-                      <select
-                        value={newTenantForm.subscription_status}
-                        onChange={(e) => setNewTenantForm({ ...newTenantForm, subscription_status: e.target.value as any })}
-                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-semibold"
-                      >
-                        <option value="active">Activa (Pagada)</option>
-                        <option value="trial">Prueba Gratis (Trial)</option>
-                      </select>
+                  <div className="p-3.5 rounded-2xl bg-indigo-50/60 border border-indigo-200/80 space-y-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-black text-indigo-950 uppercase tracking-wider text-[11px] flex items-center gap-1.5">
+                        <CreditCard className="w-3.5 h-3.5 text-indigo-600" />
+                        Facturación, Ciclo & Próximo Cobro
+                      </span>
+                      <span className="px-2 py-0.5 rounded-md bg-white border border-indigo-200 text-[10px] font-black text-indigo-700">
+                        {newTenantForm.billing_currency === 'GTQ' ? 'GTQ (Quetzales - Q)' : 'USD (Dólares - $)'}
+                      </span>
                     </div>
-                    {newTenantForm.subscription_status === 'trial' && (
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div>
-                        <label className="block font-bold text-slate-700 mb-1">Días de Prueba</label>
+                        <label className="block font-bold text-slate-700 mb-1">Estado Inicial de Suscripción</label>
+                        <select
+                          value={newTenantForm.subscription_status}
+                          onChange={(e) => handleTenantStatusChange(e.target.value as any)}
+                          className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl font-semibold"
+                        >
+                          <option value="active">Activa (Pagada)</option>
+                          <option value="trial">Prueba Gratis (Trial)</option>
+                          <option value="pending">Pendiente de Pago</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block font-bold text-slate-700 mb-1">Ciclo de Facturación</label>
+                        <div className="grid grid-cols-2 gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => handleTenantCycleChange('monthly')}
+                            className={`py-2 px-2.5 rounded-xl font-bold text-xs border transition-all cursor-pointer ${
+                              newTenantForm.billing_cycle === 'monthly'
+                                ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
+                                : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                            }`}
+                          >
+                            Mensual (30d)
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleTenantCycleChange('annual')}
+                            className={`py-2 px-2.5 rounded-xl font-bold text-xs border transition-all cursor-pointer ${
+                              newTenantForm.billing_cycle === 'annual'
+                                ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
+                                : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                            }`}
+                          >
+                            Anual (2m gratis)
+                          </button>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block font-bold text-slate-700 mb-1">
+                          Valor de la Suscripción ({newTenantForm.billing_currency === 'GTQ' ? 'Q' : '$'}) *
+                        </label>
+                        <div className="relative">
+                          <span className="absolute left-3 top-1/2 -translate-y-1/2 font-mono font-black text-indigo-700">
+                            {newTenantForm.billing_currency === 'GTQ' ? 'Q' : '$'}
+                          </span>
+                          <input
+                            type="number"
+                            min={0}
+                            step="0.01"
+                            required
+                            value={newTenantForm.billing_amount}
+                            onChange={(e) => setNewTenantForm({ ...newTenantForm, billing_amount: Number(e.target.value) })}
+                            className="w-full pl-8 pr-14 py-2 bg-white border border-slate-200 rounded-xl font-mono font-black text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                          />
+                          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-400">
+                            /{newTenantForm.billing_cycle === 'annual' ? 'año' : 'mes'}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block font-bold text-slate-700 mb-1">
+                          {newTenantForm.subscription_status === 'trial'
+                            ? 'Fin de Prueba / 1er Cobro'
+                            : 'Próxima Fecha de Cobro / Corte'}
+                        </label>
                         <input
-                          type="number"
-                          min={1}
-                          max={90}
-                          value={newTenantForm.trial_days}
-                          onChange={(e) => setNewTenantForm({ ...newTenantForm, trial_days: Number(e.target.value) || 14 })}
-                          className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-mono font-bold"
+                          type="date"
+                          required
+                          value={newTenantForm.next_billing_date}
+                          onChange={(e) => setNewTenantForm({ ...newTenantForm, next_billing_date: e.target.value })}
+                          className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl font-mono font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                         />
                       </div>
-                    )}
+
+                      {newTenantForm.subscription_status === 'trial' && (
+                        <div>
+                          <label className="block font-bold text-slate-700 mb-1">Días de Prueba</label>
+                          <input
+                            type="number"
+                            min={1}
+                            max={90}
+                            value={newTenantForm.trial_days}
+                            onChange={(e) => {
+                              const days = Number(e.target.value) || 14;
+                              setNewTenantForm(prev => ({
+                                ...prev,
+                                trial_days: days,
+                                next_billing_date: computeNextBillingDate('trial', prev.billing_cycle, days),
+                              }));
+                            }}
+                            className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl font-mono font-bold"
+                          />
+                        </div>
+                      )}
+
+                      <div className={newTenantForm.subscription_status === 'trial' ? '' : 'sm:col-span-2'}>
+                        <label className="block font-bold text-slate-700 mb-1">Método de Pago</label>
+                        <select
+                          value={newTenantForm.payment_method}
+                          onChange={(e) => setNewTenantForm({ ...newTenantForm, payment_method: e.target.value })}
+                          className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl font-semibold"
+                        >
+                          <option value="Transferencia / Depósito">Transferencia / Depósito Bancario</option>
+                          <option value="Tarjeta de Crédito / Débito">Tarjeta de Crédito / Débito</option>
+                          <option value="Efectivo">Efectivo</option>
+                          <option value="PayPal / Internacional">PayPal / Pago Internacional (USD)</option>
+                          <option value="Pendiente">Pendiente de Confirmar</option>
+                        </select>
+                      </div>
+                    </div>
                   </div>
                 </div>
 

@@ -301,6 +301,7 @@ export default function App() {
             ? (() => { try { return JSON.parse(e.configuracion); } catch { return {}; } })()
             : (e.configuracion || {});
           const serverModules = cfgObj?.modules && typeof cfgObj.modules === 'object' ? cfgObj.modules : null;
+          const serverBilling = cfgObj?.billing && typeof cfgObj.billing === 'object' ? cfgObj.billing : undefined;
           return {
             id: empId,
             nombre: e.nombre || 'Empresa Sin Nombre',
@@ -310,6 +311,9 @@ export default function App() {
             regimen: formatRegimenLabel(e.regimen_tributario || e.regimen),
             plan: (e.plan_type as any) || defaultMatch?.plan || 'enterprise',
             activa: Boolean(e.activa !== false),
+            subscription_status: e.subscription_status || (e.activa === false ? 'suspended' : 'active'),
+            trial_ends_at: e.trial_ends_at || null,
+            billing: serverBilling,
             telefono: e.telefono || '',
             email: e.email || '',
             direccion: e.direccion || '',

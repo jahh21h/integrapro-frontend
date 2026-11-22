@@ -20,6 +20,15 @@ export interface User {
   sucursal_nombre: string;
 }
 
+export interface EmpresaBillingInfo {
+  cycle: 'monthly' | 'annual';
+  amount: number;
+  currency: 'GTQ' | 'USD';
+  next_billing_date?: string | null;
+  payment_method?: string;
+  last_paid_at?: string | null;
+}
+
 export interface EmpresaSaaS {
   id: number;
   nombre: string;
@@ -29,6 +38,9 @@ export interface EmpresaSaaS {
   regimen: string;
   plan: 'basic' | 'standard' | 'enterprise' | 'live_express' | string;
   activa: boolean;
+  subscription_status?: 'active' | 'trial' | 'pending' | 'suspended' | string;
+  trial_ends_at?: string | null;
+  billing?: EmpresaBillingInfo;
   telefono: string;
   email: string;
   direccion: string;
