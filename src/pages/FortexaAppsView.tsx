@@ -35,6 +35,7 @@ import {
 } from 'lucide-react';
 import { SoftwareLicenseItem, SignedLicenseItem, EmpresaSaaS } from '../types';
 import { softwareLicenseApi, empresaApi } from '../api';
+import { isOwnerOperableEmpresa } from '../utils/tenant';
 
 export interface RutaFuelSubscription {
   id: string | number;
@@ -2050,15 +2051,22 @@ export default function FortexaAppsView({
                                   <Sliders className="w-3 h-3 text-indigo-400" />
                                   <span>Configurar</span>
                                 </button>
-                                {onSelectEmpresa && (
+                                {onSelectEmpresa && isOwnerOperableEmpresa(emp.id) ? (
                                   <button
                                     type="button"
                                     onClick={() => onSelectEmpresa(emp.id)}
                                     className="px-2 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-[11px] font-bold rounded-lg transition-all cursor-pointer border border-indigo-200"
-                                    title="Ingresar a la vista de esta empresa para verificar cómo interactúa el cliente"
+                                    title="Ingresar a la vista de tu empresa propia / demo"
                                   >
                                     <span>Probar Vista</span>
                                   </button>
+                                ) : (
+                                  <span
+                                    className="px-2 py-1 bg-slate-100 text-slate-500 text-[10px] font-bold rounded-lg border border-slate-200"
+                                    title="Privacidad Multi-Tenant: los datos operativos de clientes externos son privados"
+                                  >
+                                    🔒 Privado
+                                  </span>
                                 )}
                               </div>
                             </td>

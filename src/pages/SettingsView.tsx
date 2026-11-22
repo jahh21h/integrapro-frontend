@@ -41,6 +41,7 @@ import SpecificTimePicker from '../components/SpecificTimePicker';
 import TokenExtensionScraper from '../components/TokenExtensionScraper';
 import { ConexionExterna, EmpresaSaaS } from '../types';
 import { externalConnectionsApi, empresaApi } from '../api';
+import { isOwnerOperableEmpresa } from '../utils/tenant';
 
 interface BoutiqueConfig {
   nombre: string;
@@ -65,11 +66,12 @@ interface BoutiqueConfig {
 interface SettingsViewProps {
   currentEmpresa?: EmpresaSaaS;
   empresas?: EmpresaSaaS[];
+  isPlatformAdmin?: boolean;
   onUpdateEmpresa?: (emp: EmpresaSaaS) => void;
   onSelectEmpresa?: (id: number) => void;
 }
 
-export default function SettingsView({ currentEmpresa, empresas: propEmpresas, onUpdateEmpresa, onSelectEmpresa }: SettingsViewProps = {}) {
+export default function SettingsView({ currentEmpresa, empresas: propEmpresas, isPlatformAdmin = false, onUpdateEmpresa, onSelectEmpresa }: SettingsViewProps = {}) {
   const [activeTab, setActiveTab] = useState<'empresa' | 'moneda' | 'fel' | 'pasarelas' | 'modulos' | 'multiempresa' | 'roles' | 'api' | 'conexiones' | 'token_scraper'>('empresa');
   const [notificationToast, setNotificationToast] = useState<string | null>(null);
   const { timeFormat, setTimeFormat } = useTimeFormat();
@@ -326,87 +328,10 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, o
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteConfirmationText, setDeleteConfirmationText] = useState('');
 
-  // Directorio de Empresas Multi-Tenant sincronizado con la base de datos real (Fortexa Technologies como Cerebro SaaS)
-  const [empresasList, setEmpresasList] = useState<EmpresaSaaS[]>(propEmpresas || [
-    {
-      id: 22,
-      nombre: 'Fortexa Technologies',
-      razon_social: 'Fortexa Technologies S.A.',
-      nit: 'FORTEXA-001',
-      pais: 'GT',
-      regimen: 'Pequeño Contribuyente (5%)',
-      plan: 'enterprise',
-      activa: true,
-      telefono: '+502 2334-9000',
-      email: 'soporte@fortexa.com',
-      direccion: 'Diagonal 6 10-01 Zona 10, Edificio Las Margaritas, Torre II, Nivel 12, Ciudad de Guatemala'
-    },
-    {
-      id: 1,
-      nombre: 'Fashion Styles',
-      razon_social: 'Fashion Styles S.A.',
-      nit: '6322012-1',
-      pais: 'GT',
-      regimen: 'General (IVA 12%)',
-      plan: 'enterprise',
-      activa: true,
-      telefono: '59440491',
-      email: 'integrapro@admin.com',
-      direccion: 'Ciudad de Guatemala'
-    },
-    {
-      id: 18,
-      nombre: 'Aceitera Pinula',
-      razon_social: 'Aceitera Pinula, S.A.',
-      nit: '9999999-9',
-      pais: 'GT',
-      regimen: 'General (IVA 12%)',
-      plan: 'basic',
-      activa: true,
-      telefono: '1234-5678',
-      email: 'info@aceiterapinula.com',
-      direccion: 'San José Pinula, Guatemala'
-    },
-    {
-      id: 36,
-      nombre: 'Transpores Herrera',
-      razon_social: 'Trans Herrera S.A.',
-      nit: '581713-7',
-      pais: 'GT',
-      regimen: 'Pequeño Contribuyente (5%)',
-      plan: 'enterprise',
-      activa: true,
-      telefono: '35692070',
-      email: 'jahh21.jh@gmail.com',
-      direccion: '10 Avenida 1-46 Zona 2 Santa Catarina Pinula, Guatemala'
-    },
-    {
-      id: 20,
-      nombre: 'Las Delicias',
-      razon_social: 'Las Delicias',
-      nit: 'CF',
-      pais: 'GT',
-      regimen: 'Exento / Informal',
-      plan: 'basic',
-      activa: true,
-      telefono: '0',
-      email: 'admin@lasdelicias.com',
-      direccion: 'Ciudad'
-    },
-    {
-      id: 25,
-      nombre: '[QA-EMPRESA] IntegraPro Test',
-      razon_social: 'Empresa Demo S.A.',
-      nit: '000000-1',
-      pais: 'GT',
-      regimen: 'General (IVA 12%)',
-      plan: 'enterprise',
-      activa: true,
-      telefono: '35692079',
-      email: 'jahh21.jh@gmail.com',
-      direccion: '10 Avenida 1-46 Zona 2, Guatemala'
-    }
-  ]);
+  // Directorio de Empresas (aislado: sin clientes externos hardcodeados)
+  const [empresasList, setEmpresasList] = useState<EmpresaSaaS[]>(
+    propEmpresas && propEmpresas.length > 0 ? propEmpresas : (currentEmpresa ? [currentEmpresa] : [])
+  );
 
   useEffect(() => {
     if (propEmpresas && propEmpresas.length > 0) {
@@ -1445,18 +1370,20 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, o
           <span>Módulos Activos</span>
         </button>
 
-        <button
-          type="button"
-          onClick={() => setActiveTab('multiempresa')}
-          className={`px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-2 cursor-pointer ${
-            activeTab === 'multiempresa'
-              ? 'bg-slate-900 text-white shadow-sm'
-              : 'text-slate-600 hover:bg-slate-100'
-          }`}
-        >
-          <Store className="w-3.5 h-3.5 text-rose-400" />
-          <span>Directorio Multi-Empresa</span>
-        </button>
+        {isPlatformAdmin && (
+          <button
+            type="button"
+            onClick={() => setActiveTab('multiempresa')}
+            className={`px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-2 cursor-pointer ${
+              activeTab === 'multiempresa'
+                ? 'bg-slate-900 text-white shadow-sm'
+                : 'text-slate-600 hover:bg-slate-100'
+            }`}
+          >
+            <Store className="w-3.5 h-3.5 text-rose-400" />
+            <span>Directorio Multi-Empresa</span>
+          </button>
+        )}
 
         <button
           type="button"
@@ -2265,8 +2192,8 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, o
         </div>
       )}
 
-      {/* PESTAÑA 6: Directorio Multi-Empresa (EmpresaResource.php) */}
-      {activeTab === 'multiempresa' && (
+      {/* PESTAÑA 6: Directorio Multi-Empresa (Exclusivo Admin Plataforma) */}
+      {isPlatformAdmin && activeTab === 'multiempresa' && (
         <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 sm:p-8 space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
             <div>
@@ -2324,7 +2251,7 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, o
                         <span className="px-3 py-1 bg-emerald-100 text-emerald-800 text-[11px] font-black rounded-lg">
                           Activa Actual
                         </span>
-                      ) : (
+                      ) : isOwnerOperableEmpresa(emp.id) ? (
                         <button
                           type="button"
                           onClick={() => handleSwitchEmpresa(emp)}
@@ -2332,6 +2259,10 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, o
                         >
                           Seleccionar
                         </button>
+                      ) : (
+                        <span className="px-2.5 py-1 bg-slate-100 text-slate-500 text-[10px] font-bold rounded-lg border border-slate-200">
+                          🔒 Privado
+                        </span>
                       )}
                     </td>
                   </tr>

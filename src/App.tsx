@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { User, NavigationTab, EmpresaSaaS } from './types';
 import { authApi, empresaApi } from './api';
 import { formatRegimenLabel } from './utils/tax';
+import { isPlatformAdminEmail, isOwnerOperableEmpresa } from './utils/tenant';
 import Login from './components/Login';
 import Navbar from './components/Navbar';
 import Sidebar from './components/Sidebar';
@@ -39,7 +40,7 @@ import {
   ArrowLeft
 } from 'lucide-react';
 
-// Directorio de Empresas Multi-Tenant sincronizado con la base de datos real (Fortexa Technologies como Cerebro SaaS)
+// Empresas base propias de la plataforma (NO incluye datos de clientes externos en el bundle público)
 const DEFAULT_EMPRESAS_LIST: EmpresaSaaS[] = [
   {
     id: 1,
@@ -50,8 +51,8 @@ const DEFAULT_EMPRESAS_LIST: EmpresaSaaS[] = [
     regimen: 'General (IVA 12%)',
     plan: 'enterprise',
     activa: true,
-    telefono: '59440491',
-    email: 'integrapro@admin.com',
+    telefono: '',
+    email: '',
     direccion: 'Ciudad de Guatemala',
     modules: {
       live_sales: true,
@@ -86,46 +87,7 @@ const DEFAULT_EMPRESAS_LIST: EmpresaSaaS[] = [
     activa: true,
     telefono: '+502 2334-9000',
     email: 'soporte@fortexa.com',
-    direccion: 'Diagonal 6 10-01 Zona 10, Edificio Las Margaritas, Torre II, Nivel 12, Ciudad de Guatemala'
-  },
-  {
-    id: 18,
-    nombre: 'Aceitera Pinula',
-    razon_social: 'Aceitera Pinula, S.A.',
-    nit: '9999999-9',
-    pais: 'GT',
-    regimen: 'General (IVA 12%)',
-    plan: 'basic',
-    activa: true,
-    telefono: '1234-5678',
-    email: 'info@aceiterapinula.com',
-    direccion: 'San José Pinula, Guatemala'
-  },
-  {
-    id: 36,
-    nombre: 'Transpores Herrera',
-    razon_social: 'Trans Herrera S.A.',
-    nit: '581713-7',
-    pais: 'GT',
-    regimen: 'Pequeño Contribuyente (5%)',
-    plan: 'enterprise',
-    activa: true,
-    telefono: '35692070',
-    email: 'jahh21.jh@gmail.com',
-    direccion: '10 Avenida 1-46 Zona 2 Santa Catarina Pinula, Guatemala'
-  },
-  {
-    id: 20,
-    nombre: 'Las Delicias',
-    razon_social: 'Las Delicias',
-    nit: 'CF',
-    pais: 'GT',
-    regimen: 'Exento / Informal',
-    plan: 'basic',
-    activa: true,
-    telefono: '0',
-    email: 'admin@lasdelicias.com',
-    direccion: 'Ciudad'
+    direccion: 'Ciudad de Guatemala'
   },
   {
     id: 25,
@@ -136,22 +98,22 @@ const DEFAULT_EMPRESAS_LIST: EmpresaSaaS[] = [
     regimen: 'General (IVA 12%)',
     plan: 'enterprise',
     activa: true,
-    telefono: '35692079',
-    email: 'jahh21.jh@gmail.com',
-    direccion: '10 Avenida 1-46 Zona 2, Guatemala'
+    telefono: '',
+    email: '',
+    direccion: 'Ciudad de Guatemala'
   },
   {
     id: 99,
     nombre: 'Boutique Chic Live (Demo TikTok)',
-    razon_social: 'Boutique Chic Live / Maritza Gómez',
+    razon_social: 'Boutique Chic Live (Demo)',
     nit: 'CF',
     pais: 'GT',
     regimen: 'Exento / Informal',
     plan: 'live_express',
     activa: true,
-    telefono: '+502 4589-1234',
-    email: 'maritza.live@tiktokboutique.gt',
-    direccion: 'Calzada Roosevelt, Mixco, Guatemala',
+    telefono: '',
+    email: '',
+    direccion: 'Guatemala',
     modules: {
       live_sales: true,
       live_only: true,
@@ -316,17 +278,20 @@ export default function App() {
       if (currentToken && (currentToken.startsWith('1008|') || currentToken.startsWith('1010|'))) {
         localStorage.removeItem('integrapro_token');
         setIsAuthenticated(false);
+        return;
       }
     } catch {}
 
-    // Sincronizar directorio de empresas en vivo desde la base de datos del Droplet
+    if (!isAuthenticated) return;
+
+    // Sincronizar directorio de empresas en vivo desde la base de datos del Droplet (requiere sesión)
     empresaApi.getAll().then((data: any[]) => {
       if (Array.isArray(data) && data.length > 0) {
         // Filtrar empresas inactivas y el antiguo registro técnico de IntegraPro Admin (ID: 2)
         const validCompanies = data.filter((e: any) => {
           const empId = e.id_empresa || e.id;
           const name = e.nombre || '';
-          return empId !== 2 && !name.includes('IntegraPro Admin') && (e.activa === undefined || Boolean(e.activa));
+          return empId !== 2 && !name.includes('IntegraPro Admin');
         });
 
         const mapped: EmpresaSaaS[] = validCompanies.map((e: any) => {
@@ -353,12 +318,14 @@ export default function App() {
           };
         });
 
-        // Asegurar que las empresas base siempre estén en la lista si no vinieron de la API
-        DEFAULT_EMPRESAS_LIST.forEach(def => {
-          if (!mapped.some(m => m.id === def.id)) {
-            mapped.push(def);
-          }
-        });
+        // Solo el administrador de plataforma recibe las empresas demo locales adicionales si no vinieron de la API
+        if (isPlatformAdminEmail(currentUser.email)) {
+          DEFAULT_EMPRESAS_LIST.forEach(def => {
+            if (!mapped.some(m => m.id === def.id)) {
+              mapped.push(def);
+            }
+          });
+        }
 
         setEmpresasList(mapped);
         localStorage.setItem('integrapro_empresas_list', JSON.stringify(mapped));
@@ -378,7 +345,7 @@ export default function App() {
     }).catch(err => {
       console.warn('Error fetching live empresas from Droplet:', err);
     });
-  }, []);
+  }, [isAuthenticated, currentUser.email]);
 
   const [empresasList, setEmpresasList] = useState<EmpresaSaaS[]>(() => {
     const saved = localStorage.getItem('integrapro_empresas_list');
@@ -416,18 +383,22 @@ export default function App() {
 
   const selectedEmpresa = empresasList.find((e) => Number(e.id) === Number(selectedEmpresaId)) || empresasList[0];
 
-  // Control Multi-Tenant Estricto: SuperAdmin y Administradores pueden ver todas las empresas; usuarios de empresas sólo ven su propia empresa
-  const isSuperAdmin = currentUser.role === 'SuperAdmin' || currentUser.role === 'Administrador' || currentUser.email === 'admin@integrapro.com' || currentUser.email === 'admin@admin.com' || currentUser.email === 'jahh21.jh@gmail.com';
+  // Control Multi-Tenant Estricto (Privacidad Zero-Access sobre inquilinos externos):
+  // - Solo las cuentas de plataforma Fortexa son SuperAdmin (NUNCA un rol 'Administrador' de una empresa cliente).
+  // - Incluso el dueño de plataforma solo puede operar sus empresas propias/demo (Fortexa #22, Fashion Styles #1, Demo QA #25, Demo Live #99),
+  //   NUNCA entrar a ver datos operativos de clientes externos.
+  const isSuperAdmin = isPlatformAdminEmail(currentUser.email);
+  const ownerOperableEmpresas = empresasList.filter((e) => isOwnerOperableEmpresa(e.id));
   const tenantEmpresas = empresasList.filter((e) => Number(e.id) === Number(currentUser.empresa_id));
-  const effectiveUserEmpresas = isSuperAdmin 
-    ? empresasList 
-    : (tenantEmpresas.length > 0 
-        ? tenantEmpresas 
+  const effectiveUserEmpresas = isSuperAdmin
+    ? (ownerOperableEmpresas.length > 0 ? ownerOperableEmpresas : DEFAULT_EMPRESAS_LIST)
+    : (tenantEmpresas.length > 0
+        ? tenantEmpresas
         : (selectedEmpresa ? [selectedEmpresa] : [{
-            id: currentUser.empresa_id || 25,
-            nombre: currentUser.empresa_nombre || '[QA-EMPRESA] IntegraPro Test',
-            razon_social: currentUser.empresa_nombre || 'Empresa Demo S.A.',
-            nit: '000000-1',
+            id: currentUser.empresa_id,
+            nombre: currentUser.empresa_nombre || 'Mi Empresa',
+            razon_social: currentUser.empresa_nombre || 'Mi Empresa',
+            nit: 'CF',
             pais: 'GT',
             regimen: currentUser.empresa_regimen || 'General (IVA 12%)',
             plan: 'enterprise',
@@ -446,6 +417,13 @@ export default function App() {
   );
 
   const handleSelectEmpresa = (id: number) => {
+    // Seguridad: solo admin de plataforma puede cambiar de espacio, y únicamente entre empresas propias/demo
+    if (!isSuperAdmin) return;
+    if (!isOwnerOperableEmpresa(id)) {
+      console.warn(`[Privacidad Multi-Tenant] Bloqueado acceso operativo a empresa cliente externa #${id}.`);
+      return;
+    }
+
     setSelectedEmpresaId(id);
     localStorage.setItem('integrapro_active_empresa_id', id.toString());
     const currentList: EmpresaSaaS[] = (() => {
@@ -565,16 +543,13 @@ export default function App() {
           .then((res) => {
             if (res?.data || res?.user) {
               const u = res.data || res.user;
-              const userEmpId = Number(u.id_empresa || (u.empresa && u.empresa.id) || 1);
-              const isUserSuperAdmin =
-                u.role === 'SuperAdmin' ||
-                u.role === 'Administrador' ||
-                u.email === 'admin@integrapro.com' ||
-                u.email === 'admin@admin.com' ||
-                u.email === 'jahh21.jh@gmail.com';
+              const rawUserEmpId = Number(u.id_empresa || (u.empresa && u.empresa.id) || 1);
+              const userEmpId = rawUserEmpId === 2 ? 22 : rawUserEmpId;
+              const isUserPlatformAdmin = isPlatformAdminEmail(u.email);
               const savedEmpId = Number(localStorage.getItem('integrapro_active_empresa_id') || '0');
-              // Solo SuperAdmin puede mantener una empresa distinta seleccionada; usuarios regulares quedan bloqueados a su empresa
-              const targetEmpId = isUserSuperAdmin && savedEmpId > 0 && savedEmpId !== 2 ? savedEmpId : userEmpId;
+              // Solo admin de plataforma puede mantener seleccionada otra empresa propia/demo; inquilinos quedan bloqueados a su empresa
+              const targetEmpId =
+                isUserPlatformAdmin && isOwnerOperableEmpresa(savedEmpId) ? savedEmpId : userEmpId;
               const matchedSavedEmp = empresasList.find(e => Number(e.id) === targetEmpId);
               const empInfo = targetEmpId === userEmpId
                 ? (res.empresa || res.data?.empresa || u.empresa || matchedSavedEmp)
@@ -755,6 +730,7 @@ export default function App() {
       localStorage.removeItem('integrapro_token');
       localStorage.removeItem('integrapro_active_empresa_id');
       localStorage.removeItem('integrapro_active_empresa');
+      localStorage.removeItem('integrapro_empresas_list');
       localStorage.removeItem('integrapro_last_activity');
     } catch {}
     setIsAuthenticated(false);
@@ -783,8 +759,9 @@ export default function App() {
       {isCompanyLiveOnly ? (
         <LiveExpressShell
           empresa={selectedEmpresa}
-          empresas={empresasList}
-          onSelectEmpresa={handleSelectEmpresa}
+          empresas={effectiveUserEmpresas}
+          isPlatformAdmin={isSuperAdmin}
+          onSelectEmpresa={isSuperAdmin ? handleSelectEmpresa : undefined}
           onExitLiveMode={() => {
             setIsLiveOnlyMode(false);
             localStorage.setItem('integrapro_mode_live_only', 'false');
@@ -916,13 +893,13 @@ export default function App() {
             {activeTab === 'rrhh' && <HumanResources key={selectedEmpresaId} />}
             {activeTab === 'asistencia' && <AttendanceKiosk key={selectedEmpresaId} />}
             {activeTab === 'sucursales' && <Branches key={selectedEmpresaId} currentEmpresa={selectedEmpresa} />}
-            {activeTab === 'fortexa_apps' && (
+            {activeTab === 'fortexa_apps' && isSuperAdmin && (
               <FortexaAppsView
                 key={selectedEmpresaId}
                 currentEmpresa={selectedEmpresa} 
-                empresas={effectiveUserEmpresas}
+                empresas={empresasList}
                 onUpdateEmpresa={handleUpdateEmpresa}
-                onSelectEmpresa={isSuperAdmin ? handleSelectEmpresa : undefined}
+                onSelectEmpresa={handleSelectEmpresa}
               />
             )}
             {activeTab === 'live_sales' && (
@@ -933,6 +910,7 @@ export default function App() {
                 key={selectedEmpresaId}
                 currentEmpresa={selectedEmpresa} 
                 empresas={effectiveUserEmpresas}
+                isPlatformAdmin={isSuperAdmin}
                 onUpdateEmpresa={handleUpdateEmpresa}
                 onSelectEmpresa={isSuperAdmin ? handleSelectEmpresa : undefined}
               />

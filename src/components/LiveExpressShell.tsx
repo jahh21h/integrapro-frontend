@@ -20,6 +20,7 @@ import { useLiveSales } from '../context/LiveSalesContext';
 interface LiveExpressShellProps {
   empresa: EmpresaSaaS;
   empresas?: EmpresaSaaS[];
+  isPlatformAdmin?: boolean;
   onSelectEmpresa?: (id: number) => void;
   onExitLiveMode: () => void;
   onLogout?: () => void;
@@ -28,6 +29,7 @@ interface LiveExpressShellProps {
 export default function LiveExpressShell({
   empresa,
   empresas,
+  isPlatformAdmin = false,
   onSelectEmpresa,
   onExitLiveMode,
   onLogout
@@ -203,19 +205,21 @@ export default function LiveExpressShell({
               </div>
             )}
 
-            <button
-              type="button"
-              onClick={() => {
-                onExitLiveMode();
-                if (onSelectEmpresa) onSelectEmpresa(22);
-              }}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs font-bold shadow-md shadow-blue-900/30 transition-all cursor-pointer"
-              title="Volver a la consola maestra de Fortexa Technologies y ver todo el sistema"
-            >
-              <Building2 className="w-3.5 h-3.5 text-blue-200" />
-              <span className="hidden md:inline">Consola Fortexa</span>
-              <span className="md:hidden">Fortexa</span>
-            </button>
+            {isPlatformAdmin && (
+              <button
+                type="button"
+                onClick={() => {
+                  onExitLiveMode();
+                  if (onSelectEmpresa) onSelectEmpresa(22);
+                }}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs font-bold shadow-md shadow-blue-900/30 transition-all cursor-pointer"
+                title="Volver a la consola maestra de Fortexa Technologies y ver todo el sistema"
+              >
+                <Building2 className="w-3.5 h-3.5 text-blue-200" />
+                <span className="hidden md:inline">Consola Fortexa</span>
+                <span className="md:hidden">Fortexa</span>
+              </button>
+            )}
 
             <button
               type="button"
@@ -286,7 +290,7 @@ export default function LiveExpressShell({
 
         {activeTab === 'ajustes' && (
           <div className="bg-white rounded-3xl text-slate-900 p-4 sm:p-6 shadow-2xl">
-            <SettingsView key={empresa.id} currentEmpresa={empresa} onSelectEmpresa={onSelectEmpresa} />
+            <SettingsView key={empresa.id} currentEmpresa={empresa} isPlatformAdmin={isPlatformAdmin} onSelectEmpresa={onSelectEmpresa} />
           </div>
         )}
       </main>

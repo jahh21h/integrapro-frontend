@@ -4,6 +4,28 @@
  * (fail-closed: ante registros sin id_empresa en empresas distintas a 1, se bloquean).
  */
 
+// Únicas cuentas administradoras de la plataforma SaaS (Fortexa)
+export const PLATFORM_ADMIN_EMAILS: readonly string[] = [
+  'admin@integrapro.com',
+  'admin@admin.com',
+  'jherrera@integrapro.com',
+];
+
+// Únicas empresas operables directamente por el dueño de la plataforma
+// (Fortexa #22, Fashion Styles #1, Demo QA #25 y Demo Live #99).
+// Ningún SuperAdmin puede entrar a ver datos operativos de inquilinos externos.
+export const OWNER_OPERABLE_EMPRESA_IDS: readonly number[] = [1, 22, 25, 99];
+
+export function isPlatformAdminEmail(email?: string | null): boolean {
+  if (!email) return false;
+  return PLATFORM_ADMIN_EMAILS.includes(email.trim().toLowerCase());
+}
+
+export function isOwnerOperableEmpresa(empresaId?: number | string | null): boolean {
+  const num = Number(empresaId);
+  return Number.isFinite(num) && OWNER_OPERABLE_EMPRESA_IDS.includes(num);
+}
+
 export function getStoredActiveEmpresaId(): number | null {
   try {
     const raw = localStorage.getItem('integrapro_active_empresa_id');

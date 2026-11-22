@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { User, UserRole } from '../types';
 import { authApi } from '../api';
 import { formatRegimenLabel } from '../utils/tax';
-import { Building2, Lock, Mail, ArrowRight, ShieldCheck, Store, Sparkles, Clock, AlertCircle } from 'lucide-react';
+import { Building2, Lock, Mail, ArrowRight, ShieldCheck, Store, Clock, AlertCircle } from 'lucide-react';
 
 interface LoginProps {
   onLogin: (user: User) => void;
@@ -10,10 +10,8 @@ interface LoginProps {
 }
 
 export default function Login({ onLogin, inactivityNotice }: LoginProps) {
-  const [email, setEmail] = useState('admin@integrapro.com');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [role, setRole] = useState<UserRole>('Administrador');
-  const [sucursal, setSucursal] = useState('Sucursal Central - Ciudad');
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -30,62 +28,36 @@ export default function Login({ onLogin, inactivityNotice }: LoginProps) {
       });
       const userObj = res?.user || res?.data?.user;
       const empObj = res?.empresa || res?.data?.empresa || userObj?.empresa;
-      const effectiveEmpId = empObj?.id_empresa || empObj?.id || userObj?.id_empresa || 1;
-      const effectiveEmpNombre = empObj?.nombre || userObj?.empresa?.nombre || (effectiveEmpId === 22 ? 'Fortexa Technologies' : effectiveEmpId === 25 ? '[QA-EMPRESA] IntegraPro Test' : 'Fashion Styles');
+      const rawEmpId = Number(empObj?.id_empresa || empObj?.id || userObj?.id_empresa || 1);
+      const effectiveEmpId = rawEmpId === 2 ? 22 : rawEmpId;
+      const effectiveEmpNombre =
+        empObj?.nombre ||
+        userObj?.empresa?.nombre ||
+        (effectiveEmpId === 22
+          ? 'Fortexa Technologies'
+          : effectiveEmpId === 25
+          ? '[QA-EMPRESA] IntegraPro Test'
+          : effectiveEmpId === 1
+          ? 'Fashion Styles'
+          : `Empresa #${effectiveEmpId}`);
       const rawReg = empObj?.regimen_tributario || empObj?.regimen || '';
       const effectiveEmpRegimen = formatRegimenLabel(rawReg);
       onLogin({
         id: userObj?.id || 1,
         name: userObj?.name || email.split('@')[0].toUpperCase(),
         email: userObj?.email || email.trim(),
-        role: (userObj?.role || role) as UserRole,
+        role: (userObj?.role || 'Administrador de Empresa') as UserRole,
         empresa_id: effectiveEmpId,
         empresa_nombre: effectiveEmpNombre,
         empresa_regimen: effectiveEmpRegimen,
         sucursal_id: userObj?.id_sucursal || 1,
-        sucursal_nombre: userObj?.sucursal?.nombre || (effectiveEmpId === 22 ? 'Sede Central Fortexa Technologies' : sucursal)
+        sucursal_nombre: userObj?.sucursal?.nombre || (effectiveEmpId === 22 ? 'Sede Central Fortexa Technologies' : 'Sucursal Principal')
       });
     } catch (err: any) {
       console.error('Error de autenticación:', err);
       const msg = err.response?.data?.message 
         || err.response?.data?.errors?.email?.[0] 
         || 'Credenciales incorrectas. Verifique su correo y contraseña.';
-      setErrorMsg(msg);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleDemo = async (demoEmail: string, demoRole: UserRole, demoBranch: string) => {
-    setEmail(demoEmail);
-    setPassword('password');
-    setRole(demoRole);
-    const isFortexa = demoEmail === 'admin@integrapro.com';
-    const effectiveBranch = isFortexa ? 'Sede Central Fortexa Technologies' : demoBranch;
-    setSucursal(effectiveBranch);
-    setLoading(true);
-    setErrorMsg(null);
-    
-    try {
-      const res = await authApi.login({ 
-        email: demoEmail, 
-        password: 'password', 
-        device_name: 'IntegraPro Demo QuickLogin' 
-      });
-      const userObj = res?.user || res?.data?.user;
-      onLogin({
-        id: userObj?.id || (isFortexa ? 2 : 1),
-        name: userObj?.name || (isFortexa ? 'SaaS Administrator' : demoEmail.split('@')[0].toUpperCase()),
-        email: userObj?.email || demoEmail,
-        role: demoRole,
-        empresa_id: userObj?.id_empresa || (isFortexa ? 22 : 1),
-        empresa_nombre: userObj?.empresa?.nombre || (isFortexa ? 'Fortexa Technologies' : 'Fashion Styles'),
-        sucursal_id: userObj?.id_sucursal || (isFortexa ? 63 : 1),
-        sucursal_nombre: effectiveBranch
-      });
-    } catch (err: any) {
-      console.error('Error en acceso demo:', err);
-      const msg = err.response?.data?.message || 'No se pudo acceder con la cuenta demo seleccionada.';
       setErrorMsg(msg);
     } finally {
       setLoading(false);
@@ -180,42 +152,6 @@ export default function Login({ onLogin, inactivityNotice }: LoginProps) {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
-                Rol Operativo
-              </label>
-              <select
-                value={role}
-                onChange={(e) => setRole(e.target.value as UserRole)}
-                className="w-full px-3 py-2.5 bg-slate-800/80 border border-slate-700 rounded-xl text-xs font-medium text-slate-200 focus:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              >
-                <option value="Administrador">Administrador</option>
-                <option value="Gerente de Sucursal">Gerente</option>
-                <option value="Cajero / Ventas">Cajero / POS</option>
-                <option value="Encargado de Bodega">Bodega</option>
-                <option value="Recursos Humanos">RRHH</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
-                Sucursal
-              </label>
-              <div className="relative">
-                <select
-                  value={sucursal}
-                  onChange={(e) => setSucursal(e.target.value)}
-                  className="w-full px-3 py-2.5 bg-slate-800/80 border border-slate-700 rounded-xl text-xs font-medium text-slate-200 focus:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                >
-                  <option value="Sucursal Central - Ciudad">Central</option>
-                  <option value="Sucursal Norte">Norte</option>
-                  <option value="Sucursal Sur">Sur</option>
-                </select>
-              </div>
-            </div>
-          </div>
-
           <button
             type="submit"
             disabled={loading}
@@ -225,44 +161,6 @@ export default function Login({ onLogin, inactivityNotice }: LoginProps) {
             <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
           </button>
         </form>
-
-        {/* Accesos rápidos Demo */}
-        <div className="mt-6 pt-5 border-t border-slate-800">
-          <p className="text-[10px] text-center font-bold text-slate-400 uppercase tracking-wider mb-2.5 flex items-center justify-center gap-1">
-            <Sparkles className="w-3 h-3 text-indigo-400" />
-            Accesos Demo Comerciales:
-          </p>
-          <div className="grid grid-cols-4 gap-1.5">
-            <button
-              type="button"
-              onClick={() => handleDemo('admin@integrapro.com', 'Administrador', 'Sucursal Central - Ciudad')}
-              className="py-1.5 px-2 text-[10px] font-semibold bg-slate-800 hover:bg-indigo-900/50 hover:text-indigo-300 text-slate-300 rounded-lg border border-slate-700 transition-colors"
-            >
-              Admin
-            </button>
-            <button
-              type="button"
-              onClick={() => handleDemo('cajero@integrapro.com', 'Cajero / Ventas', 'Sucursal Central - Ciudad')}
-              className="py-1.5 px-2 text-[10px] font-semibold bg-slate-800 hover:bg-indigo-900/50 hover:text-indigo-300 text-slate-300 rounded-lg border border-slate-700 transition-colors"
-            >
-              Caja POS
-            </button>
-            <button
-              type="button"
-              onClick={() => handleDemo('bodega@integrapro.com', 'Encargado de Bodega', 'Sucursal Norte')}
-              className="py-1.5 px-2 text-[10px] font-semibold bg-slate-800 hover:bg-indigo-900/50 hover:text-indigo-300 text-slate-300 rounded-lg border border-slate-700 transition-colors"
-            >
-              Bodega
-            </button>
-            <button
-              type="button"
-              onClick={() => handleDemo('rrhh@integrapro.com', 'Recursos Humanos', 'Sucursal Central - Ciudad')}
-              className="py-1.5 px-2 text-[10px] font-semibold bg-slate-800 hover:bg-indigo-900/50 hover:text-indigo-300 text-slate-300 rounded-lg border border-slate-700 transition-colors"
-            >
-              RRHH
-            </button>
-          </div>
-        </div>
 
         {/* Badges de seguridad */}
         <div className="mt-5 flex items-center justify-center gap-3 text-[11px] text-slate-400">

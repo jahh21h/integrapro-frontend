@@ -1,14 +1,14 @@
 import { useState, useEffect, useMemo } from 'react';
-import { 
-  Search, 
-  Receipt, 
-  FileText, 
-  DollarSign, 
-  Eye, 
-  CheckCircle2, 
-  ArrowRight, 
-  Download, 
-  Printer, 
+import {
+  Search,
+  Receipt,
+  FileText,
+  DollarSign,
+  Eye,
+  CheckCircle2,
+  ArrowRight,
+  Download,
+  Printer,
   X,
   QrCode,
   FileCheck2,
@@ -171,15 +171,15 @@ export default function Sales({ currentEmpresa }: SalesProps = {}) {
       metodo_pago: s.metodoPagoRaw || 'efectivo',
       observaciones: s.observaciones || '',
       descuentoGlobal: 0,
-      detalles: s.productos && s.productos.length > 0 
+      detalles: s.productos && s.productos.length > 0
         ? s.productos.map((p: any, idx: number) => ({
-            id_producto: p.id_producto || (idx + 1),
-            nombre: p.nombre,
-            cantidad: p.cantidad,
-            precio_unitario: p.precioUnitario,
-            descuento: p.descuento || 0,
-            subtotal: p.subtotal || (p.cantidad * p.precioUnitario)
-          }))
+          id_producto: p.id_producto || (idx + 1),
+          nombre: p.nombre,
+          cantidad: p.cantidad,
+          precio_unitario: p.precioUnitario,
+          descuento: p.descuento || 0,
+          subtotal: p.subtotal || (p.cantidad * p.precioUnitario)
+        }))
         : [{ id_producto: 2745, nombre: 'Producto General', cantidad: 1, precio_unitario: s.total, descuento: 0, subtotal: s.total }]
     });
   };
@@ -324,16 +324,16 @@ export default function Sales({ currentEmpresa }: SalesProps = {}) {
   };
 
   const filteredSales = sales.filter(s => {
-    const matchesSearch = s.id.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                          s.cliente.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          s.nit.includes(searchTerm) ||
-                          (s.dte && s.dte.uuid.toLowerCase().includes(searchTerm.toLowerCase()));
+    const matchesSearch = s.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      s.cliente.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      s.nit.includes(searchTerm) ||
+      (s.dte && s.dte.uuid.toLowerCase().includes(searchTerm.toLowerCase()));
     const matchesBranch = selectedBranch === 'Todas' || s.sucursal.includes(selectedBranch);
     return matchesSearch && matchesBranch;
   });
 
-  const filteredQuotes = quotes.filter(q => 
-    q.id.toLowerCase().includes(searchTerm.toLowerCase()) || 
+  const filteredQuotes = quotes.filter(q =>
+    q.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
     q.cliente.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
@@ -389,7 +389,7 @@ export default function Sales({ currentEmpresa }: SalesProps = {}) {
 
   return (
     <div className="space-y-6">
-      
+
       {/* Toast de Notificación */}
       {notificationToast && (
         <div className="fixed bottom-6 right-6 z-50 bg-slate-900 text-white px-5 py-3.5 rounded-2xl shadow-2xl border border-slate-700 flex items-center gap-3 animate-in fade-in slide-in-from-bottom-5 duration-200">
@@ -411,8 +411,8 @@ export default function Sales({ currentEmpresa }: SalesProps = {}) {
         </div>
 
         <div className="flex items-center gap-2">
-          <button 
-            type="button" 
+          <button
+            type="button"
             onClick={fetchSales}
             className="px-3.5 py-2.5 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 shadow-sm transition-all flex items-center gap-2 hover:border-slate-300 cursor-pointer"
             title="Recargar ventas en tiempo real desde la Base de Datos"
@@ -420,8 +420,8 @@ export default function Sales({ currentEmpresa }: SalesProps = {}) {
             <RefreshCcw className={`w-4 h-4 text-indigo-600 ${isLoadingSales ? 'animate-spin' : ''}`} />
             <span>Actualizar</span>
           </button>
-          <button 
-            type="button" 
+          <button
+            type="button"
             onClick={handleExportSales}
             className="px-4 py-2.5 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 shadow-sm transition-all flex items-center gap-2 hover:border-slate-300"
           >
@@ -488,11 +488,10 @@ export default function Sales({ currentEmpresa }: SalesProps = {}) {
       <div className="flex border-b border-slate-200 gap-6">
         <button
           onClick={() => setActiveTab('ventas')}
-          className={`pb-3 text-xs font-extrabold flex items-center gap-2 border-b-2 transition-all ${
-            activeTab === 'ventas'
-              ? 'border-emerald-600 text-emerald-600'
-              : 'border-transparent text-slate-500 hover:text-slate-900'
-          }`}
+          className={`pb-3 text-xs font-extrabold flex items-center gap-2 border-b-2 transition-all ${activeTab === 'ventas'
+            ? 'border-emerald-600 text-emerald-600'
+            : 'border-transparent text-slate-500 hover:text-slate-900'
+            }`}
         >
           <Receipt className="w-4 h-4" />
           <span>Historial de Ventas & FEL DTE</span>
@@ -503,11 +502,10 @@ export default function Sales({ currentEmpresa }: SalesProps = {}) {
 
         <button
           onClick={() => setActiveTab('cotizaciones')}
-          className={`pb-3 text-xs font-extrabold flex items-center gap-2 border-b-2 transition-all ${
-            activeTab === 'cotizaciones'
-              ? 'border-emerald-600 text-emerald-600'
-              : 'border-transparent text-slate-500 hover:text-slate-900'
-          }`}
+          className={`pb-3 text-xs font-extrabold flex items-center gap-2 border-b-2 transition-all ${activeTab === 'cotizaciones'
+            ? 'border-emerald-600 text-emerald-600'
+            : 'border-transparent text-slate-500 hover:text-slate-900'
+            }`}
         >
           <FileText className="w-4 h-4" />
           <span>Cotizaciones & Propuestas</span>
@@ -518,11 +516,10 @@ export default function Sales({ currentEmpresa }: SalesProps = {}) {
 
         <button
           onClick={() => setActiveTab('vendedores')}
-          className={`pb-3 text-xs font-extrabold flex items-center gap-2 border-b-2 transition-all ${
-            activeTab === 'vendedores'
-              ? 'border-emerald-600 text-emerald-600'
-              : 'border-transparent text-slate-500 hover:text-slate-900'
-          }`}
+          className={`pb-3 text-xs font-extrabold flex items-center gap-2 border-b-2 transition-all ${activeTab === 'vendedores'
+            ? 'border-emerald-600 text-emerald-600'
+            : 'border-transparent text-slate-500 hover:text-slate-900'
+            }`}
         >
           <Trophy className="w-4 h-4" />
           <span>Desempeño & Comisiones</span>
@@ -702,11 +699,10 @@ export default function Sales({ currentEmpresa }: SalesProps = {}) {
                     <h3 className="text-sm font-bold text-slate-900">{q.cliente}</h3>
                     <p className="text-[11px] text-slate-500">{q.empresa}</p>
                   </div>
-                  <span className={`px-2.5 py-1 rounded-full text-xs font-extrabold ${
-                    q.estado === 'Aprobada' 
-                      ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' 
-                      : 'bg-amber-50 text-amber-700 border border-amber-200'
-                  }`}>
+                  <span className={`px-2.5 py-1 rounded-full text-xs font-extrabold ${q.estado === 'Aprobada'
+                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                    : 'bg-amber-50 text-amber-700 border border-amber-200'
+                    }`}>
                     {q.estado}
                   </span>
                 </div>
@@ -857,16 +853,14 @@ export default function Sales({ currentEmpresa }: SalesProps = {}) {
                       <td className="py-3.5 px-4 text-center">
                         <div className="flex items-center gap-2 justify-center">
                           <div className="w-16 bg-slate-100 h-2 rounded-full overflow-hidden">
-                            <div 
-                              className={`h-full rounded-full ${
-                                v.porcentaje_cumplido >= 100 ? 'bg-emerald-500' : 'bg-amber-500'
-                              }`}
+                            <div
+                              className={`h-full rounded-full ${v.porcentaje_cumplido >= 100 ? 'bg-emerald-500' : 'bg-amber-500'
+                                }`}
                               style={{ width: `${Math.min(v.porcentaje_cumplido, 100)}%` }}
                             />
                           </div>
-                          <span className={`text-[11px] font-black ${
-                            v.porcentaje_cumplido >= 100 ? 'text-emerald-700' : 'text-amber-700'
-                          }`}>
+                          <span className={`text-[11px] font-black ${v.porcentaje_cumplido >= 100 ? 'text-emerald-700' : 'text-amber-700'
+                            }`}>
                             {v.porcentaje_cumplido}%
                           </span>
                         </div>
@@ -933,7 +927,7 @@ export default function Sales({ currentEmpresa }: SalesProps = {}) {
               <span className="text-xs font-black text-slate-900">
                 {selectedSaleDetail.dte ? 'Documento Tributario Electrónico (FEL SAT)' : `Comprobante #${selectedSaleDetail.id}`}
               </span>
-              <button 
+              <button
                 onClick={() => setSelectedSaleDetail(null)}
                 className="p-1 text-slate-400 hover:text-slate-600 rounded-lg"
               >
@@ -1070,13 +1064,13 @@ export default function Sales({ currentEmpresa }: SalesProps = {}) {
             </div>
 
             <div className="p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
-              <button 
+              <button
                 onClick={() => setSelectedSaleDetail(null)}
                 className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-200 rounded-xl transition-colors"
               >
                 Cerrar
               </button>
-              <button 
+              <button
                 onClick={() => {
                   window.print();
                   setSelectedSaleDetail(null);
