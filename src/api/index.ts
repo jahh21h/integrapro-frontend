@@ -417,6 +417,10 @@ export const empresaApi = {
   update: async (id: number | string, data: any) => {
     const res = await apiClient.put(`/empresas/${id}`, data);
     return res.data;
+  },
+  delete: async (id: number | string) => {
+    const res = await apiClient.delete(`/empresas/${id}`);
+    return res.data;
   }
 };
 

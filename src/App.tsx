@@ -500,6 +500,18 @@ export default function App() {
     });
   };
 
+  const handleDeleteEmpresa = (deletedId: number) => {
+    const idNum = Number(deletedId);
+    setEmpresasList(prev => {
+      const updated = prev.filter(e => Number(e.id) !== idNum);
+      localStorage.setItem('integrapro_empresas_list', JSON.stringify(updated));
+      return updated;
+    });
+    try {
+      localStorage.removeItem(`integrapro_read_notifs_${idNum}`);
+    } catch {}
+  };
+
   const handleUpdateEmpresa = (updatedEmp: EmpresaSaaS) => {
     const formattedEmp: EmpresaSaaS = {
       ...updatedEmp,
@@ -1010,6 +1022,7 @@ export default function App() {
                 empresas={empresasList}
                 onUpdateEmpresa={handleUpdateEmpresa}
                 onCreateEmpresa={handleCreateEmpresa}
+                onDeleteEmpresa={handleDeleteEmpresa}
                 onSelectEmpresa={handleSelectEmpresa}
               />
             )}

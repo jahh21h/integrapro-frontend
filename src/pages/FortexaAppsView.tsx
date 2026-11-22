@@ -35,7 +35,8 @@ import {
   Lock,
   Power,
   X,
-  Send
+  Send,
+  Trash2
 } from 'lucide-react';
 import { SoftwareLicenseItem, SignedLicenseItem, EmpresaSaaS } from '../types';
 import { softwareLicenseApi, empresaApi } from '../api';
@@ -68,6 +69,7 @@ interface FortexaAppsViewProps {
   empresas?: EmpresaSaaS[];
   onUpdateEmpresa?: (emp: EmpresaSaaS) => void;
   onCreateEmpresa?: (emp: EmpresaSaaS) => void;
+  onDeleteEmpresa?: (id: number) => void;
   onSelectEmpresa?: (id: number) => void;
 }
 
@@ -76,6 +78,7 @@ export default function FortexaAppsView({
   empresas = [],
   onUpdateEmpresa,
   onCreateEmpresa,
+  onDeleteEmpresa,
   onSelectEmpresa
 }: FortexaAppsViewProps) {
   const [activeSubTab, setActiveSubTab] = useState<'rutafuel' | 'quantum' | 'integrapro' | 'live_commerce'>('integrapro');
@@ -302,6 +305,10 @@ export default function FortexaAppsView({
   const [isCreatingTenant, setIsCreatingTenant] = useState<boolean>(false);
   const [tenantCreateError, setTenantCreateError] = useState<string | null>(null);
   const [togglingTenantId, setTogglingTenantId] = useState<number | null>(null);
+  const [deletingEmpresa, setDeletingEmpresa] = useState<EmpresaSaaS | null>(null);
+  const [deleteConfirmText, setDeleteConfirmText] = useState<string>('');
+  const [isDeletingEmpresa, setIsDeletingEmpresa] = useState<boolean>(false);
+  const [deleteEmpresaError, setDeleteEmpresaError] = useState<string | null>(null);
   const [createdTenantResult, setCreatedTenantResult] = useState<{
     empresa: EmpresaSaaS;
     adminName: string;
@@ -697,6 +704,47 @@ export default function FortexaAppsView({
       ? `https://api.whatsapp.com/send?phone=${waPhone}&text=${encodeURIComponent(msg)}`
       : `https://api.whatsapp.com/send?text=${encodeURIComponent(msg)}`;
     window.open(url, '_blank');
+  };
+
+  const handleOpenDeleteModal = (emp: EmpresaSaaS) => {
+    if (emp.id === 1 || emp.id === 22 || emp.id === 25) {
+      showToast('⚠️ Las empresas base del sistema (Fortexa, Fashion Styles y Demo QA) están protegidas.');
+      return;
+    }
+    setDeletingEmpresa(emp);
+    setDeleteConfirmText('');
+    setDeleteEmpresaError(null);
+  };
+
+  const handleConfirmDeleteEmpresa = async () => {
+    if (!deletingEmpresa) return;
+    if (deleteConfirmText.trim().toUpperCase() !== 'ELIMINAR') {
+      setDeleteEmpresaError('Escribe la palabra ELIMINAR para confirmar.');
+      return;
+    }
+
+    setIsDeletingEmpresa(true);
+    setDeleteEmpresaError(null);
+    try {
+      const targetId = deletingEmpresa.id;
+      const targetName = deletingEmpresa.nombre;
+      if (targetId !== 99) {
+        await empresaApi.delete(targetId);
+      }
+      setSaasEmpresas(prev => prev.filter(e => e.id !== targetId));
+      if (onDeleteEmpresa) {
+        onDeleteEmpresa(targetId);
+      }
+      setDeletingEmpresa(null);
+      setDeleteConfirmText('');
+      showToast(`🗑️ Empresa "${targetName}" (#${targetId}) eliminada permanentemente de MySQL.`);
+    } catch (err: any) {
+      setDeleteEmpresaError(
+        err?.response?.data?.message || err?.message || 'No se pudo eliminar la empresa en el servidor.'
+      );
+    } finally {
+      setIsDeletingEmpresa(false);
+    }
   };
 
   const getTenantWelcomeText = () => {
@@ -2357,7 +2405,7 @@ export default function FortexaAppsView({
               <div className="text-right">
                 <span className="px-3 py-1 rounded-xl bg-slate-900 text-white font-bold text-xs flex items-center gap-1.5">
                   <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                  <span>10 Tenants en MySQL</span>
+                  <span>{allEmpresas.length} Tenants en MySQL</span>
                 </span>
               </div>
             </div>
@@ -2688,6 +2736,18 @@ export default function FortexaAppsView({
                                       <Power className="w-3 h-3" />
                                       <span>{emp.activa !== false ? 'Suspender' : 'Reactivar'}</span>
                                     </button>
+                                    {emp.id !== 25 && (
+                                      <button
+                                        type="button"
+                                        disabled={togglingTenantId === emp.id || isDeletingEmpresa}
+                                        onClick={() => handleOpenDeleteModal(emp)}
+                                        className="px-2 py-1 bg-white hover:bg-rose-600 text-rose-600 hover:text-white border border-rose-200 hover:border-rose-600 text-[11px] font-bold rounded-lg transition-all flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                                        title="Eliminar permanentemente esta empresa y todos sus datos"
+                                      >
+                                        <Trash2 className="w-3 h-3" />
+                                        <span>Eliminar</span>
+                                      </button>
+                                    )}
                                   </>
                                 )}
                                 {onSelectEmpresa && isOwnerOperableEmpresa(emp.id) ? (
@@ -4279,6 +4339,102 @@ export default function FortexaAppsView({
                 </div>
               </form>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* ===================================================================== */}
+      {/* MODAL DE CONFIRMACIÓN PARA ELIMINAR EMPRESA (INQUILINO) PERMANENTEMENTE */}
+      {/* ===================================================================== */}
+      {deletingEmpresa && (
+        <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150">
+          <div className="bg-white rounded-3xl max-w-md w-full border border-rose-200 shadow-2xl overflow-hidden">
+            <div className="p-5 bg-rose-50 border-b border-rose-100 flex items-start justify-between gap-3">
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-rose-600 text-white flex items-center justify-center shrink-0 shadow-sm">
+                  <Trash2 className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-rose-950">Eliminar Empresa Permanentemente</h3>
+                  <p className="text-xs text-rose-700 mt-0.5">
+                    Esta acción no se puede deshacer.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                disabled={isDeletingEmpresa}
+                onClick={() => setDeletingEmpresa(null)}
+                className="p-1.5 rounded-xl text-rose-400 hover:text-rose-700 hover:bg-rose-100 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4 text-xs">
+              <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 space-y-1">
+                <p className="font-black text-slate-900 text-sm">
+                  {deletingEmpresa.nombre}{' '}
+                  <span className="font-mono text-xs text-slate-500">#{deletingEmpresa.id}</span>
+                </p>
+                <p className="text-[11px] text-slate-500">
+                  Razón Social: {deletingEmpresa.razon_social || deletingEmpresa.nombre} • NIT: {deletingEmpresa.nit || 'CF'}
+                </p>
+              </div>
+
+              <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-[11px] leading-relaxed">
+                <strong>Se borrarán definitivamente:</strong> los usuarios del inquilino (y sus sesiones activas), sucursales, inventario, ventas, compras, clientes, contabilidad y configuración en MySQL.
+              </div>
+
+              {deleteEmpresaError && (
+                <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 font-bold text-[11px]">
+                  ⚠️ {deleteEmpresaError}
+                </div>
+              )}
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1.5">
+                  Escribe <span className="font-mono font-black text-rose-600">ELIMINAR</span> para confirmar:
+                </label>
+                <input
+                  type="text"
+                  autoFocus
+                  value={deleteConfirmText}
+                  onChange={(e) => setDeleteConfirmText(e.target.value)}
+                  placeholder="ELIMINAR"
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl font-mono font-black text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-rose-500"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  disabled={isDeletingEmpresa}
+                  onClick={() => setDeletingEmpresa(null)}
+                  className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  disabled={isDeletingEmpresa || deleteConfirmText.trim().toUpperCase() !== 'ELIMINAR'}
+                  onClick={handleConfirmDeleteEmpresa}
+                  className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-black shadow-sm flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                >
+                  {isDeletingEmpresa ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      <span>Eliminando...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>Sí, Eliminar Empresa</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
