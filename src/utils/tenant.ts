@@ -8,6 +8,7 @@
 export const PLATFORM_ADMIN_EMAILS: readonly string[] = [
   'admin@integrapro.com',
   'admin@admin.com',
+  'admin@qa.test',
   'jherrera@integrapro.com',
 ];
 
