@@ -70,6 +70,54 @@ export default function Sales({ currentEmpresa }: SalesProps = {}) {
   const [editSaleForm, setEditSaleForm] = useState<any>(null);
   const [isSavingSale, setIsSavingSale] = useState(false);
 
+  // Visor de PDF del Comprobante de Venta
+  const [loadingPdfSaleId, setLoadingPdfSaleId] = useState<number | null>(null);
+  const [pdfViewer, setPdfViewer] = useState<{ saleId: number; label: string; cliente: string; url: string } | null>(null);
+
+  const parseSaleNumericId = (sale: VentaItem): number | null => {
+    if (sale.rawId && Number(sale.rawId) > 0) return Number(sale.rawId);
+    const match = String(sale.id || '').match(/(\d+)/);
+    return match ? Number(match[1]) : null;
+  };
+
+  const handleClosePdfViewer = () => {
+    if (pdfViewer?.url) {
+      try { window.URL.revokeObjectURL(pdfViewer.url); } catch {}
+    }
+    setPdfViewer(null);
+  };
+
+  const handleOpenSalePdf = async (sale: VentaItem) => {
+    const numericId = parseSaleNumericId(sale);
+    if (!numericId) {
+      showToast('⚠️ Esta venta no tiene un ID numérico válido en la base de datos.');
+      return;
+    }
+    if (loadingPdfSaleId === numericId) return;
+    setLoadingPdfSaleId(numericId);
+    try {
+      const blobUrl = await salesApi.fetchSalePdfBlobUrl(numericId);
+      if (pdfViewer?.url) {
+        try { window.URL.revokeObjectURL(pdfViewer.url); } catch {}
+      }
+      setPdfViewer({
+        saleId: numericId,
+        label: sale.id,
+        cliente: sale.cliente,
+        url: blobUrl
+      });
+    } catch (err: any) {
+      const status = err?.response?.status;
+      showToast(
+        status === 404
+          ? `⚠️ La venta #${numericId} no existe en MySQL para ${empresaActiva.nombre}.`
+          : `⚠️ No se pudo cargar el PDF de la venta #${numericId}: ${err?.response?.data?.message || err?.message || 'Error de conexión'}`
+      );
+    } finally {
+      setLoadingPdfSaleId(null);
+    }
+  };
+
   const showToast = (msg: string) => {
     setNotificationToast(msg);
     setTimeout(() => setNotificationToast(null), 4000);
@@ -629,17 +677,16 @@ export default function Sales({ currentEmpresa }: SalesProps = {}) {
 
                           <button
                             type="button"
-                            onClick={() => {
-                              const targetId = Number(s.rawId || s.id);
-                              if (!targetId || isNaN(targetId)) return;
-                              salesApi.downloadSalePdf(targetId).catch((err: any) => {
-                                showToast(`⚠️ No se pudo abrir el PDF: ${err?.response?.data?.message || err?.message}`);
-                              });
-                            }}
-                            className="p-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold rounded-xl text-xs transition-colors inline-flex items-center gap-1 cursor-pointer"
-                            title="Descargar Comprobante PDF Elegante"
+                            disabled={loadingPdfSaleId !== null && loadingPdfSaleId === parseSaleNumericId(s)}
+                            onClick={() => handleOpenSalePdf(s)}
+                            className="p-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold rounded-xl text-xs transition-colors inline-flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                            title="Mostrar Comprobante de Venta en PDF"
                           >
-                            <FileText className="w-3.5 h-3.5 text-emerald-600" />
+                            {loadingPdfSaleId !== null && loadingPdfSaleId === parseSaleNumericId(s) ? (
+                              <Loader2 className="w-3.5 h-3.5 text-emerald-600 animate-spin" />
+                            ) : (
+                              <FileText className="w-3.5 h-3.5 text-emerald-600" />
+                            )}
                             <span className="hidden xl:inline">PDF</span>
                           </button>
 
@@ -1068,17 +1115,16 @@ export default function Sales({ currentEmpresa }: SalesProps = {}) {
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => {
-                    const targetId = Number(selectedSaleDetail.rawId || selectedSaleDetail.id);
-                    if (!targetId || isNaN(targetId)) return;
-                    salesApi.downloadSalePdf(targetId).catch((err: any) => {
-                      showToast(`⚠️ No se pudo generar el PDF: ${err?.response?.data?.message || err?.message}`);
-                    });
-                  }}
-                  className="px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 shadow-sm cursor-pointer"
+                  disabled={loadingPdfSaleId !== null && loadingPdfSaleId === parseSaleNumericId(selectedSaleDetail)}
+                  onClick={() => handleOpenSalePdf(selectedSaleDetail)}
+                  className="px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 shadow-sm cursor-pointer disabled:opacity-50"
                 >
-                  <FileText className="w-3.5 h-3.5 text-emerald-400" />
-                  <span>PDF Elegante</span>
+                  {loadingPdfSaleId !== null && loadingPdfSaleId === parseSaleNumericId(selectedSaleDetail) ? (
+                    <Loader2 className="w-3.5 h-3.5 text-emerald-400 animate-spin" />
+                  ) : (
+                    <FileText className="w-3.5 h-3.5 text-emerald-400" />
+                  )}
+                  <span>Ver PDF Elegante</span>
                 </button>
                 <button
                   onClick={() => {
@@ -1422,6 +1468,69 @@ export default function Sales({ currentEmpresa }: SalesProps = {}) {
                   </>
                 )}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL VISOR DE COMPROBANTE PDF DE VENTA */}
+      {pdfViewer && (
+        <div
+          className="fixed inset-0 z-[60] bg-slate-950/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-5 animate-in fade-in duration-150"
+          onClick={handleClosePdfViewer}
+        >
+          <div
+            className="bg-white w-full max-w-4xl h-[90vh] rounded-3xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="px-4 py-3 bg-slate-900 text-white flex items-center justify-between gap-3 shrink-0">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-8 h-8 rounded-xl bg-emerald-500/20 border border-emerald-400/30 text-emerald-300 flex items-center justify-center shrink-0">
+                  <FileText className="w-4 h-4" />
+                </div>
+                <div className="min-w-0">
+                  <h3 className="text-xs sm:text-sm font-black truncate">
+                    Comprobante de Venta PDF — {pdfViewer.label}
+                  </h3>
+                  <p className="text-[11px] text-slate-300 truncate">{pdfViewer.cliente}</p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0">
+                <a
+                  href={pdfViewer.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold transition-colors hidden sm:inline-flex items-center gap-1.5"
+                >
+                  <Printer className="w-3.5 h-3.5 text-emerald-300" />
+                  <span>Abrir en Pestaña</span>
+                </a>
+                <a
+                  href={pdfViewer.url}
+                  download={`comprobante-venta-${pdfViewer.saleId}.pdf`}
+                  className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black transition-colors inline-flex items-center gap-1.5 shadow-sm"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>Descargar PDF</span>
+                </a>
+                <button
+                  type="button"
+                  onClick={handleClosePdfViewer}
+                  className="p-1.5 rounded-xl bg-white/10 hover:bg-rose-500/80 text-white transition-colors cursor-pointer"
+                  title="Cerrar visor PDF"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            <div className="flex-1 bg-slate-100">
+              <iframe
+                src={pdfViewer.url}
+                title={`Comprobante PDF Venta #${pdfViewer.saleId}`}
+                className="w-full h-full border-0"
+              />
             </div>
           </div>
         </div>

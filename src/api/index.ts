@@ -187,23 +187,46 @@ export const salesApi = {
     const res = await apiClient.post(`/sales/${saleId}/payment`, paymentData);
     return res.data;
   },
-  downloadSalePdf: async (saleId: number) => {
+  fetchSalePdfBlobUrl: async (saleId: number): Promise<string> => {
     const res = await apiClient.get(`/sales/${saleId}/pdf`, {
       params: withTenantParam(),
       responseType: 'blob'
     });
     const blob = new Blob([res.data], { type: 'application/pdf' });
-    const url = window.URL.createObjectURL(blob);
-    const win = window.open(url, '_blank');
-    if (!win) {
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `comprobante-venta-${saleId}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
+    return window.URL.createObjectURL(blob);
+  },
+  downloadSalePdf: async (saleId: number) => {
+    // Abrir pestaña de forma síncrona (antes del await) para que Chrome/Edge nunca la bloquee
+    const win = window.open('', '_blank');
+    if (win) {
+      win.document.write(
+        '<html><head><title>Generando Comprobante PDF...</title></head><body style="font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;color:#334155;background:#f8fafc;"><div>Cargando comprobante PDF #' +
+          saleId +
+          '...</div></body></html>'
+      );
     }
-    setTimeout(() => window.URL.revokeObjectURL(url), 60_000);
+    try {
+      const res = await apiClient.get(`/sales/${saleId}/pdf`, {
+        params: withTenantParam(),
+        responseType: 'blob'
+      });
+      const blob = new Blob([res.data], { type: 'application/pdf' });
+      const url = window.URL.createObjectURL(blob);
+      if (win && !win.closed) {
+        win.location.href = url;
+      } else {
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `comprobante-venta-${saleId}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      }
+      setTimeout(() => window.URL.revokeObjectURL(url), 120_000);
+    } catch (err) {
+      if (win && !win.closed) win.close();
+      throw err;
+    }
   }
 };
 
