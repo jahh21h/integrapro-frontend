@@ -730,21 +730,33 @@ export default function App() {
     };
   }, [isAuthenticated]);
 
-  const handleLogin = (user: User) => {
+  const handleLogin = (user: User, empresaObj?: EmpresaSaaS) => {
     setSessionExpiredNotice(null);
     lastActivityRef.current = Date.now();
     try {
       localStorage.setItem('integrapro_last_activity', Date.now().toString());
       localStorage.setItem('integrapro_active_empresa_id', user.empresa_id.toString());
-      const empMatch = empresasList.find(e => e.id === user.empresa_id);
-      if (empMatch) {
-        localStorage.setItem('integrapro_active_empresa', JSON.stringify(empMatch));
+      if (empresaObj) {
+        setEmpresasList(prev => {
+          const exists = prev.some(e => Number(e.id) === Number(empresaObj.id));
+          const updated = exists
+            ? prev.map(e => Number(e.id) === Number(empresaObj.id) ? empresaObj : e)
+            : [empresaObj, ...prev];
+          localStorage.setItem('integrapro_empresas_list', JSON.stringify(updated));
+          return updated;
+        });
+        localStorage.setItem('integrapro_active_empresa', JSON.stringify(empresaObj));
+      } else {
+        const empMatch = empresasList.find(e => e.id === user.empresa_id);
+        if (empMatch) {
+          localStorage.setItem('integrapro_active_empresa', JSON.stringify(empMatch));
+        }
       }
     } catch {}
     setSelectedEmpresaId(user.empresa_id);
     setCurrentUser(user);
     setIsAuthenticated(true);
-    setActiveTab('dashboard');
+    setActiveTab(user.empresa_id === 22 ? 'fortexa_apps' : 'hub');
   };
 
   const handleLogout = async () => {
@@ -841,6 +853,8 @@ export default function App() {
             onLogout={handleLogout} 
             onOpenCommandPalette={() => setCommandPaletteOpen(true)}
             empresas={effectiveUserEmpresas}
+            allEmpresas={empresasList}
+            isPlatformAdmin={isSuperAdmin}
             selectedEmpresaId={selectedEmpresaId}
             onSelectEmpresa={isSuperAdmin ? handleSelectEmpresa : undefined}
             activeTab={activeTab}
@@ -855,6 +869,74 @@ export default function App() {
 
         <main className="flex-1 overflow-y-auto p-2.5 sm:p-6 lg:p-8">
           <div className="max-w-7xl mx-auto w-full">
+            {/* Banner de Recordatorio de Pago (5 días antes del vencimiento Mensual/Anual) o Prueba Gratis 14 Días */}
+            {selectedEmpresa && selectedEmpresa.id !== 1 && selectedEmpresa.id !== 22 && selectedEmpresa.id !== 99 && (() => {
+              const dueStr = selectedEmpresa.billing?.next_billing_date || selectedEmpresa.trial_ends_at;
+              if (!dueStr) return null;
+              const cleanDate = String(dueStr).slice(0, 10);
+              const target = new Date(cleanDate + 'T23:59:59');
+              if (isNaN(target.getTime())) return null;
+              const diffDays = Math.ceil((target.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+              const isTrial = selectedEmpresa.subscription_status === 'trial';
+              if (!isTrial && diffDays > 5) return null;
+
+              const cur = selectedEmpresa.billing?.currency || (selectedEmpresa.pais === 'GT' ? 'GTQ' : 'USD');
+              const sym = cur === 'GTQ' ? 'Q' : '$';
+              const amt = selectedEmpresa.billing?.amount ?? 0;
+              const cyc = selectedEmpresa.billing?.cycle === 'annual' ? 'Anual' : 'Mensual';
+              const isUrgent = diffDays <= 5;
+              const isOverdue = diffDays < 0;
+
+              const openWhatsApp = () => {
+                const msg = `Hola Fortexa Technologies, soy de *${selectedEmpresa.nombre}* (ID #${selectedEmpresa.id}). Deseo ${isTrial ? 'activar mi plan' : 'renovar mi suscripción'} ${cyc}${amt > 0 ? ` (${sym} ${Number(amt).toFixed(2)} ${cur})` : ''}.`;
+                window.open(`https://api.whatsapp.com/send?phone=50235692070&text=${encodeURIComponent(msg)}`, '_blank');
+              };
+
+              return (
+                <div
+                  className={`mb-4 px-4 py-3 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs shadow-xs ${
+                    isOverdue
+                      ? 'bg-rose-50 border-rose-200 text-rose-900'
+                      : isUrgent
+                      ? 'bg-amber-50 border-amber-200 text-amber-950'
+                      : 'bg-indigo-50 border-indigo-200 text-indigo-950'
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <Sparkles className={`w-4 h-4 shrink-0 ${isOverdue ? 'text-rose-600' : isUrgent ? 'text-amber-600' : 'text-indigo-600'}`} />
+                    <p className="font-semibold leading-snug">
+                      {isTrial ? (
+                        <>
+                          <strong>Prueba gratuita de 14 días:</strong> te quedan <strong>{Math.max(diffDays, 0)} día(s)</strong> (vence el <span className="font-mono font-bold">{cleanDate}</span>).
+                          {amt > 0 && <> Plan {cyc}: <strong>{sym} {Number(amt).toFixed(2)} {cur}</strong>.</>}
+                        </>
+                      ) : isOverdue ? (
+                        <>
+                          <strong>Recordatorio urgente:</strong> tu suscripción {cyc}{amt > 0 ? ` (${sym} ${Number(amt).toFixed(2)} ${cur})` : ''} venció el <span className="font-mono font-bold">{cleanDate}</span>. Reporta tu pago para evitar suspensión.
+                        </>
+                      ) : (
+                        <>
+                          <strong>Recordatorio de pago:</strong> tu suscripción {cyc}{amt > 0 ? ` de ${sym} ${Number(amt).toFixed(2)} ${cur}` : ''} vence {diffDays === 0 ? 'HOY' : `en ${diffDays} día(s)`} (<span className="font-mono font-bold">{cleanDate}</span>).
+                        </>
+                      )}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={openWhatsApp}
+                    className={`px-3.5 py-1.5 rounded-xl font-black text-[11px] whitespace-nowrap transition-colors cursor-pointer shrink-0 ${
+                      isOverdue
+                        ? 'bg-rose-600 hover:bg-rose-700 text-white'
+                        : isUrgent
+                        ? 'bg-amber-600 hover:bg-amber-700 text-white'
+                        : 'bg-indigo-600 hover:bg-indigo-700 text-white'
+                    }`}
+                  >
+                    {isTrial ? 'Activar Plan por WhatsApp' : 'Reportar Pago (WhatsApp)'}
+                  </button>
+                </div>
+              );
+            })()}
             {/* Si está dentro de un módulo específico, muestra el encabezado con botón de regreso */}
             {activeTab !== 'hub' && (
               <div className="mb-4 sm:mb-5 flex flex-wrap items-center justify-between gap-2.5 sm:gap-3 bg-white px-3 sm:px-4 py-2.5 sm:py-3 rounded-2xl border border-slate-200/90 shadow-xs animate-in fade-in duration-200">

@@ -24,16 +24,33 @@ import {
   BarChart3,
   Settings,
   Cpu,
-  Video
+  Video,
+  CreditCard,
+  AlertTriangle,
+  CheckCheck,
+  Sparkles,
+  Send
 } from 'lucide-react';
 import { useTimeFormat } from '../context/TimeFormatContext';
 import { getRegimenBadge } from '../utils/tax';
+import { isPlatformAdminEmail } from '../utils/tenant';
+
+interface NavbarNotification {
+  id: string;
+  title: string;
+  body: string;
+  severity: 'danger' | 'warning' | 'info' | 'success';
+  actionLabel?: string;
+  onAction?: () => void;
+}
 
 interface NavbarProps {
   user: User;
   onLogout: () => void;
   onOpenCommandPalette?: () => void;
   empresas?: EmpresaSaaS[];
+  allEmpresas?: EmpresaSaaS[];
+  isPlatformAdmin?: boolean;
   selectedEmpresa?: EmpresaSaaS;
   selectedEmpresaId?: number;
   onSelectEmpresa?: (id: number) => void;
@@ -49,6 +66,8 @@ export default function Navbar({
   onLogout, 
   onOpenCommandPalette,
   empresas,
+  allEmpresas,
+  isPlatformAdmin = false,
   selectedEmpresa,
   selectedEmpresaId,
   onSelectEmpresa,
@@ -60,7 +79,9 @@ export default function Navbar({
 }: NavbarProps) {
   const [navTime, setNavTime] = useState(new Date());
   const [appSwitcherOpen, setAppSwitcherOpen] = useState(false);
+  const [notifOpen, setNotifOpen] = useState(false);
   const switcherRef = useRef<HTMLDivElement>(null);
+  const notifRef = useRef<HTMLDivElement>(null);
   const { timeFormat, toggleTimeFormat, formatTime } = useTimeFormat();
 
   const currentEmpId = Number(selectedEmpresaId ?? selectedEmpresa?.id ?? user.empresa_id);
@@ -68,16 +89,147 @@ export default function Navbar({
   const rawReg = currentEmpObj?.regimen || user.empresa_regimen || '';
   const { label: displayRegimenLabel, badgeClass: displayRegimenBadgeClass } = getRegimenBadge(rawReg);
 
+  const [readNotifIds, setReadNotifIds] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('integrapro_read_notifs_' + currentEmpId);
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('integrapro_read_notifs_' + currentEmpId);
+      setReadNotifIds(saved ? JSON.parse(saved) : []);
+    } catch {
+      setReadNotifIds([]);
+    }
+  }, [currentEmpId]);
+
+  // Construcción en vivo de notificaciones reales (Recordatorio de pago 5 días antes mensual/anual + Trials + Alertas Fortexa)
+  const notifications: NavbarNotification[] = (() => {
+    const list: NavbarNotification[] = [];
+    const todayKey = new Date().toISOString().slice(0, 10);
+
+    const calcDiffDays = (dateStr?: string | null): number | null => {
+      if (!dateStr) return null;
+      const clean = String(dateStr).slice(0, 10);
+      const target = new Date(clean + 'T23:59:59');
+      if (isNaN(target.getTime())) return null;
+      return Math.ceil((target.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+    };
+
+    // 1. Notificaciones para el Dueño de Plataforma (Fortexa): cobranza y nuevos trials de todos los inquilinos
+    if (isPlatformAdmin && Array.isArray(allEmpresas)) {
+      allEmpresas
+        .filter(e => e.id !== 1 && e.id !== 22 && e.id !== 99)
+        .forEach(emp => {
+          const dueStr = emp.billing?.next_billing_date || emp.trial_ends_at;
+          const diff = calcDiffDays(dueStr);
+          const cur = emp.billing?.currency || (emp.pais === 'GT' ? 'GTQ' : 'USD');
+          const sym = cur === 'GTQ' ? 'Q' : '$';
+          const amt = emp.billing?.amount ?? 0;
+          const cyc = emp.billing?.cycle === 'annual' ? 'Anual' : 'Mensual';
+
+          if (diff !== null && diff <= 5) {
+            list.push({
+              id: `admin-due-${emp.id}-${dueStr?.slice(0, 10)}`,
+              title: diff < 0
+                ? `Suscripción vencida: ${emp.nombre}`
+                : `Cobro en ${diff === 0 ? 'HOY' : `${diff} día(s)`}: ${emp.nombre}`,
+              body: `Plan ${(emp.plan || 'Estándar').toUpperCase()} (${cyc}) • ${amt > 0 ? `${sym} ${Number(amt).toFixed(2)} ${cur}` : 'Revisar cuota'} • Corte: ${String(dueStr).slice(0, 10)}`,
+              severity: diff < 0 ? 'danger' : 'warning',
+              actionLabel: 'Gestionar en Fortexa',
+              onAction: () => {
+                if (onSelectEmpresa) onSelectEmpresa(22);
+                onTabChange?.('fortexa_apps');
+                setNotifOpen(false);
+              },
+            });
+          } else if (emp.subscription_status === 'trial') {
+            list.push({
+              id: `admin-trial-${emp.id}-${todayKey}`,
+              title: `Cliente en Prueba Gratis: ${emp.nombre}`,
+              body: `Inquilino #${emp.id} (${emp.pais || 'GT'})${dueStr ? ` • Vence: ${String(dueStr).slice(0, 10)}` : ''}`,
+              severity: 'info',
+              actionLabel: 'Ver en Fortexa',
+              onAction: () => {
+                if (onSelectEmpresa) onSelectEmpresa(22);
+                onTabChange?.('fortexa_apps');
+                setNotifOpen(false);
+              },
+            });
+          }
+        });
+    }
+
+    // 2. Notificaciones para la empresa cliente activa (Recordatorio 5 días antes de pago Mensual/Anual o Trial)
+    if (currentEmpObj && currentEmpObj.id !== 1 && currentEmpObj.id !== 22) {
+      const dueStr = currentEmpObj.billing?.next_billing_date || currentEmpObj.trial_ends_at;
+      const diff = calcDiffDays(dueStr);
+      const cur = currentEmpObj.billing?.currency || (currentEmpObj.pais === 'GT' ? 'GTQ' : 'USD');
+      const sym = cur === 'GTQ' ? 'Q' : '$';
+      const amt = currentEmpObj.billing?.amount ?? 0;
+      const cyc = currentEmpObj.billing?.cycle === 'annual' ? 'Anual' : 'Mensual';
+
+      const openFortexaWhatsApp = () => {
+        const text = `Hola Fortexa Technologies, soy de *${currentEmpObj.nombre}* (ID #${currentEmpObj.id}). Quisiera activar/renovar mi suscripción ${cyc}${amt > 0 ? ` (${sym} ${Number(amt).toFixed(2)} ${cur})` : ''}.`;
+        window.open(`https://api.whatsapp.com/send?phone=50235692070&text=${encodeURIComponent(text)}`, '_blank');
+        setNotifOpen(false);
+      };
+
+      if (currentEmpObj.subscription_status === 'trial' && diff !== null) {
+        list.push({
+          id: `tenant-trial-${currentEmpObj.id}-${todayKey}`,
+          title: diff <= 5
+            ? `Tu prueba gratuita vence en ${Math.max(diff, 0)} día(s)`
+            : `Prueba Gratuita Activa (${diff} días restantes)`,
+          body: `Tu período de prueba termina el ${String(dueStr).slice(0, 10)}. Activa tu plan ${cyc}${amt > 0 ? ` (${sym} ${Number(amt).toFixed(2)} ${cur})` : ''} para no perder acceso.`,
+          severity: diff <= 5 ? 'warning' : 'info',
+          actionLabel: 'Activar por WhatsApp',
+          onAction: openFortexaWhatsApp,
+        });
+      } else if (diff !== null && diff <= 5) {
+        list.push({
+          id: `tenant-due-${currentEmpObj.id}-${String(dueStr).slice(0, 10)}`,
+          title: diff < 0
+            ? `Recordatorio urgente: Suscripción ${cyc} vencida`
+            : `Recordatorio de Pago (${diff === 0 ? 'Vence HOY' : `Faltan ${diff} día(s)`})`,
+          body: `Tu cuota ${cyc}${amt > 0 ? ` de ${sym} ${Number(amt).toFixed(2)} ${cur}` : ''} tiene fecha de corte el ${String(dueStr).slice(0, 10)}. Envía tu comprobante para renovar.`,
+          severity: diff < 0 ? 'danger' : 'warning',
+          actionLabel: 'Reportar Pago (WhatsApp)',
+          onAction: openFortexaWhatsApp,
+        });
+      }
+    }
+
+    return list;
+  })();
+
+  const unreadCount = notifications.filter(n => !readNotifIds.includes(n.id)).length;
+
+  const markAllNotificationsRead = () => {
+    const allIds = Array.from(new Set([...readNotifIds, ...notifications.map(n => n.id)]));
+    setReadNotifIds(allIds);
+    try {
+      localStorage.setItem('integrapro_read_notifs_' + currentEmpId, JSON.stringify(allIds));
+    } catch {}
+  };
+
   useEffect(() => {
     const timer = setInterval(() => setNavTime(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
 
-  // Cerrar popover de aplicaciones al hacer clic afuera
+  // Cerrar popovers al hacer clic afuera
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (switcherRef.current && !switcherRef.current.contains(event.target as Node)) {
         setAppSwitcherOpen(false);
+      }
+      if (notifRef.current && !notifRef.current.contains(event.target as Node)) {
+        setNotifOpen(false);
       }
     }
     document.addEventListener('mousedown', handleClickOutside);
@@ -242,7 +394,7 @@ export default function Navbar({
       {/* Derecha: Empresa, Sucursal, Notificaciones, Perfil */}
       <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
         {/* Selector de Empresa y Régimen Activo */}
-        {empresas && onSelectEmpresa && empresas.length > 1 && (user.role === 'SuperAdmin' || user.role === 'Administrador' || user.email === 'admin@integrapro.com' || user.email === 'admin@admin.com' || user.email === 'jahh21.jh@gmail.com') ? (
+        {empresas && onSelectEmpresa && empresas.length > 1 && (isPlatformAdmin || isPlatformAdminEmail(user.email)) ? (
           <div className="flex items-center gap-1 sm:gap-1.5 px-2 sm:px-2.5 py-1 bg-slate-50 border border-slate-200/80 rounded-xl text-xs">
             <Building2 className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
             <select
@@ -311,15 +463,115 @@ export default function Navbar({
           </span>
         </button>
 
-        {/* Campana de Notificaciones con Badge (oculta en móvil para dar espacio al botón Salir) */}
-        <button 
-          type="button" 
-          className="hidden sm:block relative p-1.5 sm:p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition-colors shrink-0"
-          title="Notificaciones"
-        >
-          <Bell className="w-4 h-4" />
-          <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-emerald-500 rounded-full ring-2 ring-white animate-pulse" />
-        </button>
+        {/* Campana de Notificaciones Funcional (Recordatorios de pago 5 días antes + Alertas SaaS) */}
+        <div className="relative hidden sm:block" ref={notifRef}>
+          <button
+            type="button"
+            onClick={() => setNotifOpen(prev => !prev)}
+            className={`relative p-1.5 sm:p-2 rounded-xl transition-colors shrink-0 cursor-pointer ${
+              notifOpen
+                ? 'bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200'
+                : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'
+            }`}
+            title={unreadCount > 0 ? `${unreadCount} notificación(es) pendiente(s)` : 'Centro de Notificaciones'}
+          >
+            <Bell className="w-4 h-4" />
+            {unreadCount > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 min-w-[17px] h-[17px] px-1 rounded-full bg-rose-600 text-white text-[9px] font-black flex items-center justify-center ring-2 ring-white animate-pulse">
+                {unreadCount > 9 ? '9+' : unreadCount}
+              </span>
+            )}
+          </button>
+
+          {notifOpen && (
+            <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden z-50 animate-in fade-in zoom-in-95 duration-150">
+              <div className="px-4 py-3 bg-slate-50 border-b border-slate-100 flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <Bell className="w-4 h-4 text-indigo-600" />
+                  <span className="text-xs font-black text-slate-900">Centro de Notificaciones</span>
+                  {unreadCount > 0 && (
+                    <span className="px-1.5 py-0.5 rounded-md bg-rose-100 text-rose-700 text-[10px] font-black">
+                      {unreadCount} nueva(s)
+                    </span>
+                  )}
+                </div>
+                {notifications.length > 0 && unreadCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={markAllNotificationsRead}
+                    className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 cursor-pointer"
+                  >
+                    <CheckCheck className="w-3.5 h-3.5" />
+                    <span>Marcar leídas</span>
+                  </button>
+                )}
+              </div>
+
+              <div className="max-h-80 overflow-y-auto divide-y divide-slate-100">
+                {notifications.length === 0 ? (
+                  <div className="p-6 text-center space-y-1.5">
+                    <div className="w-10 h-10 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto">
+                      <ShieldCheck className="w-5 h-5" />
+                    </div>
+                    <p className="text-xs font-bold text-slate-700">¡Todo al día!</p>
+                    <p className="text-[11px] text-slate-400">
+                      No tienes recordatorios de pago ni alertas pendientes en este momento.
+                    </p>
+                  </div>
+                ) : (
+                  notifications.map((n) => {
+                    const isUnread = !readNotifIds.includes(n.id);
+                    return (
+                      <div
+                        key={n.id}
+                        className={`p-3.5 transition-colors ${isUnread ? 'bg-indigo-50/30' : 'bg-white'} hover:bg-slate-50`}
+                      >
+                        <div className="flex items-start gap-2.5">
+                          <div
+                            className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 mt-0.5 ${
+                              n.severity === 'danger'
+                                ? 'bg-rose-100 text-rose-600'
+                                : n.severity === 'warning'
+                                ? 'bg-amber-100 text-amber-600'
+                                : 'bg-indigo-100 text-indigo-600'
+                            }`}
+                          >
+                            {n.severity === 'danger' || n.severity === 'warning' ? (
+                              <AlertTriangle className="w-4 h-4" />
+                            ) : (
+                              <Sparkles className="w-4 h-4" />
+                            )}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-extrabold text-slate-900 leading-snug flex items-center gap-1.5">
+                              <span className="truncate">{n.title}</span>
+                              {isUnread && <span className="w-1.5 h-1.5 rounded-full bg-indigo-600 shrink-0" />}
+                            </p>
+                            <p className="text-[11px] text-slate-500 mt-0.5 leading-snug">{n.body}</p>
+                            {n.actionLabel && n.onAction && (
+                              <button
+                                type="button"
+                                onClick={n.onAction}
+                                className="mt-2 inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[10px] font-bold transition-colors cursor-pointer"
+                              >
+                                {n.actionLabel.includes('WhatsApp') ? (
+                                  <Send className="w-3 h-3 text-emerald-400" />
+                                ) : (
+                                  <CreditCard className="w-3 h-3 text-indigo-300" />
+                                )}
+                                <span>{n.actionLabel}</span>
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+          )}
+        </div>
 
         {/* Separador vertical */}
         <div className="h-6 w-px bg-slate-200 hidden sm:block" />

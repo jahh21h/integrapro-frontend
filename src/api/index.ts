@@ -49,6 +49,27 @@ export const authApi = {
     }
     return res.data;
   },
+  registerTenant: async (payload: {
+    nombre: string;
+    pais: string;
+    regimen_tributario?: string;
+    telefono?: string;
+    preset: 'retail' | 'admin_only' | 'standard' | 'enterprise' | 'live_express';
+    billing_cycle: 'monthly' | 'annual';
+    admin_name: string;
+    admin_email: string;
+    admin_password: string;
+    device_name?: string;
+  }) => {
+    const res = await apiClient.post('/register-tenant', {
+      device_name: 'IntegraPro Self-Service Web',
+      ...payload,
+    });
+    if (res.data?.token) {
+      localStorage.setItem('integrapro_token', res.data.token);
+    }
+    return res.data;
+  },
   getMe: async () => {
     const res = await apiClient.get('/me');
     return res.data;
