@@ -463,7 +463,19 @@ export default function App() {
       localStorage.setItem('integrapro_mode_live_only', shouldBeLiveOnly ? 'true' : 'false');
       if (shouldBeLiveOnly) {
         setActiveTab('live_sales');
+      } else if (id !== 22) {
+        const hasPos = found.modules?.pos !== false;
+        const hasLive = found.modules?.live_sales ?? id === 1;
+        if (
+          activeTab === 'fortexa_apps' ||
+          (activeTab === 'pos' && !hasPos) ||
+          (activeTab === 'live_sales' && !hasLive)
+        ) {
+          setActiveTab('hub');
+        }
       }
+    } else if (id !== 22 && activeTab === 'fortexa_apps') {
+      setActiveTab('hub');
     }
     // Si se selecciona Fortexa Technologies, navegar directamente a su panel de software y apps
     if (id === 22) {
@@ -473,16 +485,27 @@ export default function App() {
     }
   };
 
-  // Protección: En Fortexa Technologies o empresas con POS desactivado no aplica Punto de Venta (POS)
+  // Protección automática de pestañas exclusivas al cambiar de empresa
   useEffect(() => {
+    if (activeTab === 'fortexa_apps' && selectedEmpresaId !== 22) {
+      setActiveTab('hub');
+      return;
+    }
     if (activeTab === 'pos') {
       if (selectedEmpresaId === 22) {
         setActiveTab('fortexa_apps');
       } else if (selectedEmpresa?.modules?.pos === false) {
         setActiveTab('hub');
       }
+      return;
     }
-  }, [selectedEmpresaId, selectedEmpresa?.modules?.pos, activeTab]);
+    if (activeTab === 'live_sales') {
+      const hasLive = selectedEmpresaId !== 22 && (selectedEmpresa?.modules?.live_sales ?? selectedEmpresaId === 1);
+      if (!hasLive) {
+        setActiveTab('hub');
+      }
+    }
+  }, [selectedEmpresaId, selectedEmpresa?.modules?.pos, selectedEmpresa?.modules?.live_sales, activeTab]);
 
   const handleCreateEmpresa = (newEmp: EmpresaSaaS) => {
     const formattedEmp: EmpresaSaaS = {
@@ -1015,7 +1038,7 @@ export default function App() {
             {activeTab === 'rrhh' && <HumanResources key={selectedEmpresaId} />}
             {activeTab === 'asistencia' && <AttendanceKiosk key={selectedEmpresaId} />}
             {activeTab === 'sucursales' && <Branches key={selectedEmpresaId} currentEmpresa={selectedEmpresa} />}
-            {activeTab === 'fortexa_apps' && isSuperAdmin && (
+            {activeTab === 'fortexa_apps' && isSuperAdmin && selectedEmpresaId === 22 && (
               <FortexaAppsView
                 key={selectedEmpresaId}
                 currentEmpresa={selectedEmpresa} 
