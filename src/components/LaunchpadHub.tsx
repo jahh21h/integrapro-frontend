@@ -1259,7 +1259,7 @@ export default function LaunchpadHub({
                 onNavigate(heroCard.id);
               }
             }}
-            className={`group relative md:col-span-2 rounded-3xl p-6 border shadow-[0_15px_35px_-5px_rgba(79,70,229,0.12),0_8px_10px_-6px_rgba(0,0,0,0.04)] hover:shadow-[0_25px_50px_-12px_rgba(79,70,229,0.25)] hover:-translate-y-1.5 transition-all duration-300 cursor-pointer flex flex-col justify-between overflow-hidden ${
+            className={`group relative md:col-span-2 rounded-3xl p-5 border shadow-[0_15px_35px_-5px_rgba(79,70,229,0.12),0_8px_10px_-6px_rgba(0,0,0,0.04)] hover:shadow-[0_25px_50px_-12px_rgba(79,70,229,0.25)] hover:-translate-y-1.5 transition-all duration-300 cursor-pointer flex flex-col justify-between overflow-hidden ${
               heroCard.isLocked
                 ? 'bg-gradient-to-br from-white via-slate-50 to-amber-50/40 border-amber-300/80 hover:border-amber-400'
                 : 'bg-gradient-to-br from-white via-slate-50 to-indigo-50/40 border-indigo-200/90'
@@ -1272,12 +1272,12 @@ export default function LaunchpadHub({
             <div className="absolute -inset-1 rounded-3xl bg-gradient-to-r from-indigo-500/20 to-purple-500/20 opacity-0 group-hover:opacity-100 blur-2xl transition-opacity duration-500 pointer-events-none" />
 
             <div>
-              <div className="flex items-center justify-between gap-3 mb-4">
-                <div className="flex items-center gap-3">
-                  <div className={`w-11 h-11 rounded-2xl bg-gradient-to-br ${heroCard.gradient} flex items-center justify-center text-white shadow-md shadow-indigo-600/30 group-hover:scale-110 transition-transform`}>
-                    {isFortexa ? <Cpu className="w-6 h-6" /> : (heroCard.id === 'live_sales' ? <Video className="w-6 h-6" /> : <Zap className="w-6 h-6" />)}
+              <div className="flex items-center justify-between gap-3 min-h-[52px] mb-3">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className={`w-10 h-10 rounded-2xl bg-gradient-to-br ${heroCard.gradient} flex items-center justify-center text-white shadow-md shadow-indigo-600/30 group-hover:scale-105 transition-transform shrink-0`}>
+                    {isFortexa ? <Cpu className="w-5 h-5" /> : (heroCard.id === 'live_sales' ? <Video className="w-5 h-5" /> : <Zap className="w-5 h-5" />)}
                   </div>
-                  <div>
+                  <div className="min-w-0">
                     <div className="flex items-center gap-2">
                       <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-md border ${
                         heroCard.isLocked 
@@ -1293,50 +1293,50 @@ export default function LaunchpadHub({
                         </span>
                       )}
                     </div>
-                    <h3 className="font-black text-slate-900 text-lg group-hover:text-indigo-600 transition-colors mt-0.5">
+                    <h3 className="font-black text-slate-900 text-base sm:text-lg group-hover:text-indigo-600 transition-colors mt-0.5 truncate">
                       {heroCard.title}
                     </h3>
                   </div>
                 </div>
 
-                <span className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-white/80 border border-slate-200 text-xs font-bold text-slate-700 shadow-2xs">
+                <span className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-white/80 border border-slate-200 text-xs font-bold text-slate-700 shadow-2xs shrink-0">
                   {heroCard.isLocked ? <Lock className="w-3.5 h-3.5 text-amber-600" /> : <Maximize2 className="w-3.5 h-3.5 text-indigo-600" />}
                   {heroCard.isLocked ? 'Requiere Upgrade' : 'Módulo Destacado'}
                 </span>
               </div>
 
               {/* Widget Interactivo */}
-              <div className={`my-2 ${heroCard.isLocked ? 'opacity-70 saturate-50 pointer-events-none' : ''}`}>
+              <div className={`my-1 ${heroCard.isLocked ? 'opacity-70 saturate-50 pointer-events-none' : ''}`}>
                 {renderCardWidget(heroCard)}
               </div>
 
-              <p className="text-xs text-slate-600 mt-3 leading-relaxed">
+              <p className="text-xs text-slate-600 mt-3 leading-relaxed line-clamp-2 min-h-[36px]">
                 {heroCard.description}
               </p>
             </div>
 
-            <div className="mt-5 pt-4 border-t border-slate-200/70 flex items-center justify-between">
+            <div className="mt-4 pt-3 border-t border-slate-200/70 flex items-center justify-between min-h-[40px]">
               <span className="text-xs font-extrabold text-indigo-900 flex items-center gap-1.5">
-                <Sparkles className="w-4 h-4 text-indigo-600" />
-                {heroCard.metric}
+                <Sparkles className="w-4 h-4 text-indigo-600 shrink-0" />
+                <span className="truncate">{heroCard.metric}</span>
               </span>
 
               <button
                 type="button"
-                className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-white font-bold text-xs shadow-md group-hover:translate-x-1 transition-all ${
+                className={`inline-flex items-center gap-2 px-4 py-1.5 rounded-xl text-white font-bold text-xs shadow-md group-hover:translate-x-1 transition-all shrink-0 ${
                   heroCard.isLocked 
                     ? 'bg-amber-600 hover:bg-amber-700 shadow-amber-600/30' 
                     : 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-600/30'
                 }`}
               >
                 <span>{heroCard.isLocked ? 'Conocer Módulo' : isFortexa ? 'Gestionar Suscripciones' : heroCard.id === 'live_sales' ? 'Abrir Pantalla Live' : 'Abrir Terminal POS'}</span>
-                {heroCard.isLocked ? <Lock className="w-4 h-4" /> : <ArrowRight className="w-4 h-4" />}
+                {heroCard.isLocked ? <Lock className="w-3.5 h-3.5" /> : <ArrowRight className="w-3.5 h-3.5" />}
               </button>
             </div>
           </div>
         )}
 
-        {/* TARJETA ALTA (Inventario & Bodega / Hardware) */}
+        {/* TARJETA ALTA (Inventario & Bodega / Hardware) — Alineada con el mismo ritmo vertical */}
         {tallCard && (
           <div
             onClick={() => {
@@ -1352,34 +1352,37 @@ export default function LaunchpadHub({
             <div className="absolute -inset-1 rounded-3xl bg-amber-500/10 opacity-0 group-hover:opacity-100 blur-xl transition-opacity duration-300 pointer-events-none" />
 
             <div>
-              <div className="flex items-center justify-between gap-2 mb-3">
-                <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center text-white shadow-md shadow-amber-500/20 group-hover:scale-105 transition-transform">
-                  <Boxes className="w-5 h-5" />
+              <div className="flex items-center justify-between gap-2.5 min-h-[52px] mb-3">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center text-white shadow-md shadow-amber-500/20 group-hover:scale-105 transition-transform shrink-0">
+                    <Boxes className="w-5 h-5" />
+                  </div>
+                  <div className="min-w-0">
+                    <h3 className="font-bold text-slate-900 text-sm group-hover:text-amber-600 transition-colors leading-tight truncate">
+                      {tallCard.title}
+                    </h3>
+                    <p className="text-[11px] font-medium text-slate-400 truncate mt-0.5">
+                      {tallCard.subtitle}
+                    </p>
+                  </div>
                 </div>
-                <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full border ${tallCard.badge.color}`}>
+                <span className={`text-[9.5px] font-bold px-2 py-0.5 rounded-full border shrink-0 whitespace-nowrap ${tallCard.badge.color}`}>
                   {tallCard.badge.text}
                 </span>
               </div>
 
-              <h3 className="font-bold text-slate-900 text-base group-hover:text-amber-600 transition-colors">
-                {tallCard.title}
-              </h3>
-              <p className="text-[11px] font-semibold text-slate-400 mb-2">
-                {tallCard.subtitle}
-              </p>
-
-              <div className={`my-2 ${tallCard.isLocked ? 'opacity-70 saturate-50 pointer-events-none' : ''}`}>
+              <div className={`my-1 ${tallCard.isLocked ? 'opacity-70 saturate-50 pointer-events-none' : ''}`}>
                 {renderCardWidget(tallCard)}
               </div>
 
-              <p className="text-xs text-slate-600 mt-2 line-clamp-2">
+              <p className="text-xs text-slate-600 mt-3 leading-relaxed line-clamp-2 min-h-[36px]">
                 {tallCard.description}
               </p>
             </div>
 
-            <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs">
-              <span className="text-[11px] font-bold text-amber-700">{tallCard.metric}</span>
-              <span className="inline-flex items-center gap-1 text-xs font-bold text-indigo-600 group-hover:translate-x-1 transition-all">
+            <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs min-h-[40px]">
+              <span className="text-[11px] font-bold text-amber-700 truncate max-w-[160px]">{tallCard.metric}</span>
+              <span className="inline-flex items-center gap-1 text-xs font-bold text-indigo-600 group-hover:translate-x-1 transition-all shrink-0">
                 {tallCard.isLocked ? (
                   <><span>Conocer</span> <Lock className="w-3.5 h-3.5 text-amber-600" /></>
                 ) : (
@@ -1390,7 +1393,7 @@ export default function LaunchpadHub({
           </div>
         )}
 
-        {/* TARJETAS MEDIANAS & COMPACTAS EN BENTO GRID */}
+        {/* TARJETAS MEDIANAS & COMPACTAS EN BENTO GRID — Misma estructura vertical alineada */}
         {otherBentoCards.map((card) => {
           const Icon = card.icon;
           return (
@@ -1417,50 +1420,56 @@ export default function LaunchpadHub({
               
               <div className={`absolute -inset-1 rounded-3xl bg-gradient-to-r ${card.glowColor} opacity-0 group-hover:opacity-100 blur-xl transition-opacity duration-300 pointer-events-none -z-10`} />
 
-              {/* Badge de Candado si está bloqueado */}
-              {card.isLocked && (
-                <div className="absolute top-3 right-3 z-10 flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-100 border border-amber-300/80 text-amber-900 text-[10px] font-black shadow-xs">
-                  <Lock className="w-3 h-3 text-amber-700" />
-                  <span>Módulo Pro</span>
-                </div>
-              )}
-
               <div>
-                <div className={`mb-3 ${card.isLocked ? 'opacity-70 saturate-50 pointer-events-none' : ''}`}>
-                  {renderCardWidget(card)}
-                </div>
-
-                <div className="flex items-start justify-between gap-2 mb-1.5">
-                  <div className="flex items-center gap-2">
-                    <div className={`w-8 h-8 rounded-xl bg-gradient-to-br ${card.gradient} flex items-center justify-center text-white shadow-xs group-hover:scale-105 transition-transform shrink-0`}>
-                      <Icon className="w-4 h-4" />
+                <div className="flex items-center justify-between gap-2.5 min-h-[52px] mb-3">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div className={`w-10 h-10 rounded-2xl bg-gradient-to-br ${card.gradient} flex items-center justify-center text-white shadow-sm group-hover:scale-105 transition-transform shrink-0`}>
+                      <Icon className="w-5 h-5" />
                     </div>
-                    <div>
-                      <h4 className="font-bold text-slate-900 text-sm group-hover:text-indigo-600 transition-colors leading-tight">
+                    <div className="min-w-0">
+                      <h4 className="font-bold text-slate-900 text-sm group-hover:text-indigo-600 transition-colors leading-tight truncate">
                         {card.title}
                       </h4>
-                      <p className="text-[10px] font-semibold text-slate-400 truncate max-w-[150px]">
+                      <p className="text-[11px] font-medium text-slate-400 truncate mt-0.5">
                         {card.subtitle}
                       </p>
                     </div>
                   </div>
+                  {card.isLocked ? (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-100 border border-amber-300/80 text-amber-900 text-[9.5px] font-black shrink-0 whitespace-nowrap">
+                      <Lock className="w-2.5 h-2.5 text-amber-700" />
+                      <span>Pro</span>
+                    </span>
+                  ) : (
+                    <span className={`text-[9.5px] font-bold px-2 py-0.5 rounded-full border shrink-0 whitespace-nowrap ${card.badge.color}`}>
+                      {card.badge.text}
+                    </span>
+                  )}
                 </div>
+
+                <div className={`my-1 ${card.isLocked ? 'opacity-70 saturate-50 pointer-events-none' : ''}`}>
+                  {renderCardWidget(card)}
+                </div>
+
+                <p className="text-xs text-slate-600 mt-3 leading-relaxed line-clamp-2 min-h-[36px]">
+                  {card.description}
+                </p>
               </div>
 
-              <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between text-xs">
-                <span className="text-[10px] font-bold text-slate-500 truncate max-w-[140px]">{card.metric}</span>
-                <span className={`inline-flex items-center gap-1 text-[11px] font-bold group-hover:translate-x-1 transition-all ${
+              <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs min-h-[40px]">
+                <span className="text-[11px] font-bold text-slate-500 truncate max-w-[155px]">{card.metric}</span>
+                <span className={`inline-flex items-center gap-1 text-xs font-bold group-hover:translate-x-1 transition-all shrink-0 ${
                   card.isLocked ? 'text-amber-800' : 'text-indigo-600'
                 }`}>
                   {card.isLocked ? (
                     <>
-                      <span>Conocer Módulo</span>
-                      <Lock className="w-3 h-3 text-amber-600" />
+                      <span>Conocer</span>
+                      <Lock className="w-3.5 h-3.5 text-amber-600" />
                     </>
                   ) : (
                     <>
                       <span>Ingresar</span>
-                      <ArrowRight className="w-3 h-3" />
+                      <ArrowRight className="w-3.5 h-3.5" />
                     </>
                   )}
                 </span>
