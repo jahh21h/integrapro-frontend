@@ -354,13 +354,23 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
   const displayedProducts = filteredProducts.slice(0, displayLimit);
 
   const addToCart = (product: Product) => {
+    if (product.stock <= 0) {
+      setSaleError(`"${product.name}" no tiene existencias disponibles (Stock: 0).`);
+      return;
+    }
     setCart(prevCart => {
       const existing = prevCart.find(item => item.id === product.id);
       if (existing) {
+        if (existing.quantity + 1 > product.stock) {
+          setSaleError(`Stock máximo alcanzado para "${product.name}" (Disponible: ${product.stock}).`);
+          return prevCart;
+        }
+        setSaleError(null);
         return prevCart.map(item => 
           item.id === product.id ? { ...item, quantity: item.quantity + 1 } : item
         );
       }
+      setSaleError(null);
       return [...prevCart, { ...product, quantity: 1, discount: 0 }];
     });
   };
@@ -371,6 +381,11 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
         if (item.id === id) {
           const newQty = item.quantity + delta;
           if (newQty <= 0) return null;
+          if (delta > 0 && newQty > item.stock) {
+            setSaleError(`Stock máximo alcanzado para "${item.name}" (Disponible: ${item.stock}).`);
+            return item;
+          }
+          setSaleError(null);
           const maxDiscount = item.price * newQty;
           const currentDiscount = item.discount || 0;
           return { 
@@ -748,7 +763,9 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
       setSaleCompletedModal(true);
     } catch (err: any) {
       console.error('Error al registrar venta en el servidor:', err);
-      const errMsg = err?.response?.data?.message || err?.message || 'Error al conectar con el servidor para registrar la venta.';
+      const validationErrors = err?.response?.data?.errors;
+      const firstValidationMsg = validationErrors ? String(Object.values(validationErrors).flat()[0] || '') : '';
+      const errMsg = firstValidationMsg || err?.response?.data?.message || err?.message || 'Error al conectar con el servidor para registrar la venta.';
       setSaleError(errMsg);
       alert(`⚠️ ERROR AL PROCESAR VENTA:\n\n${errMsg}\n\nLa venta NO se registró en la base de datos ni se descontó inventario.`);
     } finally {
@@ -926,8 +943,10 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
                     </div>
                   )}
 
-                  <span className="absolute top-1.5 right-1.5 bg-slate-900/75 backdrop-blur-sm text-white text-[10px] font-black px-1.5 py-0.5 rounded-md pointer-events-none">
-                    Stock: {product.stock}
+                  <span className={`absolute top-1.5 right-1.5 backdrop-blur-sm text-white text-[10px] font-black px-1.5 py-0.5 rounded-md pointer-events-none ${
+                    product.stock <= 0 ? 'bg-rose-600/90' : 'bg-slate-900/75'
+                  }`}>
+                    {product.stock <= 0 ? 'Agotado' : `Stock: ${product.stock}`}
                   </span>
                 </div>
 
@@ -950,15 +969,20 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
                   </span>
                 )}
 
-                {/* Botón MÁS (+): El ÚNICO elemento que agrega el producto al carrito */}
+                {/* Botón MÁS (+): bloqueado si stock <= 0 */}
                 <button
                   type="button"
+                  disabled={product.stock <= 0}
                   onClick={(e) => {
                     e.stopPropagation();
                     addToCart(product);
                   }}
-                  className="w-8 h-8 bg-emerald-600 hover:bg-emerald-700 active:scale-90 text-white rounded-xl flex items-center justify-center shadow-md shadow-emerald-600/25 transition-all cursor-pointer"
-                  title={`Añadir ${product.name} al carrito`}
+                  className={`w-8 h-8 rounded-xl flex items-center justify-center transition-all ${
+                    product.stock <= 0
+                      ? 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed'
+                      : 'bg-emerald-600 hover:bg-emerald-700 active:scale-90 text-white shadow-md shadow-emerald-600/25 cursor-pointer'
+                  }`}
+                  title={product.stock <= 0 ? 'Sin existencias disponibles en inventario' : `Añadir ${product.name} al carrito`}
                 >
                   <Plus className="w-4 h-4" />
                 </button>
