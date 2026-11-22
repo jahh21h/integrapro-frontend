@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { 
   Search, 
   Plus, 
@@ -36,8 +36,9 @@ import { useTimeFormat } from '../context/TimeFormatContext';
 import { useLiveSales } from '../context/LiveSalesContext';
 import { calculateSaleTaxes } from '../utils/tax';
 import { inventoryApi, salesApi } from '../api';
-import { REAL_CLIENTS } from '../data/realClients';
+import { getTenantClients } from '../data/realClients';
 import { getTenantCatalog } from '../data/tenantProducts';
+import { filterRecordsByTenant, getStoredActiveEmpresaId } from '../utils/tenant';
 
 interface Product {
   id: number;
@@ -47,6 +48,8 @@ interface Product {
   category: string;
   sku: string;
   image: string;
+  // 'costo' = el precio mostrado es el de compra porque aún no hay precio de venta
+  priceSource?: 'venta' | 'costo';
 }
 
 interface CartItem extends Product {
@@ -59,56 +62,36 @@ interface PosTerminalProps {
 }
 
 export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
+  const fallbackEmpresaId = getStoredActiveEmpresaId() || 0;
   const empresaActiva: EmpresaSaaS = currentEmpresa || {
-    id: 1,
-    nombre: 'Corporación Comercial IntegraPro S.A.',
-    razon_social: 'IntegraPro Soluciones Empresariales Sociedad Anónima',
-    nit: '10429182-3',
+    id: fallbackEmpresaId,
+    nombre: fallbackEmpresaId === 1 ? 'Fashion Styles' : 'Empresa Activa',
+    razon_social: fallbackEmpresaId === 1 ? 'Fashion Styles S.A.' : 'Empresa Activa',
+    nit: 'CF',
     pais: 'GT',
     regimen: 'General (IVA 12%)',
-    plan: 'standard',
+    plan: 'enterprise',
     activa: true,
-    telefono: '+502 2334-9000',
-    email: 'facturacion@integrapro.com',
-    direccion: '7a Avenida 12-45 Zona 9, Guatemala'
+    telefono: '',
+    email: '',
+    direccion: 'Ciudad de Guatemala'
   };
   const { formatTime } = useTimeFormat();
   const [selectedCategory, setSelectedCategory] = useState<string>('Todos');
   const [searchTerm, setSearchTerm] = useState<string>('');
-  const [cart, setCart] = useState<CartItem[]>([
-    { 
-      id: 1, 
-      name: 'Aceite Vegetal 800ml', 
-      price: 16.50, 
-      stock: 24, 
-      category: 'Abarrotes', 
-      sku: 'SKU-001', 
-      quantity: 2,
-      image: 'https://images.unsplash.com/photo-1474979266404-7eaacbcd87c5?w=400&auto=format&fit=crop&q=80'
-    },
-    { 
-      id: 4, 
-      name: 'Leche Entera 1L Pasteurizada', 
-      price: 12.00, 
-      stock: 45, 
-      category: 'Lácteos', 
-      sku: 'SKU-004', 
-      quantity: 1,
-      image: 'https://images.unsplash.com/photo-1550583724-b2692b85b150?w=400&auto=format&fit=crop&q=80'
-    },
-  ]);
+  const [cart, setCart] = useState<CartItem[]>([]);
 
   // Estado para Descuentos en Línea por Producto
   const [editingDiscountId, setEditingDiscountId] = useState<number | null>(null);
   const [tempDiscountValue, setTempDiscountValue] = useState<string>('');
 
-  // Directorio Real de Clientes (420 clientes sincronizados del Droplet)
-  const [clientsList, setClientsList] = useState<Cliente[]>(REAL_CLIENTS);
+  // Directorio de Clientes Aislado por Tenant
+  const [clientsList, setClientsList] = useState<Cliente[]>(() => getTenantClients(empresaActiva.id));
   const [selectedClient, setSelectedClient] = useState<Cliente | null>(null);
   const { findOpenBagByCustomer } = useLiveSales();
 
   const liveBag = selectedClient 
-    ? findOpenBagByCustomer(selectedClient.nombre_completo || selectedClient.nombre, currentEmpresa?.id || 1)
+    ? findOpenBagByCustomer(selectedClient.nombre_completo || selectedClient.nombre, empresaActiva.id)
     : undefined;
 
   const handleUnifyLiveBag = (bag: any) => {
@@ -145,6 +128,8 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
 
   const [clientModalOpen, setClientModalOpen] = useState<boolean>(false);
   const [clientSearchTerm, setClientSearchTerm] = useState<string>('');
+  const [totalClientsCount, setTotalClientsCount] = useState<number>(0);
+  const [isSearchingClients, setIsSearchingClients] = useState<boolean>(false);
   const [showNewClientForm, setShowNewClientForm] = useState<boolean>(false);
   const [newClientData, setNewClientData] = useState({
     nombre: '',
@@ -182,7 +167,8 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
     return cat.products.map(p => ({
       id: p.id,
       name: p.nombre,
-      price: p.precioVenta > 0 ? p.precioVenta : 10.00,
+      price: p.precioVenta > 0 ? p.precioVenta : (p.precioCompra > 0 ? p.precioCompra : 10.00),
+      priceSource: p.precioVenta > 0 ? 'venta' as const : 'costo' as const,
       stock: p.stockTotal > 0 ? p.stockTotal : 5,
       category: p.categoria,
       sku: p.sku,
@@ -193,65 +179,159 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
   const products = liveProducts;
   const categories = ['Todos', ...Array.from(new Set(products.map(p => p.category)))];
 
-  // Sincronización en vivo según la empresa activa
+  // Normalizador universal para búsqueda insensible a mayúsculas, minúsculas, tildes y diacríticos
+  const normalizeClientSearch = (text: string | null | undefined): string => {
+    if (!text) return '';
+    return text
+      .toString()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .trim();
+  };
+
+  // Carga y búsqueda de clientes optimizada y estrictamente aislada por empresa
+  const fetchClientsList = useCallback(async (searchQuery?: string) => {
+    setIsSearchingClients(true);
+    try {
+      const q = searchQuery !== undefined ? searchQuery.trim() : clientSearchTerm.trim();
+      const res = await salesApi.getClients({
+        id_empresa: empresaActiva.id,
+        search: q || undefined,
+        per_page: q ? 100 : 1000
+      });
+      const rawClients = res?.data || res;
+      if (Array.isArray(rawClients)) {
+        const { items: tenantRawClients, rejectedCount } = filterRecordsByTenant(rawClients, empresaActiva.id);
+
+        if (rejectedCount > 0) {
+          console.warn(
+            `[Multi-Tenant Guard] POS bloqueó ${rejectedCount} cliente(s) ajenos o sin id_empresa para la empresa #${empresaActiva.id}.`
+          );
+        }
+
+        if (tenantRawClients.length > 0 || (rejectedCount === 0 && q)) {
+          const mappedClients: Cliente[] = tenantRawClients.map((c: any) => {
+            const rawNombre = (c.nombre || '').trim();
+            const rawApellido = (c.apellido && c.apellido !== 'C/F' && c.apellido !== 'CF') ? c.apellido.trim() : '';
+
+            let cleanNombreCompleto = c.nombre_completo || `${rawNombre} ${rawApellido}`.trim();
+            // Prevenir duplicación si el nombre ya contiene el apellido (ej: legacy)
+            if (rawApellido && rawNombre.toLowerCase().endsWith(rawApellido.toLowerCase())) {
+              cleanNombreCompleto = rawNombre;
+            }
+            if (!cleanNombreCompleto) cleanNombreCompleto = 'Cliente';
+
+            return {
+              id_cliente: c.id_cliente,
+              nombre: rawNombre,
+              apellido: rawApellido,
+              nombre_completo: cleanNombreCompleto,
+              nit: c.nit ? (c.nit.trim().toUpperCase() === 'C/F' ? 'CF' : c.nit.trim()) : 'CF',
+              telefono: c.telefono ? c.telefono.trim() : 'N/A',
+              email: c.email || 'N/A',
+              direccion: c.direccion || 'Ciudad de Guatemala',
+              tipo_cliente: c.tipo_cliente || 'normal',
+              descuento_aplicable: Number(c.descuento_aplicable) || 0,
+              dias_credito: Number(c.dias_credito) || 30,
+              saldo_actual: Number(c.saldo_actual) || 0,
+              limite_credito: Number(c.limite_credito) || 5000
+            };
+          });
+
+          setClientsList(mappedClients);
+          setTotalClientsCount(
+            rejectedCount === 0 && res?.total !== undefined ? Number(res.total) || mappedClients.length : mappedClients.length
+          );
+        } else {
+          // Fallback estricto al directorio aislado del tenant actual
+          const fallbackClients = getTenantClients(empresaActiva.id);
+          setClientsList(fallbackClients);
+          setTotalClientsCount(fallbackClients.length);
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching clients:', err);
+      const fallbackClients = getTenantClients(empresaActiva.id);
+      setClientsList(fallbackClients);
+      setTotalClientsCount(fallbackClients.length);
+    } finally {
+      setIsSearchingClients(false);
+    }
+  }, [clientSearchTerm, empresaActiva.id]);
+
+  // Búsqueda en vivo con debounce de 150ms al escribir en el modal de clientes
   useEffect(() => {
+    if (!clientModalOpen) return;
+    const timer = setTimeout(() => {
+      fetchClientsList(clientSearchTerm);
+    }, 150);
+    return () => clearTimeout(timer);
+  }, [clientSearchTerm, clientModalOpen, fetchClientsList]);
+
+  // Sincronización en vivo estrictamente aislada por empresa activa
+  useEffect(() => {
+    let cancelled = false;
     setCart([]);
+    setSelectedClient(null);
+    setSelectedCategory('Todos');
+    setSearchTerm('');
+
     const cat = getTenantCatalog(empresaActiva.id);
     setLiveProducts(cat.products.map(p => ({
       id: p.id,
       name: p.nombre,
-      price: p.precioVenta > 0 ? p.precioVenta : 10.00,
+      price: p.precioVenta > 0 ? p.precioVenta : (p.precioCompra > 0 ? p.precioCompra : 10.00),
+      priceSource: p.precioVenta > 0 ? 'venta' as const : 'costo' as const,
       stock: p.stockTotal > 0 ? p.stockTotal : 5,
       category: p.categoria,
       sku: p.sku,
       image: p.imagen
     })));
-    setSelectedCategory('Todos');
-    inventoryApi.getAll({ per_page: 250 })
+    setClientsList(getTenantClients(empresaActiva.id));
+
+    inventoryApi.getAll({ id_empresa: empresaActiva.id, per_page: 250 })
       .then(res => {
+        if (cancelled) return;
         const liveItems = res?.data || res;
         if (Array.isArray(liveItems) && liveItems.length > 0) {
-          const mapped: Product[] = liveItems.map((p: any) => ({
-            id: p.id_producto || p.id,
-            name: p.nombre,
-            price: Number(p.precio_venta) > 0 ? Number(p.precio_venta) : (Number(p.precio_compra) > 0 ? Number(p.precio_compra) * 1.5 : 25.00),
-            stock: p.stock !== undefined ? p.stock : 5,
-            category: p.categoria?.nombre || p.categoria || 'General',
-            sku: p.sku || `SKU-${p.id_producto}`,
-            image: p.foto ? (p.foto.startsWith('http') ? p.foto : `https://app.integrapro.app/storage/${p.foto}`) : ''
-          }));
-          setLiveProducts(mapped);
-          setIsLiveConnected(true);
+          const { items: tenantItems, rejectedCount } = filterRecordsByTenant(liveItems, empresaActiva.id);
+
+          if (rejectedCount > 0) {
+            console.warn(
+              `[Multi-Tenant Guard] POS bloqueó ${rejectedCount} producto(s) ajenos o sin id_empresa para la empresa #${empresaActiva.id}.`
+            );
+          }
+
+          if (tenantItems.length > 0) {
+            const mapped: Product[] = tenantItems.map((p: any) => ({
+              id: p.id_producto || p.id,
+              name: p.nombre,
+              // Sin precio de venta → se usa el PRECIO DE COMPRA tal cual (lo que pagó el usuario)
+              price: Number(p.precio_venta) > 0 ? Number(p.precio_venta) : Math.max(Number(p.precio_compra) || 0, 0),
+              priceSource: Number(p.precio_venta) > 0 ? 'venta' as const : 'costo' as const,
+              stock: p.stock !== undefined ? p.stock : 5,
+              category: p.categoria?.nombre || p.categoria || 'General',
+              sku: p.sku || `SKU-${p.id_producto}`,
+              image: p.foto ? (p.foto.startsWith('http') ? p.foto : `https://app.integrapro.app/storage/${p.foto}`) : ''
+            }));
+            setLiveProducts(mapped);
+            setIsLiveConnected(true);
+          }
         }
       })
       .catch(() => {
-        setIsLiveConnected(false);
+        if (!cancelled) {
+          setIsLiveConnected(false);
+        }
       });
 
-    salesApi.getClients()
-      .then(res => {
-        const liveClients = res?.data || res;
-        if (Array.isArray(liveClients)) {
-          const mappedClients: Cliente[] = liveClients.map((c: any) => ({
-            id_cliente: c.id_cliente,
-            nombre: c.nombre || '',
-            apellido: c.apellido || '',
-            nombre_completo: c.nombre_completo || `${c.nombre || ''} ${c.apellido || ''}`.trim(),
-            nit: c.nit || 'CF',
-            telefono: c.telefono || 'N/A',
-            email: c.email || 'N/A',
-            direccion: c.direccion || 'Ciudad de Guatemala',
-            tipo_cliente: c.tipo_cliente || 'normal',
-            descuento_aplicable: Number(c.descuento_aplicable) || 0,
-            dias_credito: Number(c.dias_credito) || 30,
-            saldo_actual: Number(c.saldo_actual) || 0,
-            limite_credito: Number(c.limite_credito) || 5000
-          }));
-          setClientsList(mappedClients);
-        }
-      })
-      .catch(() => {});
-  }, [empresaActiva.id]);
+    fetchClientsList('');
+
+    return () => {
+      cancelled = true;
+    };
+  }, [empresaActiva.id, fetchClientsList]);
 
   const filteredProducts = products.filter(product => {
     const matchesCategory = selectedCategory === 'Todos' || product.category === selectedCategory;
@@ -366,16 +446,42 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
   const efectivoNum = parseFloat(efectivoRecibido) || 0;
   const cambio = efectivoNum > total ? efectivoNum - total : 0;
 
-  const filteredClients = clientsList.filter(c => {
-    const q = clientSearchTerm.toLowerCase().trim();
-    if (!q) return true;
-    return (
-      c.nombre_completo.toLowerCase().includes(q) ||
-      c.nit.toLowerCase().includes(q) ||
-      (c.telefono && c.telefono.toLowerCase().includes(q)) ||
-      (c.direccion && c.direccion.toLowerCase().includes(q))
-    );
-  }).slice(0, 40);
+  // Filtrado instantáneo (0ms) en memoria: 100% insensible a mayúsculas, minúsculas, tildes y acentos
+  const filteredClients = useMemo(() => {
+    const rawQ = clientSearchTerm.trim();
+    if (!rawQ) return clientsList.slice(0, 80);
+
+    const cleanQ = normalizeClientSearch(rawQ);
+    const words = cleanQ.split(/\s+/).filter(Boolean);
+    const digitsOnly = rawQ.replace(/\D/g, '');
+    const cleanQNit = rawQ.toUpperCase().replace(/[^A-Z0-9]/g, '');
+
+    return clientsList.filter(c => {
+      const nomCompleto = normalizeClientSearch(c.nombre_completo);
+      const nom = normalizeClientSearch(c.nombre);
+      const ape = normalizeClientSearch(c.apellido);
+      const dir = normalizeClientSearch(c.direccion);
+      const email = normalizeClientSearch(c.email);
+      const nit = (c.nit || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+      const tel = (c.telefono || '').replace(/\D/g, '');
+
+      // 1. Coincidencia por teléfono (si escribió al menos 3 dígitos)
+      if (digitsOnly.length >= 3 && tel.includes(digitsOnly)) {
+        return true;
+      }
+
+      // 2. Coincidencia por NIT
+      if (cleanQNit.length >= 2 && nit.includes(cleanQNit)) {
+        return true;
+      }
+
+      // 3. Cadena unificada de búsqueda (nombre, apellido, nombre completo, nit, tel, dirección)
+      const haystack = `${nomCompleto} ${nom} ${ape} ${dir} ${email} ${nit} ${tel}`;
+
+      // Cada palabra buscada debe coincidir en cualquier parte del cliente
+      return words.every(w => haystack.includes(w));
+    }).slice(0, 80);
+  }, [clientsList, clientSearchTerm]);
 
   const handleSelectClient = (client: Cliente) => {
     setSelectedClient(client);
@@ -395,31 +501,65 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
     setDireccionReceptor('Ciudad de Guatemala');
   };
 
-  const handleCreateQuickClient = (e: React.FormEvent) => {
+  const handleCreateQuickClient = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newClientData.nombre.trim()) return;
 
     const fullName = `${newClientData.nombre.trim()} ${newClientData.apellido.trim()}`.trim();
     const cleanNit = newClientData.nit.trim().toUpperCase() || 'CF';
 
-    const newC: Cliente = {
-      id_cliente: Math.floor(10000 + Math.random() * 90000),
-      nombre: newClientData.nombre.trim(),
-      apellido: newClientData.apellido.trim(),
-      nombre_completo: fullName,
-      nit: cleanNit,
-      telefono: newClientData.telefono.trim() || 'N/A',
-      email: 'N/A',
-      direccion: newClientData.direccion.trim() || 'Ciudad de Guatemala',
-      tipo_cliente: 'normal',
-      descuento_aplicable: 0,
-      dias_credito: 30,
-      saldo_actual: 0,
-      limite_credito: Number(newClientData.limite_credito) || 5000
-    };
+    try {
+      const res = await salesApi.createClient({
+        nombre: newClientData.nombre.trim(),
+        apellido: newClientData.apellido.trim(),
+        nit: cleanNit,
+        telefono: newClientData.telefono.trim() || null,
+        direccion: newClientData.direccion.trim() || 'Ciudad de Guatemala',
+        tipo_cliente: 'normal',
+        empresa_id: empresaActiva.id
+      });
+      const created = res?.cliente || res;
+      const newC: Cliente = {
+        id_cliente: created?.id_cliente || Math.floor(10000 + Math.random() * 90000),
+        nombre: created?.nombre || newClientData.nombre.trim(),
+        apellido: created?.apellido || newClientData.apellido.trim(),
+        nombre_completo: created?.nombre_completo || fullName,
+        nit: created?.nit || cleanNit,
+        telefono: created?.telefono || newClientData.telefono.trim() || 'N/A',
+        email: created?.email || 'N/A',
+        direccion: created?.direccion || newClientData.direccion.trim() || 'Ciudad de Guatemala',
+        tipo_cliente: 'normal',
+        descuento_aplicable: 0,
+        dias_credito: 30,
+        saldo_actual: 0,
+        limite_credito: Number(newClientData.limite_credito) || 5000
+      };
 
-    setClientsList(prev => [newC, ...prev]);
-    handleSelectClient(newC);
+      setClientsList(prev => [newC, ...prev]);
+      setTotalClientsCount(prev => prev + 1);
+      handleSelectClient(newC);
+    } catch {
+      const newC: Cliente = {
+        id_cliente: Math.floor(10000 + Math.random() * 90000),
+        nombre: newClientData.nombre.trim(),
+        apellido: newClientData.apellido.trim(),
+        nombre_completo: fullName,
+        nit: cleanNit,
+        telefono: newClientData.telefono.trim() || 'N/A',
+        email: 'N/A',
+        direccion: newClientData.direccion.trim() || 'Ciudad de Guatemala',
+        tipo_cliente: 'normal',
+        descuento_aplicable: 0,
+        dias_credito: 30,
+        saldo_actual: 0,
+        limite_credito: Number(newClientData.limite_credito) || 5000
+      };
+
+      setClientsList(prev => [newC, ...prev]);
+      setTotalClientsCount(prev => prev + 1);
+      handleSelectClient(newC);
+    }
+
     setNewClientData({
       nombre: '',
       apellido: '',
@@ -446,6 +586,33 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
         setSelectedClient(match);
         setNombreReceptor(match.nombre_completo);
         setDireccionReceptor(match.direccion || 'Ciudad de Guatemala');
+      } else if (clean.length >= 4) {
+        // Búsqueda remota instantánea en backend (aislada por empresa)
+        salesApi.getClients({ id_empresa: empresaActiva.id, search: clean, per_page: 5 }).then(res => {
+          const found = res?.data || res;
+          const { items: tenantFound } = filterRecordsByTenant(Array.isArray(found) ? found : [], empresaActiva.id);
+          if (tenantFound.length > 0) {
+            const first = tenantFound[0];
+            const cleanC: Cliente = {
+              id_cliente: first.id_cliente,
+              nombre: first.nombre,
+              apellido: first.apellido,
+              nombre_completo: first.nombre_completo || `${first.nombre} ${first.apellido}`.trim(),
+              nit: first.nit || clean,
+              telefono: first.telefono || 'N/A',
+              email: first.email || 'N/A',
+              direccion: first.direccion || 'Ciudad de Guatemala',
+              tipo_cliente: first.tipo_cliente || 'normal',
+              descuento_aplicable: Number(first.descuento_aplicable) || 0,
+              dias_credito: Number(first.dias_credito) || 30,
+              saldo_actual: Number(first.saldo_actual) || 0,
+              limite_credito: Number(first.limite_credito) || 5000
+            };
+            setSelectedClient(cleanC);
+            setNombreReceptor(cleanC.nombre_completo);
+            setDireccionReceptor(cleanC.direccion);
+          }
+        }).catch(() => {});
       } else if (clean === '1048291-K' || clean === '1048291K') {
         setNombreReceptor('Distribuidora San José S.A.');
         setDireccionReceptor('Zona 12, Ciudad de Guatemala');
@@ -497,6 +664,7 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
     try {
       // 1. Sincronizar y registrar la venta en vivo en MySQL del servidor
       const salePayload: any = {
+        id_empresa: empresaActiva.id,
         id_cliente: selectedClient ? selectedClient.id_cliente : undefined,
         metodo_pago: metodoPago,
         detalles: cart.map(item => ({
@@ -594,12 +762,12 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
   }
 
   return (
-    <div className="h-[calc(100vh-6rem)] flex flex-col lg:flex-row gap-4">
+    <div className="min-h-[calc(100vh-6rem)] lg:h-[calc(100vh-6rem)] flex flex-col lg:flex-row gap-4">
       {/* Panel Izquierdo: Catálogo de Productos */}
-      <div className="flex-1 flex flex-col bg-white rounded-3xl border border-slate-200/80 shadow-sm overflow-hidden">
+      <div className="flex-1 flex flex-col bg-white rounded-3xl border border-slate-200/80 shadow-sm overflow-hidden min-h-[460px] lg:min-h-0">
         {/* Barra de Filtros y Búsqueda */}
         <div className="p-4 border-b border-slate-100 space-y-3">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
             <div className="relative flex-1">
               <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
               <input
@@ -610,7 +778,7 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
                 className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 font-medium"
               />
             </div>
-            <div className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-700 rounded-xl border border-emerald-100 text-xs font-bold">
+            <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-700 rounded-xl border border-emerald-100 text-xs font-bold">
               <Building className="w-3.5 h-3.5" />
               <span>Sucursal Central</span>
             </div>
@@ -717,7 +885,15 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
                 <span className="text-sm font-black text-slate-900">
                   Q {product.price.toFixed(2)}
                 </span>
-                
+                {product.priceSource === 'costo' && (
+                  <span
+                    className="text-[9px] font-extrabold text-amber-700 bg-amber-50 border border-amber-300 px-1.5 py-0.5 rounded-md"
+                    title="Este producto aún no tiene precio de venta; se está mostrando el precio de compra. Actualízalo en Inventario para vender con margen."
+                  >
+                    COSTO
+                  </span>
+                )}
+
                 {/* Botón MÁS (+): El ÚNICO elemento que agrega el producto al carrito */}
                 <button
                   type="button"
@@ -1791,7 +1967,7 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
                 <div>
                   <h3 className="text-sm font-black text-slate-900">Seleccionar Cliente para la Venta</h3>
                   <p className="text-[10px] text-slate-500 font-medium">
-                    {clientsList.length} clientes registrados • Saldos y Crédito
+                    {totalClientsCount > 0 ? `${totalClientsCount} clientes registrados` : `${clientsList.length} clientes registrados`} • Saldos y Crédito
                   </p>
                 </div>
               </div>
@@ -1808,7 +1984,11 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
             <div className="p-3 border-b border-slate-100 space-y-2 bg-white">
               <div className="flex gap-2">
                 <div className="relative flex-1">
-                  <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  {isSearchingClients ? (
+                    <Loader2 className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-indigo-600 animate-spin" />
+                  ) : (
+                    <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  )}
                   <input
                     type="text"
                     value={clientSearchTerm}
@@ -1816,15 +1996,25 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
                       setClientSearchTerm(e.target.value);
                       setShowNewClientForm(false);
                     }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        fetchClientsList(clientSearchTerm);
+                      }
+                    }}
                     placeholder="Buscar por nombre, NIT o teléfono..."
-                    className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-900 placeholder:text-slate-400 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all"
+                    className="w-full pl-9 pr-8 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-900 placeholder:text-slate-400 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all"
                     autoFocus
                   />
                   {clientSearchTerm && (
                     <button
                       type="button"
-                      onClick={() => setClientSearchTerm('')}
-                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                      onClick={() => {
+                        setClientSearchTerm('');
+                        fetchClientsList('');
+                      }}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer p-0.5"
+                      title="Limpiar búsqueda"
                     >
                       <X className="w-3.5 h-3.5" />
                     </button>
@@ -2037,7 +2227,7 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
             {/* Pie del Modal */}
             <div className="p-3 bg-slate-50 border-t border-slate-100 flex items-center justify-between text-xs">
               <span className="text-[10px] text-slate-500">
-                Mostrando {filteredClients.length} de {clientsList.length} clientes disponibles
+                Mostrando {filteredClients.length} de {totalClientsCount > 0 ? totalClientsCount : clientsList.length} clientes {clientSearchTerm ? 'encontrados' : 'disponibles'}
               </span>
               <button
                 type="button"

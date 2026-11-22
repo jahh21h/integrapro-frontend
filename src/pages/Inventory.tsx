@@ -37,6 +37,7 @@ import { UnidadMedida, UbicacionBodega, EmpresaSaaS } from '../types';
 import { exportToExcelCsv } from '../utils/export';
 import { getTenantCatalog } from '../data/tenantProducts';
 import { scraperApi, inventoryApi } from '../api';
+import { filterRecordsByTenant, getStoredActiveEmpresaId } from '../utils/tenant';
 
 function getProductPhotoUrl(foto?: string | null): string {
   if (!foto) return 'https://images.unsplash.com/photo-1542838132-92c53300491e?w=400&auto=format&fit=crop&q=80';
@@ -71,6 +72,8 @@ function mapApiProductToInventoryItem(p: any): InventoryItem {
     sku: p.sku || `PROD-${p.id_producto || p.id}`,
     codigoBarras: p.codigo_barras || '',
     nombre: p.nombre || 'Producto',
+    talla: p.talla || '',
+    color: p.color || '',
     categoria: p.categoria?.nombre || p.categoria_nombre || 'General',
     proveedor: p.proveedor?.nombre || p.proveedor_nombre || 'Distribuidor',
     precioCompra: parseFloat(p.precio_compra) || 0,
@@ -91,6 +94,8 @@ interface InventoryItem {
   sku: string;
   codigoBarras: string;
   nombre: string;
+  talla?: string;
+  color?: string;
   categoria: string;
   proveedor: string;
   precioCompra: number;
@@ -170,10 +175,13 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
   });
 
   const productFileInputRef = useRef<HTMLInputElement>(null);
+  const [newImageFile, setNewImageFile] = useState<File | null>(null);
+  const [editImageFile, setEditImageFile] = useState<File | null>(null);
 
   const handleProductImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      setNewImageFile(file);
       const reader = new FileReader();
       reader.onloadend = () => {
         setNewProduct(prev => ({ ...prev, imagen: reader.result as string }));
@@ -194,6 +202,8 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
   const [editFormData, setEditFormData] = useState({
     nombre: '',
     sku: '',
+    talla: '',
+    color: '',
     codigoBarras: '',
     categoria: 'Abarrotes',
     proveedor: '',
@@ -216,59 +226,116 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
     motivo: 'Reabastecimiento de stock bajo'
   });
 
-  // Catálogo Multi-Tenant cargado según la empresa activa
-  const initialCatalog = getTenantCatalog(currentEmpresa?.id);
+  // Catálogo Multi-Tenant estrictamente aislado por empresa activa
+  const activeEmpresaId = Number(currentEmpresa?.id ?? getStoredActiveEmpresaId() ?? 0);
+  const initialCatalog = getTenantCatalog(activeEmpresaId);
   const [products, setProducts] = useState<InventoryItem[]>(initialCatalog.products);
   const [categories, setCategories] = useState<string[]>(initialCatalog.categories);
   const [isLoadingLive, setIsLoadingLive] = useState(false);
+  const fetchRequestIdRef = useRef(0);
 
-  // Función para cargar catálogo y productos en vivo desde la base de datos de producción
-  const fetchLiveProducts = async (queryTerm?: string) => {
+  // Función para cargar catálogo y productos en vivo desde la base de datos (con bloqueo estricto multi-tenant)
+  const fetchLiveProducts = async (queryTerm?: string, empresaIdOverride?: number) => {
+    const targetEmpresaId = Number(empresaIdOverride ?? activeEmpresaId);
+    const requestId = ++fetchRequestIdRef.current;
+
+    if (!Number.isFinite(targetEmpresaId) || targetEmpresaId <= 0) {
+      setProducts([]);
+      setCategories(['Todas']);
+      return;
+    }
+
     setIsLoadingLive(true);
     try {
       const trimmedQuery = queryTerm ? queryTerm.trim() : '';
       const res = await inventoryApi.getAll({
+        id_empresa: targetEmpresaId,
         search: trimmedQuery || undefined,
         per_page: trimmedQuery ? 100 : 250
       });
-      const data = res?.data || (Array.isArray(res) ? res : []);
-      if (Array.isArray(data) && data.length > 0) {
-        const mapped = data.map(mapApiProductToInventoryItem);
+
+      // Ignorar respuestas viejas si el usuario cambió de empresa o búsqueda mientras cargaba
+      if (requestId !== fetchRequestIdRef.current) return;
+
+      const rawData = res?.data || (Array.isArray(res) ? res : []);
+      const { items: tenantData, rejectedCount } = filterRecordsByTenant(
+        Array.isArray(rawData) ? rawData : [],
+        targetEmpresaId
+      );
+
+      if (rejectedCount > 0) {
+        console.warn(
+          `[Multi-Tenant Guard] Inventario bloqueó ${rejectedCount} producto(s) ajenos o sin id_empresa para la empresa #${targetEmpresaId}.`
+        );
+      }
+
+      if (tenantData.length > 0) {
+        const mapped = tenantData.map(mapApiProductToInventoryItem);
         setProducts(mapped);
-        
-        // Agregar nuevas categorías descubiertas en los productos reales de la base de datos
-        const discoveredCats = Array.from(new Set(mapped.map((it: InventoryItem) => it.categoria).filter(Boolean))) as string[];
-        if (discoveredCats.length > 0) {
-          setCategories(prev => Array.from(new Set([...prev, ...discoveredCats])));
-        }
+
+        const discoveredCats = Array.from(
+          new Set(mapped.map((it: InventoryItem) => it.categoria).filter(Boolean))
+        ) as string[];
+        setCategories(['Todas', ...discoveredCats]);
       } else if (trimmedQuery) {
-        // Si no encontró nada en la búsqueda en vivo por SKU o nombre, vaciar lista
-        setProducts([]);
+        // Si el backend bloqueó datos de otra empresa, filtrar el catálogo propio del tenant; si respondió vacío legítimo, mostrar vacío
+        if (rejectedCount > 0) {
+          const cat = getTenantCatalog(targetEmpresaId);
+          const q = trimmedQuery.toLowerCase();
+          setProducts(
+            cat.products.filter(
+              p =>
+                p.nombre.toLowerCase().includes(q) ||
+                p.sku.toLowerCase().includes(q) ||
+                p.codigoBarras.toLowerCase().includes(q)
+            )
+          );
+          setCategories(cat.categories);
+        } else {
+          setProducts([]);
+        }
       } else {
-        // Fallback al catálogo del tenant si la API regresa vacío
-        const cat = getTenantCatalog(currentEmpresa?.id);
+        // Fallback estricto al catálogo aislado de ESTA empresa (nunca de otra)
+        const cat = getTenantCatalog(targetEmpresaId);
         setProducts(cat.products);
+        setCategories(cat.categories);
       }
     } catch (err) {
+      if (requestId !== fetchRequestIdRef.current) return;
       console.warn('Error fetching live inventory from Droplet:', err);
+      const cat = getTenantCatalog(targetEmpresaId);
+      setProducts(cat.products);
+      setCategories(cat.categories);
     } finally {
-      setIsLoadingLive(false);
+      if (requestId === fetchRequestIdRef.current) {
+        setIsLoadingLive(false);
+      }
     }
   };
 
-  // Sincronizar automáticamente el catálogo cuando cambia la empresa activa
+  // Reiniciar estado inmediatamente al cambiar de empresa activa (cero arrastre entre tenants)
   useEffect(() => {
-    fetchLiveProducts();
+    const cat = getTenantCatalog(activeEmpresaId);
+    setProducts(cat.products);
+    setCategories(cat.categories);
     setSelectedCategory('Todas');
-  }, [currentEmpresa?.id]);
+    setSearchTerm('');
+    setCurrentPage(1);
+    fetchLiveProducts('', activeEmpresaId);
+  }, [activeEmpresaId]);
 
   // Búsqueda en vivo conectada con la base de datos MySQL (con debounce de 350ms)
+  const isFirstSearchRender = useRef(true);
   useEffect(() => {
+    if (isFirstSearchRender.current) {
+      isFirstSearchRender.current = false;
+      return;
+    }
     const timer = setTimeout(() => {
-      fetchLiveProducts(searchTerm);
+      fetchLiveProducts(searchTerm, activeEmpresaId);
     }, 350);
     return () => clearTimeout(timer);
-  }, [searchTerm]);
+  }, [searchTerm, activeEmpresaId]);
 
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 30;
@@ -395,31 +462,60 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
     setTimeout(() => setNotificationToast(null), 3500);
   };
 
-  const handleCreateProduct = (e: React.FormEvent) => {
+  const handleCreateProduct = async (e: React.FormEvent) => {
     e.preventDefault();
-    const id = products.length + 1;
-    const item: InventoryItem = {
-      id,
-      sku: newProduct.sku || `PROD-${id.toString().padStart(3, '0')}`,
-      codigoBarras: newProduct.codigoBarras || `74010099${id}`,
-      nombre: newProduct.nombre,
-      categoria: newProduct.categoria,
-      proveedor: newProduct.proveedor,
-      precioCompra: parseFloat(newProduct.precioCompra) || 10,
-      precioVenta: parseFloat(newProduct.precioVenta) || 15,
-      stockTotal: parseInt(newProduct.stockInicial) || 20,
-      stockMinimo: parseInt(newProduct.stockMinimo) || 10,
-      stockPorSucursal: {
-        central: parseInt(newProduct.stockInicial) || 20,
-        norte: 0,
-        sur: 0
-      },
-      imagen: newProduct.imagen
-    };
+    if (!newProduct.nombre.trim()) {
+      showToast('⚠️ El nombre del producto es obligatorio.');
+      return;
+    }
 
-    setProducts([item, ...products]);
+    const precioCompra = parseFloat(newProduct.precioCompra) || 0;
+    const precioVenta = parseFloat(newProduct.precioVenta) || 0;
+    const stockInicial = parseInt(newProduct.stockInicial) || 0;
+    // Solo enviar URL si el usuario la escribió (no el placeholder demo ni un preview base64)
+    const imagenUrl = (newProduct.imagen && !newProduct.imagen.startsWith('data:') && !newProduct.imagen.includes('unsplash.com/photo-1542838132'))
+      ? newProduct.imagen
+      : null;
+
+    try {
+      if (newImageFile) {
+        const fd = new FormData();
+        fd.append('id_empresa', String(activeEmpresaId));
+        fd.append('nombre', newProduct.nombre.trim());
+        fd.append('sku', newProduct.sku.trim());
+        fd.append('codigo_barras', newProduct.codigoBarras || '');
+        fd.append('precio_compra', String(precioCompra));
+        fd.append('precio_venta', String(precioVenta));
+        fd.append('stock', String(stockInicial));
+        fd.append('stock_minimo', newProduct.stockMinimo || '10');
+        fd.append('foto', newImageFile);
+        await inventoryApi.createWithImage(fd);
+      } else {
+        await inventoryApi.create({
+          id_empresa: activeEmpresaId,
+          nombre: newProduct.nombre.trim(),
+          sku: newProduct.sku.trim() || undefined,
+          codigo_barras: newProduct.codigoBarras || undefined,
+          precio_compra: precioCompra,
+          precio_venta: precioVenta,
+          stock: stockInicial,
+          stock_minimo: parseInt(newProduct.stockMinimo) || 10,
+          ...(imagenUrl ? { foto: imagenUrl } : {})
+        });
+      }
+    } catch (err: any) {
+      console.error('Error creando producto:', err);
+      const msg = err?.response?.data?.message
+        || (err?.response?.data?.errors ? Object.values(err.response.data.errors).flat().join(', ') : null)
+        || 'No se pudo registrar el producto en el servidor.';
+      showToast(`⚠️ ${msg}`);
+      return;
+    }
+
+    await fetchLiveProducts();
     setShowNewProductModal(false);
-    showToast(`Producto "${item.nombre}" registrado exitosamente.`);
+    setNewImageFile(null);
+    showToast(`Producto "${newProduct.nombre.trim()}" registrado exitosamente.`);
     setNewProduct({
       nombre: '',
       sku: '',
@@ -444,9 +540,12 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
 
   const handleOpenEditModal = (p: InventoryItem) => {
     setEditingProduct(p);
+    setEditImageFile(null);
     setEditFormData({
       nombre: p.nombre,
       sku: p.sku,
+      talla: p.talla || '',
+      color: p.color || '',
       codigoBarras: p.codigoBarras,
       categoria: p.categoria,
       proveedor: p.proveedor,
@@ -463,10 +562,11 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
   const handleEditImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      setEditImageFile(file);
       const reader = new FileReader();
       reader.onloadend = () => {
         setEditFormData(prev => ({ ...prev, imagen: reader.result as string }));
-        showToast(`Fotografía actualizada para "${file.name}".`);
+        showToast(`Fotografía actualizada para "${file.name}". Guarda los cambios para subirla al servidor.`);
       };
       reader.readAsDataURL(file);
     }
@@ -497,6 +597,8 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
           ...p,
           nombre: editFormData.nombre,
           sku: editFormData.sku,
+          talla: editFormData.talla,
+          color: editFormData.color,
           codigoBarras: editFormData.codigoBarras,
           categoria: editFormData.categoria,
           proveedor: editFormData.proveedor,
@@ -520,24 +622,61 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
     setEditingProduct(null);
 
     try {
-      await inventoryApi.update(prodIdToUpdate, {
-        nombre: editFormData.nombre,
-        sku: editFormData.sku,
-        codigo_barras: editFormData.codigoBarras,
-        precio_compra: compra,
-        precio_venta: venta,
-        stock_minimo: minimo,
-        foto: editFormData.imagen
-      });
-    } catch (err) {
+      if (editImageFile) {
+        // Subida real del archivo (multipart) — el base64 no se envía como texto
+        const fd = new FormData();
+        fd.append('nombre', editFormData.nombre);
+        fd.append('sku', editFormData.sku);
+        if ((editFormData.talla || '').trim()) fd.append('talla', editFormData.talla.trim());
+        if ((editFormData.color || '').trim()) fd.append('color', editFormData.color.trim());
+        fd.append('codigo_barras', editFormData.codigoBarras || '');
+        fd.append('precio_compra', String(compra));
+        fd.append('precio_venta', String(venta));
+        fd.append('stock_minimo', String(minimo));
+        fd.append('foto', editImageFile);
+        await inventoryApi.updateWithImage(prodIdToUpdate, fd);
+        fetchLiveProducts(); // refrescar para mostrar la URL real del servidor
+      } else {
+        // Sin archivo: solo enviar foto si es una URL (nunca un base64 gigante)
+        const fotoUrl = editFormData.imagen && !editFormData.imagen.startsWith('data:')
+          ? editFormData.imagen
+          : undefined;
+        await inventoryApi.update(prodIdToUpdate, {
+          nombre: editFormData.nombre,
+          sku: editFormData.sku,
+          talla: editFormData.talla || null,
+          color: editFormData.color || null,
+          codigo_barras: editFormData.codigoBarras,
+          precio_compra: compra,
+          precio_venta: venta,
+          stock_minimo: minimo,
+          ...(fotoUrl ? { foto: fotoUrl } : {})
+        });
+      }
+    } catch (err: any) {
       console.warn('Error al persistir actualización de producto en backend:', err);
+      showToast(`⚠️ ${err?.response?.data?.message || 'El producto NO se guardó en el servidor. Intenta de nuevo.'}`);
+    } finally {
+      setEditImageFile(null);
     }
   };
 
-  const handleDeleteProduct = (p: InventoryItem) => {
-    if (window.confirm(`¿Estás seguro de que deseas eliminar o dar de baja el producto "${p.nombre}" (SKU: ${p.sku})?`)) {
+  const [isDeletingProduct, setIsDeletingProduct] = useState<boolean>(false);
+
+  const handleDeleteProduct = async (p: InventoryItem) => {
+    if (!window.confirm(`¿Estás seguro de que deseas eliminar o dar de baja el producto "${p.nombre}" (SKU: ${p.sku})?`)) {
+      return;
+    }
+    setIsDeletingProduct(true);
+    try {
+      await inventoryApi.delete(p.id);
       setProducts(prev => prev.filter(item => item.id !== p.id));
       showToast(`Producto "${p.nombre}" eliminado del inventario.`);
+    } catch (err: any) {
+      const backendMsg = err?.response?.data?.message;
+      showToast(backendMsg || `No se pudo eliminar "${p.nombre}". Verifica tu conexión e intenta de nuevo.`);
+    } finally {
+      setIsDeletingProduct(false);
     }
   };
 
@@ -702,12 +841,34 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
   };
 
   const filteredProducts = products.filter((p) => {
-    const matchesCategory = selectedCategory === 'Todas' || p.categoria === selectedCategory;
-    const matchesSearch = p.nombre.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                          p.sku.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          p.codigoBarras.includes(searchTerm);
+    const rawSearch = searchTerm.trim().toLowerCase();
+    const cleanSearch = rawSearch.replace(/^(sku|código|codigo|cod|ref|item)[\s:#\-_]+/i, '').trim();
+
+    if (!rawSearch) {
+      const matchesCategory = selectedCategory === 'Todas' || p.categoria === selectedCategory;
+      const matchesAlert = activeTab === 'alertas' ? p.stockTotal <= p.stockMinimo : true;
+      return matchesCategory && matchesAlert;
+    }
+
+    const searchWords = cleanSearch.split(/\s+/).filter(Boolean);
+    const pSku = (p.sku || '').toLowerCase();
+    const pNombre = (p.nombre || '').toLowerCase();
+    const pCodigo = (p.codigoBarras || '').toLowerCase();
+
+    // Si coincide con SKU o código
+    const matchesCode = pSku.includes(cleanSearch) || 
+                        pSku.includes(rawSearch) || 
+                        pCodigo.includes(cleanSearch) || 
+                        pCodigo.includes(rawSearch);
+
+    // O coincidencia por todas las palabras
+    const matchesWords = searchWords.every(word => 
+      pNombre.includes(word) || pSku.includes(word) || pCodigo.includes(word)
+    );
+
+    const matchesSearch = matchesCode || matchesWords;
     const matchesAlert = activeTab === 'alertas' ? p.stockTotal <= p.stockMinimo : true;
-    return matchesCategory && matchesSearch && matchesAlert;
+    return matchesSearch && matchesAlert;
   });
 
   const totalPages = Math.ceil(filteredProducts.length / itemsPerPage) || 1;
@@ -1155,10 +1316,15 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
                         </div>
                         <div className="min-w-0">
                           <p className="font-bold text-slate-900 truncate max-w-xs">{p.nombre}</p>
-                          <div className="flex items-center gap-2 mt-0.5">
+                          <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                             <span className="text-[10px] font-extrabold text-indigo-600 bg-indigo-50 px-1.5 py-0.2 rounded">
                               {p.sku}
                             </span>
+                            {(p.talla || '').trim() && (
+                              <span className="text-[10px] font-extrabold text-purple-700 bg-purple-50 border border-purple-200 px-1.5 py-0.2 rounded" title={`Talla: ${p.talla}${(p.color || '').trim() ? ` • Color: ${p.color}` : ''}`}>
+                                Talla {p.talla}
+                              </span>
+                            )}
                             <span className="text-[10px] text-slate-400">
                               EAN: {p.codigoBarras}
                             </span>
@@ -1258,10 +1424,11 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
                         >
                           <Edit3 className="w-4 h-4" />
                         </button>
-                        <button 
-                          type="button" 
+                        <button
+                          type="button"
                           onClick={() => handleDeleteProduct(p)}
-                          className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                          disabled={isDeletingProduct}
+                          className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                           title="Desactivar / Eliminar producto"
                         >
                           <Trash2 className="w-4 h-4" />
@@ -1612,7 +1779,10 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
                         type="url"
                         placeholder="O pega un enlace web: https://ejemplo.com/foto.jpg"
                         value={newProduct.imagen}
-                        onChange={(e) => setNewProduct({ ...newProduct, imagen: e.target.value })}
+                        onChange={(e) => {
+                          setNewImageFile(null); // una URL manual anula cualquier archivo pendiente
+                          setNewProduct({ ...newProduct, imagen: e.target.value });
+                        }}
                         className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500"
                       />
                     </div>
@@ -1701,6 +1871,34 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
                     className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium"
                     placeholder="SKU"
                   />
+                </div>
+
+                {/* Talla y Color */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                      Talla
+                    </label>
+                    <input
+                      type="text"
+                      value={editFormData.talla}
+                      onChange={(e) => setEditFormData({ ...editFormData, talla: e.target.value })}
+                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium"
+                      placeholder="S, M, L, Única..."
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                      Color
+                    </label>
+                    <input
+                      type="text"
+                      value={editFormData.color}
+                      onChange={(e) => setEditFormData({ ...editFormData, color: e.target.value })}
+                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium"
+                      placeholder="Negro, Varios..."
+                    />
+                  </div>
                 </div>
 
                 {/* Código de Barras (EAN-13) */}
@@ -1903,7 +2101,10 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
                         type="url"
                         placeholder="O pega un enlace web de la imagen: https://..."
                         value={editFormData.imagen}
-                        onChange={(e) => setEditFormData({ ...editFormData, imagen: e.target.value })}
+                        onChange={(e) => {
+                          setEditImageFile(null); // una URL manual anula cualquier archivo pendiente
+                          setEditFormData({ ...editFormData, imagen: e.target.value });
+                        }}
                         className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500"
                       />
                     </div>

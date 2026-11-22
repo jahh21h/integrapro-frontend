@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { User, NavigationTab, EmpresaSaaS } from './types';
 import { authApi, empresaApi } from './api';
+import { formatRegimenLabel } from './utils/tax';
 import Login from './components/Login';
 import Navbar from './components/Navbar';
 import Sidebar from './components/Sidebar';
@@ -171,7 +172,21 @@ const DEFAULT_EMPRESAS_LIST: EmpresaSaaS[] = [
 ];
 
 export default function App() {
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(true);
+  // Seguridad: Iniciar desautenticado por defecto para obligar siempre a pasar por el Login
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
+    try {
+      const token = localStorage.getItem('integrapro_token');
+      if (!token || token.startsWith('1010|') || token.startsWith('1008|')) {
+        localStorage.removeItem('integrapro_token');
+        return false;
+      }
+      return true;
+    } catch {
+      return false;
+    }
+  });
+  const [sessionExpiredNotice, setSessionExpiredNotice] = useState<string | null>(null);
+  const lastActivityRef = useRef<number>(Date.now());
   const [currentUser, setCurrentUser] = useState<User>(() => {
     const savedActive = localStorage.getItem('integrapro_active_empresa');
     if (savedActive) {
@@ -183,9 +198,9 @@ export default function App() {
             name: 'JONATHAN HERRERA',
             email: 'admin@integrapro.com',
             role: 'Administrador',
-            empresa_id: emp.id || 1,
+            empresa_id: Number(emp.id) || 1,
             empresa_nombre: emp.nombre || 'Fashion Styles',
-            empresa_regimen: emp.regimen || 'General (IVA 12%)',
+            empresa_regimen: formatRegimenLabel(emp.regimen),
             sucursal_id: 1,
             sucursal_nombre: 'Sucursal Central - Ciudad'
           };
@@ -209,6 +224,52 @@ export default function App() {
   const [commandPaletteOpen, setCommandPaletteOpen] = useState<boolean>(false);
   const [hasUpdate, setHasUpdate] = useState<boolean>(true);
   const [updateNotificationToast, setUpdateNotificationToast] = useState<string | null>(null);
+  const [newVersionAvailable, setNewVersionAvailable] = useState<boolean>(false);
+
+  // Detector de nueva versión: compara el hash del bundle en ejecución contra el
+  // index.html servido. Si difieren, hay un deploy nuevo y se ofrece recargar.
+  useEffect(() => {
+    const runningMatch = document.querySelector<HTMLScriptElement>('script[type="module"][src*="/assets/index-"]')
+      ?.src?.match(/index-([A-Za-z0-9_-]+)\.js/);
+    const runningHash = runningMatch ? runningMatch[1] : null;
+    if (!runningHash) return;
+
+    let stopped = false;
+    const checkForNewVersion = async () => {
+      try {
+        const res = await fetch('/', { cache: 'no-store', headers: { Accept: 'text/html' } });
+        const html = await res.text();
+        const servedMatch = html.match(/index-([A-Za-z0-9_-]+)\.js/);
+        if (!stopped && servedMatch && servedMatch[1] !== runningHash) {
+          setNewVersionAvailable(true);
+        }
+      } catch {
+        // Sin conexión: se reintenta en el próximo ciclo
+      }
+    };
+
+    checkForNewVersion();
+    const intervalId = setInterval(checkForNewVersion, 5 * 60 * 1000);
+    window.addEventListener('focus', checkForNewVersion);
+    return () => {
+      stopped = true;
+      clearInterval(intervalId);
+      window.removeEventListener('focus', checkForNewVersion);
+    };
+  }, []);
+
+  const newVersionBanner = newVersionAvailable ? (
+    <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-[70] bg-slate-900 text-white pl-4 pr-2 py-2 rounded-2xl shadow-2xl border border-indigo-500/50 flex items-center gap-3">
+      <span className="text-xs font-bold">🚀 Nueva versión disponible</span>
+      <button
+        type="button"
+        onClick={() => window.location.reload()}
+        className="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-xs font-extrabold transition-colors cursor-pointer"
+      >
+        Actualizar ahora
+      </button>
+    </div>
+  ) : null;
 
   const getModuleName = (tab: NavigationTab, empresaId?: number): string => {
     const isFortexa = empresaId === 22;
@@ -249,11 +310,14 @@ export default function App() {
   };
 
   useEffect(() => {
-    // Token de sesión activa conectado en vivo con el Droplet de producción
-    const currentToken = localStorage.getItem('integrapro_token');
-    if (!currentToken || currentToken.startsWith('1008|')) {
-      localStorage.setItem('integrapro_token', '1010|9ggVi6lr0qdKDfB6ICqrGsQU5au5XmRUUuxiwFgfb6e323c2');
-    }
+    // Purga de seguridad: si existe el antiguo token demo hardcoded, eliminarlo inmediatamente
+    try {
+      const currentToken = localStorage.getItem('integrapro_token');
+      if (currentToken && (currentToken.startsWith('1008|') || currentToken.startsWith('1010|'))) {
+        localStorage.removeItem('integrapro_token');
+        setIsAuthenticated(false);
+      }
+    } catch {}
 
     // Sincronizar directorio de empresas en vivo desde la base de datos del Droplet
     empresaApi.getAll().then((data: any[]) => {
@@ -274,11 +338,7 @@ export default function App() {
             razon_social: e.razon_social || e.nombre || 'Sin Razón Social',
             nit: e.nit || 'CF',
             pais: e.pais || 'GT',
-            regimen: e.regimen_tributario === 'informal' 
-              ? 'Exento / Informal' 
-              : (e.regimen_tributario === 'pequeno_contribuyente' 
-                ? 'Pequeño Contribuyente (5%)' 
-                : 'General (IVA 12%)'),
+            regimen: formatRegimenLabel(e.regimen_tributario || e.regimen),
             plan: (e.plan_type as any) || defaultMatch?.plan || 'enterprise',
             activa: Boolean(e.activa !== false),
             telefono: e.telefono || '',
@@ -302,6 +362,18 @@ export default function App() {
 
         setEmpresasList(mapped);
         localStorage.setItem('integrapro_empresas_list', JSON.stringify(mapped));
+
+        // Sincronizar inmediatamente la empresa activa con su régimen real del servidor
+        const currentActive = mapped.find(m => Number(m.id) === Number(selectedEmpresaId)) || mapped[0];
+        if (currentActive) {
+          setCurrentUser(prev => ({
+            ...prev,
+            empresa_id: currentActive.id,
+            empresa_nombre: currentActive.nombre,
+            empresa_regimen: currentActive.regimen
+          }));
+          localStorage.setItem('integrapro_active_empresa', JSON.stringify(currentActive));
+        }
       }
     }).catch(err => {
       console.warn('Error fetching live empresas from Droplet:', err);
@@ -321,7 +393,10 @@ export default function App() {
               filtered.push(def);
             }
           });
-          return filtered;
+          return filtered.map(e => ({
+            ...e,
+            regimen: formatRegimenLabel(e.regimen)
+          }));
         }
       } catch {}
     }
@@ -339,7 +414,28 @@ export default function App() {
     return savedActive === '99' && localStorage.getItem('integrapro_mode_live_only') === 'true';
   });
 
-  const selectedEmpresa = empresasList.find((e) => e.id === selectedEmpresaId) || empresasList[0];
+  const selectedEmpresa = empresasList.find((e) => Number(e.id) === Number(selectedEmpresaId)) || empresasList[0];
+
+  // Control Multi-Tenant Estricto: SuperAdmin y Administradores pueden ver todas las empresas; usuarios de empresas sólo ven su propia empresa
+  const isSuperAdmin = currentUser.role === 'SuperAdmin' || currentUser.role === 'Administrador' || currentUser.email === 'admin@integrapro.com' || currentUser.email === 'admin@admin.com' || currentUser.email === 'jahh21.jh@gmail.com';
+  const tenantEmpresas = empresasList.filter((e) => Number(e.id) === Number(currentUser.empresa_id));
+  const effectiveUserEmpresas = isSuperAdmin 
+    ? empresasList 
+    : (tenantEmpresas.length > 0 
+        ? tenantEmpresas 
+        : (selectedEmpresa ? [selectedEmpresa] : [{
+            id: currentUser.empresa_id || 25,
+            nombre: currentUser.empresa_nombre || '[QA-EMPRESA] IntegraPro Test',
+            razon_social: currentUser.empresa_nombre || 'Empresa Demo S.A.',
+            nit: '000000-1',
+            pais: 'GT',
+            regimen: currentUser.empresa_regimen || 'General (IVA 12%)',
+            plan: 'enterprise',
+            activa: true,
+            telefono: '',
+            email: currentUser.email,
+            direccion: ''
+          }]));
 
   // Determinar si la empresa activa opera en Modo Solo Live (para CUALQUIER empresa, no solo la 99)
   const isCompanyLiveOnly = selectedEmpresaId !== 22 && (
@@ -360,7 +456,7 @@ export default function App() {
         return empresasList;
       }
     })();
-    const found = currentList.find((e) => e.id === id) || empresasList.find((e) => e.id === id);
+    const found = currentList.find((e) => Number(e.id) === Number(id)) || empresasList.find((e) => Number(e.id) === Number(id));
     if (found) {
       setCurrentUser((prev) => ({
         ...prev,
@@ -399,20 +495,37 @@ export default function App() {
   }, [selectedEmpresaId, activeTab]);
 
   const handleUpdateEmpresa = (updatedEmp: EmpresaSaaS) => {
+    const formattedEmp: EmpresaSaaS = {
+      ...updatedEmp,
+      id: Number(updatedEmp.id),
+      regimen: formatRegimenLabel(updatedEmp.regimen)
+    };
+
     setEmpresasList(prev => {
-      const updated = prev.map(e => e.id === updatedEmp.id ? updatedEmp : e);
+      const updated = prev.map(e => Number(e.id) === Number(formattedEmp.id) ? formattedEmp : e);
       localStorage.setItem('integrapro_empresas_list', JSON.stringify(updated));
       return updated;
     });
 
-    if (selectedEmpresaId === updatedEmp.id) {
+    if (Number(selectedEmpresaId) === Number(formattedEmp.id) || Number(currentUser.empresa_id) === Number(formattedEmp.id)) {
       setCurrentUser(prev => ({
         ...prev,
-        empresa_id: updatedEmp.id,
-        empresa_nombre: updatedEmp.nombre,
-        empresa_regimen: updatedEmp.regimen
+        empresa_id: formattedEmp.id,
+        empresa_nombre: formattedEmp.nombre,
+        empresa_regimen: formattedEmp.regimen
       }));
-      localStorage.setItem('integrapro_active_empresa', JSON.stringify(updatedEmp));
+      localStorage.setItem('integrapro_active_empresa', JSON.stringify(formattedEmp));
+
+      try {
+        const storedUser = localStorage.getItem('integrapro_user');
+        if (storedUser) {
+          const parsedUser = JSON.parse(storedUser);
+          parsedUser.empresa_regimen = formattedEmp.regimen;
+          parsedUser.empresa_nombre = formattedEmp.nombre;
+          parsedUser.empresa_id = formattedEmp.id;
+          localStorage.setItem('integrapro_user', JSON.stringify(parsedUser));
+        }
+      } catch {}
 
       // Actualizar inmediatamente el modo live para que surta efecto al instante en pantalla
       const isLiveOnly = updatedEmp.id !== 22 && (
@@ -444,42 +557,206 @@ export default function App() {
     // Verificación de token Sanctum existente
     const token = localStorage.getItem('integrapro_token');
     if (token) {
-      authApi.getMe()
-        .then((res) => {
-          if (res?.data || res?.user) {
-            const u = res.data || res.user;
-            setCurrentUser((prev) => ({
-              ...prev,
-              id: u.id || prev.id,
-              name: u.name || prev.name,
-              email: u.email || prev.email,
-              role: u.role || prev.role,
-              empresa_id: u.id_empresa || prev.empresa_id,
-              empresa_nombre: u.empresa?.nombre || prev.empresa_nombre
-            }));
-            setIsAuthenticated(true);
-          }
-        })
-        .catch(() => {
-          // Si el token expira o el backend está offline, conservamos la sesión local
-        });
+      if (token.startsWith('1010|') || token.startsWith('1008|')) {
+        localStorage.removeItem('integrapro_token');
+        setIsAuthenticated(false);
+      } else {
+        authApi.getMe()
+          .then((res) => {
+            if (res?.data || res?.user) {
+              const u = res.data || res.user;
+              const userEmpId = Number(u.id_empresa || (u.empresa && u.empresa.id) || 1);
+              const isUserSuperAdmin =
+                u.role === 'SuperAdmin' ||
+                u.role === 'Administrador' ||
+                u.email === 'admin@integrapro.com' ||
+                u.email === 'admin@admin.com' ||
+                u.email === 'jahh21.jh@gmail.com';
+              const savedEmpId = Number(localStorage.getItem('integrapro_active_empresa_id') || '0');
+              // Solo SuperAdmin puede mantener una empresa distinta seleccionada; usuarios regulares quedan bloqueados a su empresa
+              const targetEmpId = isUserSuperAdmin && savedEmpId > 0 && savedEmpId !== 2 ? savedEmpId : userEmpId;
+              const matchedSavedEmp = empresasList.find(e => Number(e.id) === targetEmpId);
+              const empInfo = targetEmpId === userEmpId
+                ? (res.empresa || res.data?.empresa || u.empresa || matchedSavedEmp)
+                : (matchedSavedEmp || res.empresa || res.data?.empresa || u.empresa);
+              const rawReg = empInfo?.regimen_tributario || empInfo?.regimen || '';
+              const mappedReg = formatRegimenLabel(rawReg);
+
+              const targetEmpNombre = empInfo?.nombre || (targetEmpId === 25 ? '[QA-EMPRESA] IntegraPro Test' : (targetEmpId === 22 ? 'Fortexa Technologies' : targetEmpId === 1 ? 'Fashion Styles' : `Empresa #${targetEmpId}`));
+              setCurrentUser((prev) => ({
+                ...prev,
+                id: u.id || prev.id,
+                name: u.name || prev.name,
+                email: u.email || prev.email,
+                role: u.role || prev.role,
+                empresa_id: targetEmpId,
+                empresa_nombre: targetEmpNombre,
+                empresa_regimen: mappedReg
+              }));
+              setSelectedEmpresaId(targetEmpId);
+              localStorage.setItem('integrapro_active_empresa_id', targetEmpId.toString());
+              setIsAuthenticated(true);
+            } else {
+              localStorage.removeItem('integrapro_token');
+              setIsAuthenticated(false);
+            }
+          })
+          .catch(() => {
+            // Si el token es inválido o expiró, cerrar sesión inmediatamente
+            localStorage.removeItem('integrapro_token');
+            setIsAuthenticated(false);
+          });
+      }
+    } else {
+      setIsAuthenticated(false);
     }
 
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
+  // Control global de inactividad: Cierre automático de sesión tras 5 minutos sin interacción
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    const INACTIVITY_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutos de inactividad
+
+    // Inicializar timestamp de última actividad
+    const initialTime = Date.now();
+    lastActivityRef.current = initialTime;
+    try {
+      localStorage.setItem('integrapro_last_activity', initialTime.toString());
+    } catch {}
+
+    const triggerInactivityLogout = async () => {
+      try {
+        await authApi.logout();
+      } catch {
+        localStorage.removeItem('integrapro_token');
+      }
+      setSessionExpiredNotice('Tu sesión se cerró automáticamente por inactividad durante 5 minutos.');
+      setIsAuthenticated(false);
+    };
+
+    // Eventos que indican actividad del usuario
+    const userEvents = [
+      'mousedown',
+      'mousemove',
+      'keydown',
+      'touchstart',
+      'touchmove',
+      'wheel',
+      'scroll',
+      'click'
+    ];
+
+    const registerActivity = () => {
+      const now = Date.now();
+      // Throttle de 1 segundo para no saturar operaciones
+      if (now - lastActivityRef.current > 1000) {
+        lastActivityRef.current = now;
+        try {
+          localStorage.setItem('integrapro_last_activity', now.toString());
+        } catch {}
+      }
+    };
+
+    userEvents.forEach((event) => {
+      window.addEventListener(event, registerActivity, { passive: true });
+    });
+
+    // Sincronizar actividad entre diferentes pestañas abiertas
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'integrapro_last_activity' && e.newValue) {
+        const remoteTime = parseInt(e.newValue, 10);
+        if (!isNaN(remoteTime) && remoteTime > lastActivityRef.current) {
+          lastActivityRef.current = remoteTime;
+        }
+      }
+    };
+    window.addEventListener('storage', handleStorageChange);
+
+    // Verificación periódica cada 5 segundos
+    const intervalId = setInterval(() => {
+      let lastAct = lastActivityRef.current;
+      try {
+        const stored = localStorage.getItem('integrapro_last_activity');
+        if (stored) {
+          const parsed = parseInt(stored, 10);
+          if (!isNaN(parsed) && parsed > lastAct) {
+            lastAct = parsed;
+            lastActivityRef.current = parsed;
+          }
+        }
+      } catch {}
+
+      const elapsed = Date.now() - lastAct;
+      if (elapsed >= INACTIVITY_TIMEOUT_MS) {
+        triggerInactivityLogout();
+      }
+    }, 5000);
+
+    // Verificación al volver a la pestaña (si la computadora se suspendió o el navegador estuvo en segundo plano)
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        let lastAct = lastActivityRef.current;
+        try {
+          const stored = localStorage.getItem('integrapro_last_activity');
+          if (stored) {
+            const parsed = parseInt(stored, 10);
+            if (!isNaN(parsed) && parsed > lastAct) {
+              lastAct = parsed;
+              lastActivityRef.current = parsed;
+            }
+          }
+        } catch {}
+
+        if (Date.now() - lastAct >= INACTIVITY_TIMEOUT_MS) {
+          triggerInactivityLogout();
+        }
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      userEvents.forEach((event) => {
+        window.removeEventListener(event, registerActivity);
+      });
+      window.removeEventListener('storage', handleStorageChange);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      clearInterval(intervalId);
+    };
+  }, [isAuthenticated]);
+
   const handleLogin = (user: User) => {
+    setSessionExpiredNotice(null);
+    lastActivityRef.current = Date.now();
+    try {
+      localStorage.setItem('integrapro_last_activity', Date.now().toString());
+      localStorage.setItem('integrapro_active_empresa_id', user.empresa_id.toString());
+      const empMatch = empresasList.find(e => e.id === user.empresa_id);
+      if (empMatch) {
+        localStorage.setItem('integrapro_active_empresa', JSON.stringify(empMatch));
+      }
+    } catch {}
+    setSelectedEmpresaId(user.empresa_id);
     setCurrentUser(user);
     setIsAuthenticated(true);
     setActiveTab('dashboard');
   };
 
   const handleLogout = async () => {
+    setSessionExpiredNotice(null);
     try {
       await authApi.logout();
     } catch {
       localStorage.removeItem('integrapro_token');
     }
+    try {
+      localStorage.removeItem('integrapro_token');
+      localStorage.removeItem('integrapro_active_empresa_id');
+      localStorage.removeItem('integrapro_active_empresa');
+      localStorage.removeItem('integrapro_last_activity');
+    } catch {}
     setIsAuthenticated(false);
   };
 
@@ -492,7 +769,12 @@ export default function App() {
   };
 
   if (!isAuthenticated) {
-    return <Login onLogin={handleLogin} />;
+    return (
+      <>
+        <Login onLogin={handleLogin} inactivityNotice={sessionExpiredNotice} />
+        {newVersionBanner}
+      </>
+    );
   }
 
   return (
@@ -508,6 +790,7 @@ export default function App() {
             localStorage.setItem('integrapro_mode_live_only', 'false');
             setActiveTab('hub');
           }}
+          onLogout={handleLogout}
         />
       ) : (
         <div className="min-h-screen flex bg-slate-100 text-slate-800 antialiased font-sans">
@@ -539,6 +822,7 @@ export default function App() {
                 currentEmpresaId={selectedEmpresaId}
                 currentEmpresa={selectedEmpresa}
                 onClose={() => setSidebarOpen(false)}
+                onLogout={handleLogout}
               />
             </div>
           </div>
@@ -548,11 +832,12 @@ export default function App() {
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
           <Navbar 
             user={currentUser} 
+            selectedEmpresa={selectedEmpresa}
             onLogout={handleLogout} 
             onOpenCommandPalette={() => setCommandPaletteOpen(true)}
-            empresas={empresasList}
+            empresas={effectiveUserEmpresas}
             selectedEmpresaId={selectedEmpresaId}
-            onSelectEmpresa={handleSelectEmpresa}
+            onSelectEmpresa={isSuperAdmin ? handleSelectEmpresa : undefined}
             activeTab={activeTab}
             onTabChange={(tab) => { setActiveTab(tab); setSidebarOpen(false); }}
             onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
@@ -563,11 +848,11 @@ export default function App() {
             }}
           />
 
-        <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
-          <div className="max-w-7xl mx-auto">
+        <main className="flex-1 overflow-y-auto p-2.5 sm:p-6 lg:p-8">
+          <div className="max-w-7xl mx-auto w-full">
             {/* Si está dentro de un módulo específico, muestra el encabezado con botón de regreso */}
             {activeTab !== 'hub' && (
-              <div className="mb-5 flex flex-wrap items-center justify-between gap-3 bg-white px-4 py-3 rounded-2xl border border-slate-200/90 shadow-xs animate-in fade-in duration-200">
+              <div className="mb-4 sm:mb-5 flex flex-wrap items-center justify-between gap-2.5 sm:gap-3 bg-white px-3 sm:px-4 py-2.5 sm:py-3 rounded-2xl border border-slate-200/90 shadow-xs animate-in fade-in duration-200">
                 <div className="flex items-center gap-2.5">
                   <button
                     type="button"
@@ -601,47 +886,55 @@ export default function App() {
               </div>
             )}
 
-            {/* Vistas según pestaña activa */}
+            {/* Vistas según pestaña activa (key={selectedEmpresaId} garantiza reinicio total del estado al cambiar de empresa) */}
             {activeTab === 'hub' && (
-              <LaunchpadHub 
+              <LaunchpadHub
+                key={selectedEmpresaId}
                 user={currentUser}
                 selectedEmpresa={selectedEmpresa}
                 onNavigate={(tab) => { setActiveTab(tab); setSidebarOpen(false); }}
-                empresas={empresasList}
-                onSelectEmpresa={handleSelectEmpresa}
+                empresas={effectiveUserEmpresas}
+                onSelectEmpresa={isSuperAdmin ? handleSelectEmpresa : undefined}
+                onLogout={handleLogout}
               />
             )}
             {activeTab === 'dashboard' && (
-              <Dashboard 
-                empresas={empresasList}
+              <Dashboard
+                key={selectedEmpresaId}
+                empresas={effectiveUserEmpresas}
+                currentEmpresa={selectedEmpresa}
                 selectedEmpresaId={selectedEmpresaId}
-                onSelectEmpresa={handleSelectEmpresa}
+                onSelectEmpresa={isSuperAdmin ? handleSelectEmpresa : undefined}
               />
             )}
-            {activeTab === 'inventario' && <Inventory currentEmpresa={selectedEmpresa} />}
-            {activeTab === 'pos' && <PosTerminal currentEmpresa={selectedEmpresa} />}
-            {activeTab === 'ventas' && <Sales currentEmpresa={selectedEmpresa} />}
-            {activeTab === 'clientes' && <Clients />}
-            {activeTab === 'compras' && <Purchases />}
-            {activeTab === 'contabilidad' && <Accounting currentEmpresa={selectedEmpresa} />}
-            {activeTab === 'rrhh' && <HumanResources />}
-            {activeTab === 'asistencia' && <AttendanceKiosk />}
-            {activeTab === 'sucursales' && <Branches />}
+            {activeTab === 'inventario' && <Inventory key={selectedEmpresaId} currentEmpresa={selectedEmpresa} />}
+            {activeTab === 'pos' && <PosTerminal key={selectedEmpresaId} currentEmpresa={selectedEmpresa} />}
+            {activeTab === 'ventas' && <Sales key={selectedEmpresaId} currentEmpresa={selectedEmpresa} />}
+            {activeTab === 'clientes' && <Clients key={selectedEmpresaId} currentEmpresa={selectedEmpresa} />}
+            {activeTab === 'compras' && <Purchases key={selectedEmpresaId} currentEmpresa={selectedEmpresa} />}
+            {activeTab === 'contabilidad' && <Accounting key={selectedEmpresaId} currentEmpresa={selectedEmpresa} />}
+            {activeTab === 'rrhh' && <HumanResources key={selectedEmpresaId} />}
+            {activeTab === 'asistencia' && <AttendanceKiosk key={selectedEmpresaId} />}
+            {activeTab === 'sucursales' && <Branches key={selectedEmpresaId} currentEmpresa={selectedEmpresa} />}
             {activeTab === 'fortexa_apps' && (
-              <FortexaAppsView 
+              <FortexaAppsView
+                key={selectedEmpresaId}
                 currentEmpresa={selectedEmpresa} 
-                empresas={empresasList}
+                empresas={effectiveUserEmpresas}
                 onUpdateEmpresa={handleUpdateEmpresa}
-                onSelectEmpresa={handleSelectEmpresa}
+                onSelectEmpresa={isSuperAdmin ? handleSelectEmpresa : undefined}
               />
             )}
             {activeTab === 'live_sales' && (
-              <LiveSalesView currentEmpresa={selectedEmpresa} />
+              <LiveSalesView key={selectedEmpresaId} currentEmpresa={selectedEmpresa} />
             )}
             {activeTab === 'configuracion' && (
-              <SettingsView 
+              <SettingsView
+                key={selectedEmpresaId}
                 currentEmpresa={selectedEmpresa} 
-                onUpdateEmpresa={handleUpdateEmpresa} 
+                empresas={effectiveUserEmpresas}
+                onUpdateEmpresa={handleUpdateEmpresa}
+                onSelectEmpresa={isSuperAdmin ? handleSelectEmpresa : undefined}
               />
             )}
             {activeTab === 'token_scraper' && (
@@ -774,6 +1067,7 @@ export default function App() {
       )}
       </div>
       )}
+      {newVersionBanner}
     </LiveSalesProvider>
   );
 }

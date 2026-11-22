@@ -14,6 +14,11 @@ export interface VentaItem {
   estado: 'Completada' | 'Anulada' | 'Crédito';
   vendedor: string;
   dte?: FELCertificadoDTE | null;
+  rawId?: number;
+  idCliente?: number;
+  metodoPagoRaw?: string;
+  observaciones?: string;
+  rawDetalles?: any[];
   productos: {
     nombre: string;
     cantidad: number;
@@ -38430,3 +38435,157 @@ export const REAL_COTIZACIONES: CotizacionItem[] = [
     ]
   }
 ];
+
+export const DEMO_SALES: VentaItem[] = [
+  {
+    id: "DEMO-VEN-001",
+    cliente: "Cliente Mostrador Demo",
+    nit: "CF",
+    sucursal: "Sucursal Demo Principal",
+    fecha: "2026-11-19",
+    itemsCount: 1,
+    subtotal: 401.79,
+    iva: 48.21,
+    total: 450.00,
+    metodoPago: "Tarjeta POS",
+    estado: "Completada",
+    vendedor: "Asesor Comercial Demo",
+    dte: {
+      uuid: "A1B2C3D4-DEMO-4A5B-9C0D-1234567890AB",
+      serie: "DEMO",
+      numero: "00000001",
+      fechaCertificacion: "2026-11-19T10:30:00-06:00",
+      nitEmisor: "000000-1",
+      nombreEmisor: "[QA-EMPRESA] IntegraPro Test",
+      nitReceptor: "CF",
+      nombreReceptor: "Consumidor Final",
+      total: 450.00,
+      iva: 48.21,
+      certificador: "INFILE, S.A.",
+      fraseFiscal: "Sujeto a Pagos Trimestrales ISR",
+      qrUrl: "https://fel.sat.gob.gt/verificador"
+    },
+    productos: [
+      {
+        nombre: "Smart Watch Pro Serie 8 Waterproof",
+        cantidad: 1,
+        precioUnitario: 450.00,
+        subtotal: 450.00
+      }
+    ]
+  },
+  {
+    id: "DEMO-VEN-002",
+    cliente: "Distribuidora Central Demo",
+    nit: "9988776-5",
+    sucursal: "Sucursal Demo Principal",
+    fecha: "2026-11-18",
+    itemsCount: 1,
+    subtotal: 196.43,
+    iva: 23.57,
+    total: 220.00,
+    metodoPago: "Efectivo",
+    estado: "Completada",
+    vendedor: "Asesor Comercial Demo",
+    dte: {
+      uuid: "E5F6G7H8-DEMO-4A5B-9C0D-0987654321BA",
+      serie: "DEMO",
+      numero: "00000002",
+      fechaCertificacion: "2026-11-18T09:45:00-06:00",
+      nitEmisor: "000000-1",
+      nombreEmisor: "[QA-EMPRESA] IntegraPro Test",
+      nitReceptor: "9988776-5",
+      nombreReceptor: "Distribuidora Central Demo",
+      total: 220.00,
+      iva: 23.57,
+      certificador: "INFILE, S.A.",
+      fraseFiscal: "Sujeto a Pagos Trimestrales ISR",
+      qrUrl: "https://fel.sat.gob.gt/verificador"
+    },
+    productos: [
+      {
+        nombre: "Audífonos Inalámbricos TWS Pro Cancelación Ruido",
+        cantidad: 1,
+        precioUnitario: 220.00,
+        subtotal: 220.00
+      }
+    ]
+  },
+  {
+    id: "DEMO-VEN-003",
+    cliente: "Consumidor Final",
+    nit: "CF",
+    sucursal: "Sucursal Demo Principal",
+    fecha: "2026-11-17",
+    itemsCount: 1,
+    subtotal: 98.21,
+    iva: 11.79,
+    total: 110.00,
+    metodoPago: "Transferencia",
+    estado: "Completada",
+    vendedor: "Asesor Comercial Demo",
+    dte: {
+      uuid: "I9J0K1L2-DEMO-4A5B-9C0D-112233445566",
+      serie: "DEMO",
+      numero: "00000003",
+      fechaCertificacion: "2026-11-17T09:10:00-06:00",
+      nitEmisor: "000000-1",
+      nombreEmisor: "[QA-EMPRESA] IntegraPro Test",
+      nitReceptor: "CF",
+      nombreReceptor: "Consumidor Final",
+      total: 110.00,
+      iva: 11.79,
+      certificador: "INFILE, S.A.",
+      fraseFiscal: "Sujeto a Pagos Trimestrales ISR",
+      qrUrl: "https://fel.sat.gob.gt/verificador"
+    },
+    productos: [
+      {
+        nombre: "Termo Inteligente Acero LED Pantalla Temperatura",
+        cantidad: 1,
+        precioUnitario: 110.00,
+        subtotal: 110.00
+      }
+    ]
+  }
+];
+
+export const DEMO_COTIZACIONES: CotizacionItem[] = [
+  {
+    id: "DEMO-COT-001",
+    cliente: "Corporación Tecnológica Demo",
+    empresa: "[QA-EMPRESA] IntegraPro Test",
+    fecha: "2026-11-18",
+    vigencia: "2026-11-30",
+    total: 1350.00,
+    estado: "Pendiente",
+    productos: [
+      {
+        nombre: "Smart Watch Pro Serie 8 Waterproof",
+        cantidad: 3,
+        precioUnitario: 450.00,
+        subtotal: 1350.00
+      }
+    ]
+  }
+];
+
+export function getTenantSales(empresaId?: number): VentaItem[] {
+  if (empresaId === 1) {
+    return REAL_SALES;
+  }
+  if (empresaId === 25) {
+    return DEMO_SALES;
+  }
+  return [];
+}
+
+export function getTenantCotizaciones(empresaId?: number): CotizacionItem[] {
+  if (empresaId === 1) {
+    return REAL_COTIZACIONES;
+  }
+  if (empresaId === 25) {
+    return DEMO_COTIZACIONES;
+  }
+  return [];
+}

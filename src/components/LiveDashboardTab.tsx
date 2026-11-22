@@ -20,8 +20,8 @@ interface LiveDashboardTabProps {
 export default function LiveDashboardTab({ empresa }: LiveDashboardTabProps) {
   const { bags } = useLiveSales();
 
-  // Filtrar canastas para la empresa actual
-  const tenantBags = bags.filter(b => !b.empresa_id || b.empresa_id === empresa.id);
+  // Filtrar estrictamente canastas pertenecientes a la empresa actual
+  const tenantBags = bags.filter(b => Number(b.empresa_id) === Number(empresa.id));
 
   // Cálculos de métricas reales
   const validBags = tenantBags.filter(b => b.estado !== 'cancelada');

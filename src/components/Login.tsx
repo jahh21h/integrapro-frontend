@@ -1,71 +1,95 @@
 import React, { useState } from 'react';
 import { User, UserRole } from '../types';
 import { authApi } from '../api';
-import { Building2, Lock, Mail, ArrowRight, ShieldCheck, Store, Sparkles } from 'lucide-react';
+import { formatRegimenLabel } from '../utils/tax';
+import { Building2, Lock, Mail, ArrowRight, ShieldCheck, Store, Sparkles, Clock, AlertCircle } from 'lucide-react';
 
 interface LoginProps {
   onLogin: (user: User) => void;
+  inactivityNotice?: string | null;
 }
 
-export default function Login({ onLogin }: LoginProps) {
+export default function Login({ onLogin, inactivityNotice }: LoginProps) {
   const [email, setEmail] = useState('admin@integrapro.com');
-  const [password, setPassword] = useState('••••••••••••');
+  const [password, setPassword] = useState('');
   const [role, setRole] = useState<UserRole>('Administrador');
   const [sucursal, setSucursal] = useState('Sucursal Central - Ciudad');
   const [loading, setLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    setErrorMsg(null);
     
     try {
-      const res = await authApi.login({ email, password });
+      const res = await authApi.login({ 
+        email: email.trim(), 
+        password, 
+        device_name: 'IntegraPro Web App' 
+      });
       const userObj = res?.user || res?.data?.user;
-      const isFortexaAdmin = (userObj?.id_empresa === 22) || email === 'admin@integrapro.com';
+      const empObj = res?.empresa || res?.data?.empresa || userObj?.empresa;
+      const effectiveEmpId = empObj?.id_empresa || empObj?.id || userObj?.id_empresa || 1;
+      const effectiveEmpNombre = empObj?.nombre || userObj?.empresa?.nombre || (effectiveEmpId === 22 ? 'Fortexa Technologies' : effectiveEmpId === 25 ? '[QA-EMPRESA] IntegraPro Test' : 'Fashion Styles');
+      const rawReg = empObj?.regimen_tributario || empObj?.regimen || '';
+      const effectiveEmpRegimen = formatRegimenLabel(rawReg);
       onLogin({
-        id: userObj?.id || (isFortexaAdmin ? 2 : 1),
-        name: userObj?.name || (isFortexaAdmin ? 'SaaS Administrator (Fortexa Tech)' : email.split('@')[0].toUpperCase()),
-        email: userObj?.email || email,
+        id: userObj?.id || 1,
+        name: userObj?.name || email.split('@')[0].toUpperCase(),
+        email: userObj?.email || email.trim(),
         role: (userObj?.role || role) as UserRole,
-        empresa_id: userObj?.id_empresa || (isFortexaAdmin ? 22 : 1),
-        empresa_nombre: userObj?.empresa?.nombre || (isFortexaAdmin ? 'Fortexa Technologies' : 'Fashion Styles'),
-        sucursal_id: userObj?.id_sucursal || (isFortexaAdmin ? 63 : 1),
-        sucursal_nombre: isFortexaAdmin ? 'Sede Central Fortexa Technologies' : sucursal
+        empresa_id: effectiveEmpId,
+        empresa_nombre: effectiveEmpNombre,
+        empresa_regimen: effectiveEmpRegimen,
+        sucursal_id: userObj?.id_sucursal || 1,
+        sucursal_nombre: userObj?.sucursal?.nombre || (effectiveEmpId === 22 ? 'Sede Central Fortexa Technologies' : sucursal)
       });
-    } catch {
-      // Fallback seguro: permite acceso continuo si el servidor local de Laravel no está activo
-      const isFortexaAdmin = email === 'admin@integrapro.com';
-      onLogin({
-        id: isFortexaAdmin ? 2 : 1,
-        name: isFortexaAdmin ? 'SaaS Administrator (Fortexa Tech)' : email.split('@')[0].toUpperCase(),
-        email,
-        role,
-        empresa_id: isFortexaAdmin ? 22 : 1,
-        empresa_nombre: isFortexaAdmin ? 'Fortexa Technologies' : 'Fashion Styles',
-        sucursal_id: isFortexaAdmin ? 63 : 1,
-        sucursal_nombre: isFortexaAdmin ? 'Sede Central Fortexa Technologies' : sucursal
-      });
+    } catch (err: any) {
+      console.error('Error de autenticación:', err);
+      const msg = err.response?.data?.message 
+        || err.response?.data?.errors?.email?.[0] 
+        || 'Credenciales incorrectas. Verifique su correo y contraseña.';
+      setErrorMsg(msg);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleDemo = (demoEmail: string, demoRole: UserRole, demoBranch: string) => {
+  const handleDemo = async (demoEmail: string, demoRole: UserRole, demoBranch: string) => {
     setEmail(demoEmail);
+    setPassword('password');
     setRole(demoRole);
     const isFortexa = demoEmail === 'admin@integrapro.com';
     const effectiveBranch = isFortexa ? 'Sede Central Fortexa Technologies' : demoBranch;
     setSucursal(effectiveBranch);
-    onLogin({
-      id: isFortexa ? 2 : 1,
-      name: isFortexa ? 'SaaS Administrator (Fortexa Tech)' : demoEmail.split('@')[0].toUpperCase(),
-      email: demoEmail,
-      role: demoRole,
-      empresa_id: isFortexa ? 22 : 1,
-      empresa_nombre: isFortexa ? 'Fortexa Technologies' : 'Fashion Styles',
-      sucursal_id: isFortexa ? 63 : 1,
-      sucursal_nombre: effectiveBranch
-    });
+    setLoading(true);
+    setErrorMsg(null);
+    
+    try {
+      const res = await authApi.login({ 
+        email: demoEmail, 
+        password: 'password', 
+        device_name: 'IntegraPro Demo QuickLogin' 
+      });
+      const userObj = res?.user || res?.data?.user;
+      onLogin({
+        id: userObj?.id || (isFortexa ? 2 : 1),
+        name: userObj?.name || (isFortexa ? 'SaaS Administrator' : demoEmail.split('@')[0].toUpperCase()),
+        email: userObj?.email || demoEmail,
+        role: demoRole,
+        empresa_id: userObj?.id_empresa || (isFortexa ? 22 : 1),
+        empresa_nombre: userObj?.empresa?.nombre || (isFortexa ? 'Fortexa Technologies' : 'Fashion Styles'),
+        sucursal_id: userObj?.id_sucursal || (isFortexa ? 63 : 1),
+        sucursal_nombre: effectiveBranch
+      });
+    } catch (err: any) {
+      console.error('Error en acceso demo:', err);
+      const msg = err.response?.data?.message || 'No se pudo acceder con la cuenta demo seleccionada.';
+      setErrorMsg(msg);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -74,7 +98,7 @@ export default function Login({ onLogin }: LoginProps) {
       <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-indigo-600/10 rounded-full blur-3xl pointer-events-none" />
       <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-emerald-600/10 rounded-full blur-3xl pointer-events-none" />
 
-      <div className="max-w-md w-full bg-slate-900/90 backdrop-blur-xl rounded-3xl shadow-2xl p-8 border border-slate-800 relative z-10 text-white">
+      <div className="max-w-md w-full bg-slate-900/90 backdrop-blur-xl rounded-3xl shadow-2xl p-5 sm:p-8 border border-slate-800 relative z-10 text-white">
         {/* Barra superior de acento */}
         <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-indigo-500 via-sky-400 to-emerald-400 rounded-t-3xl" />
 
@@ -94,6 +118,32 @@ export default function Login({ onLogin }: LoginProps) {
           </p>
         </div>
 
+        {/* Aviso de Inactividad */}
+        {inactivityNotice && (
+          <div className="mb-5 p-3.5 rounded-2xl bg-amber-500/15 border border-amber-500/40 text-amber-200 text-xs flex items-center gap-3 animate-in fade-in slide-in-from-top-2">
+            <div className="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center shrink-0">
+              <Clock className="w-4 h-4" />
+            </div>
+            <div>
+              <p className="font-bold text-amber-300">Sesión Cerrada por Inactividad</p>
+              <p className="text-[11px] text-amber-200/90 leading-tight mt-0.5">{inactivityNotice}</p>
+            </div>
+          </div>
+        )}
+
+        {/* Mensaje de Error de Autenticación */}
+        {errorMsg && (
+          <div className="mb-5 p-3.5 rounded-2xl bg-rose-500/15 border border-rose-500/40 text-rose-200 text-xs flex items-center gap-3 animate-in fade-in slide-in-from-top-2">
+            <div className="w-8 h-8 rounded-xl bg-rose-500/20 text-rose-400 flex items-center justify-center shrink-0">
+              <AlertCircle className="w-4 h-4" />
+            </div>
+            <div>
+              <p className="font-bold text-rose-300">Acceso Denegado</p>
+              <p className="text-[11px] text-rose-200/90 leading-tight mt-0.5">{errorMsg}</p>
+            </div>
+          </div>
+        )}
+
         {/* Formulario */}
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
@@ -107,7 +157,7 @@ export default function Login({ onLogin }: LoginProps) {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                className="w-full pl-10 pr-4 py-2.5 bg-slate-800/80 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
+                className="autofill-dark w-full pl-10 pr-4 py-2.5 bg-slate-800/80 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-400 focus:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
                 placeholder="usuario@empresa.com"
               />
             </div>
@@ -124,8 +174,8 @@ export default function Login({ onLogin }: LoginProps) {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
-                className="w-full pl-10 pr-4 py-2.5 bg-slate-800/80 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
-                placeholder="••••••••••••"
+                className="autofill-dark w-full pl-10 pr-4 py-2.5 bg-slate-800/80 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-400 focus:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
+                placeholder="••••••••"
               />
             </div>
           </div>

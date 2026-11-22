@@ -1,3 +1,5 @@
+import { getTipoRegimenSAT } from '../utils/tax';
+import type { EmpresaSaaS } from '../types';
 import { useState, useEffect } from 'react';
 import { 
   Building2, 
@@ -33,8 +35,9 @@ import {
 } from 'lucide-react';
 import TokenExtensionScraper from '../components/TokenExtensionScraper';
 import { Compra, Proveedor, DetalleCompraItem } from '../types';
-import { REAL_PROVEEDORES, REAL_COMPRAS } from '../data/realPurchases';
+import { REAL_COMPRAS } from '../data/realPurchases';
 import { purchasesApi, scraperApi, apiClient } from '../api';
+import { filterRecordsByTenant, getStoredActiveEmpresaId } from '../utils/tenant';
 
 function getProductPhotoUrl(foto?: string | null): string | null {
   if (!foto) return null;
@@ -45,7 +48,14 @@ function getProductPhotoUrl(foto?: string | null): string | null {
   return `/storage/${foto}`;
 }
 
-export default function Purchases() {
+export default function Purchases({ currentEmpresa }: { currentEmpresa?: EmpresaSaaS } = {}) {
+  const activeEmpresaId = Number(currentEmpresa?.id ?? getStoredActiveEmpresaId() ?? 0);
+  // IVA sincronizado con el régimen tributario configurado en la empresa
+  const tipoRegimenEmpresa = getTipoRegimenSAT(currentEmpresa?.regimen || '');
+  const aplicaIvaCredito = tipoRegimenEmpresa === 'general';
+  const ivaPct = aplicaIvaCredito ? '12%' : '0%';
+  const calcularIvaCompra = (total: number) =>
+    aplicaIvaCredito ? Math.round((total * 0.12 / 1.12) * 100) / 100 : 0;
   const [activeTab, setActiveTab] = useState<'compras' | 'proveedores' | 'cxp'>('compras');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCompra, setSelectedCompra] = useState<Compra | null>(null);
@@ -74,6 +84,7 @@ export default function Purchases() {
   const [scraperUrlInput, setScraperUrlInput] = useState('');
   const [showScraperBar, setShowScraperBar] = useState(false);
   const [scraperToast, setScraperToast] = useState<string | null>(null);
+  const [compraFormError, setCompraFormError] = useState<string | null>(null);
   const [enlargedPhotoItem, setEnlargedPhotoItem] = useState<{
     descripcion: string;
     foto: string;
@@ -93,21 +104,74 @@ export default function Purchases() {
   const [monedaCompra, setMonedaCompra] = useState<'GTQ' | 'USD'>('GTQ');
   const [tipoCambio, setTipoCambio] = useState<number>(7.80);
 
-  // Proveedores sincronizados con base de datos del Droplet
-  const [proveedores, setProveedores] = useState<Proveedor[]>(REAL_PROVEEDORES);
+  // Proveedores sincronizados con base de datos del Droplet (aislados por empresa)
+  const [proveedores, setProveedores] = useState<Proveedor[]>([]);
+  const loadProveedores = (empresaIdOverride?: number) => {
+    const targetEmpresaId = Number(empresaIdOverride ?? activeEmpresaId);
+    return purchasesApi.getSuppliers({ id_empresa: targetEmpresaId }).then((res: any) => {
+      const rawData = Array.isArray(res) ? res : (res?.data || []);
+      const { items: tenantData, rejectedCount } = filterRecordsByTenant(
+        Array.isArray(rawData) ? rawData : [],
+        targetEmpresaId
+      );
+      if (rejectedCount > 0) {
+        console.warn(
+          `[Multi-Tenant Guard] Compras bloqueó ${rejectedCount} proveedor(es) ajenos o sin id_empresa para la empresa #${targetEmpresaId}.`
+        );
+      }
+      const mapped: Proveedor[] = tenantData.map((p: any) => ({
+        id_proveedor: p.id_proveedor,
+        nombre: p.nombre,
+        nit: p.nit || 'CF',
+        telefono: p.telefono || 'N/A',
+        email: p.email || 'N/A',
+        direccion: p.direccion || 'Ciudad',
+        regimen_tributario: p.regimen_tributario || 'general',
+        saldo_pendiente: 0
+      }));
+      setProveedores(mapped);
+      // Asegurar que el proveedor seleccionado exista realmente en el servidor
+      setNewCompra((prev: any) =>
+        mapped.some(m => m.id_proveedor === Number(prev.id_proveedor)) || mapped.length === 0
+          ? prev
+          : { ...prev, id_proveedor: mapped[0].id_proveedor }
+      );
+    }).catch(err => {
+      console.error('Error cargando proveedores del servidor:', err);
+      setProveedores([]);
+      setScraperToast('⚠️ No se pudieron cargar los proveedores del servidor.');
+      setTimeout(() => setScraperToast(null), 8000);
+    });
+  };
   useEffect(() => {
-    setProveedores(REAL_PROVEEDORES);
-  }, []);
+    setProveedores([]);
+    loadProveedores(activeEmpresaId);
+  }, [activeEmpresaId]);
 
-  // Historial de compras sincronizado con base de datos del Droplet
-  const [compras, setCompras] = useState<Compra[]>(REAL_COMPRAS);
+  // Historial de compras estrictamente aislado por empresa (REAL_COMPRAS es exclusivo de Fashion Styles #1)
+  const [compras, setCompras] = useState<Compra[]>(() => (activeEmpresaId === 1 ? REAL_COMPRAS : []));
+  // El saldo por pagar de cada proveedor se deriva de sus compras reales
   useEffect(() => {
-    setCompras(REAL_COMPRAS);
-    // Sincronizar en vivo con la API del Droplet si hay sesión activa
-    purchasesApi.getAll({ all: true }).then((res: any) => {
-      const data = Array.isArray(res) ? res : (res?.data || []);
-      if (Array.isArray(data) && data.length > 0) {
-        const mapped: Compra[] = data.map((c: any) => ({
+    setProveedores(prev => prev.map(p => ({
+      ...p,
+      saldo_pendiente: compras
+        .filter(c => c.id_proveedor === p.id_proveedor)
+        .reduce((acc, c) => acc + (c.saldo_pendiente || 0), 0)
+    })));
+  }, [compras, proveedores.length]);
+  const loadCompras = (empresaIdOverride?: number) => {
+    const targetEmpresaId = Number(empresaIdOverride ?? activeEmpresaId);
+    // Sincronizar en vivo con la API del Droplet (fuente de verdad aislada por empresa)
+    return purchasesApi.getAll({ all: true, id_empresa: targetEmpresaId }).then((res: any) => {
+      const rawData = Array.isArray(res) ? res : (res?.data || []);
+      if (Array.isArray(rawData)) {
+        const { items: tenantData, rejectedCount } = filterRecordsByTenant(rawData, targetEmpresaId);
+        if (rejectedCount > 0) {
+          console.warn(
+            `[Multi-Tenant Guard] Compras bloqueó ${rejectedCount} compra(s) ajenas o sin id_empresa para la empresa #${targetEmpresaId}.`
+          );
+        }
+        const mapped: Compra[] = tenantData.map((c: any) => ({
           id_compra: c.id_compra || c.id,
           id_proveedor: c.id_proveedor || 2,
           nombre_proveedor: c.nombre_proveedor || c.proveedor?.nombre || 'Proveedor',
@@ -120,7 +184,7 @@ export default function Purchases() {
           monto_exento: parseFloat(c.monto_exento) || 0,
           monto_iva: parseFloat(c.monto_iva) || 0,
           descripcion: c.descripcion || 'Compra de mercadería',
-          tipo_compra: c.tipo_compra || 'credito',
+          tipo_compra: (parseFloat(c.saldo_pendiente) > 0 || (c.estado_pago && c.estado_pago !== 'pagado')) ? 'credito' : 'contado',
           total_pagado: parseFloat(c.total_pagado) || 0,
           saldo_pendiente: parseFloat(c.saldo_pendiente) || 0,
           estado_pago: c.estado_pago || 'pendiente',
@@ -146,9 +210,16 @@ export default function Purchases() {
         setCompras(mapped);
       }
     }).catch(err => {
-      console.warn('Error fetching live purchases from Droplet:', err);
+      console.error('Error fetching live purchases from Droplet:', err);
+      setCompras(targetEmpresaId === 1 ? REAL_COMPRAS : []);
+      setScraperToast('⚠️ No se pudo cargar el historial real de compras del servidor.');
+      setTimeout(() => setScraperToast(null), 8000);
     });
-  }, []);
+  };
+  useEffect(() => {
+    setCompras(activeEmpresaId === 1 ? REAL_COMPRAS : []);
+    loadCompras(activeEmpresaId);
+  }, [activeEmpresaId]);
 
   // Estado para modal de Editar Compra
   const [editingCompra, setEditingCompra] = useState<Compra | null>(null);
@@ -216,7 +287,7 @@ export default function Purchases() {
 
     const subtotalBruto = editFormData.detalles.reduce((acc, it) => acc + (it.cantidad * it.precio_unitario), 0);
     const montoTotal = subtotalBruto > 0 ? subtotalBruto : (editingCompra.monto_total || 0);
-    const montoIva = Math.round((montoTotal * 0.12 / 1.12) * 100) / 100;
+    const montoIva = calcularIvaCompra(montoTotal);
     
     const pagado = editingCompra.total_pagado || 0;
     let nuevoSaldo = Math.max(0, montoTotal - pagado);
@@ -261,7 +332,7 @@ export default function Purchases() {
         tipo_documento: updatedCompra.tipo_documento,
         serie: updatedCompra.serie,
         numero_documento: updatedCompra.numero_documento,
-        tipo_compra: updatedCompra.tipo_compra,
+        tipo_compra: updatedCompra.moneda_compra === 'USD' ? 'importacion' : 'bien',
         estado_pago: updatedCompra.estado_pago,
         monto_total: updatedCompra.monto_total,
         monto_iva: updatedCompra.monto_iva,
@@ -270,8 +341,10 @@ export default function Purchases() {
         descripcion: updatedCompra.descripcion,
         detalles: updatedCompra.detalles
       });
-    } catch (err) {
-      console.warn('Actualizado en modo local/resiliente:', err);
+    } catch (err: any) {
+      console.error('Error al actualizar compra:', err);
+      showToast('NO se pudo actualizar la compra: ' + (err?.response?.data?.message || 'error de conexión'));
+      return;
     }
 
     setCompras(prev => prev.map(c => c.id_compra === editingCompra.id_compra ? updatedCompra : c));
@@ -292,8 +365,11 @@ export default function Purchases() {
 
     try {
       await purchasesApi.delete(compra.id_compra);
-    } catch (err) {
-      console.warn('Eliminada localmente:', err);
+    } catch (err: any) {
+      console.error('Error al eliminar compra:', err);
+      const backendMsg = err?.response?.data?.message;
+      showToast(backendMsg || `No se pudo eliminar la compra "${compra.serie} ${compra.numero_documento}". Intenta de nuevo.`);
+      return;
     }
 
     setCompras(prev => prev.filter(c => c.id_compra !== compra.id_compra));
@@ -303,7 +379,7 @@ export default function Purchases() {
     if (editingCompra?.id_compra === compra.id_compra) {
       setEditingCompra(null);
     }
-    showToast(`Compra "${compra.serie} ${compra.numero_documento}" eliminada del registro.`);
+    showToast(`Compra "${compra.serie} ${compra.numero_documento}" eliminada y stock revertido.`);
   };
 
   // Paginación Compras
@@ -384,6 +460,7 @@ export default function Purchases() {
 
   // Manejo de items en nueva compra
   const handleItemChange = (index: number, field: keyof DetalleCompraItem, value: any) => {
+    setCompraFormError(null);
     const updated = [...newCompra.items];
     const item = { ...updated[index], [field]: value };
     
@@ -488,7 +565,7 @@ export default function Purchases() {
           descripcion: p.title || p.name || p.nombre_producto || 'Producto Importado',
           nombre_producto: p.title || p.name || p.nombre_producto || 'Producto Importado',
           sku: p.sku || `IMP-${Math.floor(Math.random() * 89999 + 10000)}`,
-          talla: p.talla || 'Única',
+          talla: p.talla || '',
           color: p.color || 'Varios',
           cantidad: cantidad,
           precio_origen: precioUSD,
@@ -556,10 +633,10 @@ export default function Purchases() {
       if (!scrapedData) {
         const platformName = isTemu ? 'Temu' : isShein ? 'Shein' : isAli ? 'AliExpress' : 'Importado';
         scrapedData = {
-          name: `${platformName} - Chaqueta Bomber Térmica Cortavientos Unisex`,
+          name: `[REVISAR] Producto extraído de ${platformName} - verificar nombre, precio y talla`,
           price: isTemu ? '125.00' : '14.50',
           sku: `${platformName.toUpperCase()}-${Math.floor(Math.random() * 89999 + 10000)}`,
-          talla: 'L / XL',
+          talla: '',
           color: 'Negro Mate',
           image_url: 'https://images.unsplash.com/photo-1544441893-675973e31985?w=600&auto=format&fit=crop&q=80',
           url: url
@@ -573,7 +650,7 @@ export default function Purchases() {
       const nuevoItem: DetalleCompraItem = {
         descripcion: scrapedData.name || 'Producto Extraído con Scraper',
         sku: scrapedData.sku || `SKU-${Date.now().toString().slice(-5)}`,
-        talla: scrapedData.talla || 'M',
+        talla: scrapedData.talla || '',
         color: scrapedData.color || 'Negro',
         cantidad: 1,
         precio_origen: precioOrigen,
@@ -727,7 +804,7 @@ export default function Purchases() {
   };
 
   const totalCalculadoNuevaCompra = newCompra.items.reduce((acc, it) => acc + it.subtotal, 0);
-  const ivaCalculadoNuevaCompra = Number(((totalCalculadoNuevaCompra / 1.12) * 0.12).toFixed(2));
+  const ivaCalculadoNuevaCompra = calcularIvaCompra(totalCalculadoNuevaCompra);
 
   const handleSaveCompra = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -735,9 +812,39 @@ export default function Purchases() {
     if (!prov) return;
 
     const total = totalCalculadoNuevaCompra;
-    const iva = prov.regimen_tributario === 'pequeno_contribuyente' ? 0 : ivaCalculadoNuevaCompra;
-    const exento = prov.regimen_tributario === 'pequeno_contribuyente' ? total : 0;
+    const iva = ivaCalculadoNuevaCompra;
+    const exento = aplicaIvaCredito ? 0 : total;
     const esCredito = newCompra.tipo_compra === 'credito';
+
+    // Validación de tallas: obligatoria por línea + aviso de duplicados exactos
+    setCompraFormError(null);
+    const itemsValidos = newCompra.items.filter(it => (it.descripcion || it.nombre_producto || '').trim() !== '');
+    if (itemsValidos.length === 0) {
+      setCompraFormError('⚠️ Agrega al menos un producto a la compra.');
+      return;
+    }
+    const sinTalla = itemsValidos.filter(it => !(it.talla || '').trim());
+    if (sinTalla.length > 0) {
+      const ejemplo = (sinTalla[0].descripcion || sinTalla[0].nombre_producto || '').slice(0, 45);
+      setCompraFormError(`⚠️ Falta la TALLA en ${sinTalla.length} línea(s) (ej: "${ejemplo}..."). Usa los botones XS/S/M/L/XL/Única o escríbela.`);
+      return;
+    }
+    const vistos = new Set<string>();
+    const duplicados = itemsValidos.filter(it => {
+      const key = `${(it.descripcion || it.nombre_producto || '').trim().toLowerCase()}|${(it.sku || '').trim()}|${(it.talla || '').trim().toLowerCase()}`;
+      if (vistos.has(key)) return true;
+      vistos.add(key);
+      return false;
+    });
+    if (duplicados.length > 0) {
+      const ejemplo = (duplicados[0].descripcion || duplicados[0].nombre_producto || '').slice(0, 50);
+      const continuar = window.confirm(
+        `Hay ${duplicados.length} línea(s) repetida(s) con la MISMA talla (ej: "${ejemplo}").\n\n` +
+        `• Si son tallas DISTINTAS, corrige el campo Talla de cada línea.\n` +
+        `• Si es el mismo producto, fusiónalas en una sola línea con mayor cantidad.\n\n¿Guardar de todas formas?`
+      );
+      if (!continuar) return;
+    }
 
     const cleanDetalles = newCompra.items.map(it => ({
       nombre_producto: it.descripcion || it.nombre_producto || 'Producto Importado',
@@ -747,6 +854,7 @@ export default function Purchases() {
       precio_compra: it.precio_unitario || it.precio_compra || 0,
       precio_unitario: it.precio_unitario || it.precio_compra || 0,
       precio_origen: it.precio_origen || 0,
+      precio_venta: it.precio_venta ? Number(it.precio_venta) : undefined,
       subtotal: it.subtotal || ((it.cantidad || 1) * (it.precio_unitario || 0)),
       foto: it.foto || it.image_url || undefined,
       talla: it.talla || 'Única',
@@ -766,7 +874,7 @@ export default function Purchases() {
       monto_exento: exento,
       monto_iva: iva,
       descripcion: newCompra.descripcion || `Compra de mercadería a ${prov.nombre}`,
-      tipo_compra: newCompra.tipo_compra,
+      tipo_compra: monedaCompra === 'USD' ? 'importacion' : 'bien', // enum de la BD; contado/crédito va en estado_pago
       total_pagado: esCredito ? 0 : total,
       saldo_pendiente: esCredito ? total : 0,
       estado_pago: esCredito ? 'pendiente' : 'pagado',
@@ -782,10 +890,15 @@ export default function Purchases() {
       const creada: Compra = {
         id_compra: compraGuardada?.id_compra || Date.now(),
         ...payload,
+        tipo_compra: newCompra.tipo_compra,
         detalles: cleanDetalles
       };
 
+      if (!compraGuardada?.id_compra) {
+        throw new Error('El servidor respondió sin id_compra: la compra no fue confirmada.');
+      }
       setCompras([creada, ...compras]);
+      loadCompras(); // re-sincronizar con la base de datos
       if (esCredito) {
         setProveedores(proveedores.map(p => 
           p.id_proveedor === prov.id_proveedor ? { ...p, saldo_pendiente: p.saldo_pendiente + total } : p
@@ -796,15 +909,11 @@ export default function Purchases() {
       showToast(`¡Factura guardada con éxito! Se registraron ${cleanDetalles.length} productos y se ingresaron al inventario.`);
     } catch (err: any) {
       console.error('Error al guardar compra en backend:', err);
-      // Fallback local
-      const creada: Compra = {
-        id_compra: Date.now(),
-        ...payload,
-        detalles: cleanDetalles
-      };
-      setCompras([creada, ...compras]);
-      setShowNewCompraModal(false);
-      showToast(`Factura guardada localmente.`);
+      const data = err?.response?.data;
+      const detalle = data?.errors ? Object.values(data.errors).flat().join(' | ') : '';
+      const msg = data?.message || (err?.response ? '' : 'Sin conexión con el servidor.');
+      showToast('NO se guardó la compra' + (err?.response?.status ? ` (HTTP ${err.response.status})` : '') + ': ' + [msg, detalle].filter(Boolean).join(' - '));
+      return;
     }
 
     setNewCompra({
@@ -819,19 +928,35 @@ export default function Purchases() {
     });
   };
 
-  const handleSaveProveedor = (e: React.FormEvent) => {
+  const handleSaveProveedor = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newProveedor.nombre || !newProveedor.nit) return;
-    const provNuevo: Proveedor = {
-      id_proveedor: Date.now(),
-      nombre: newProveedor.nombre,
-      nit: newProveedor.nit,
-      telefono: newProveedor.telefono || 'N/A',
-      email: newProveedor.email || 'N/A',
-      direccion: newProveedor.direccion || 'Ciudad',
-      regimen_tributario: newProveedor.regimen_tributario,
-      saldo_pendiente: 0.00
-    };
+    let provNuevo: Proveedor;
+    try {
+      const res = await purchasesApi.createSupplier({
+        nombre: newProveedor.nombre,
+        nit: newProveedor.nit,
+        telefono: newProveedor.telefono || null,
+        email: newProveedor.email || null,
+        direccion: newProveedor.direccion || null,
+        regimen_tributario: newProveedor.regimen_tributario
+      });
+      if (!res?.id_proveedor) throw new Error('Respuesta sin id_proveedor');
+      provNuevo = {
+        id_proveedor: res.id_proveedor,
+        nombre: res.nombre,
+        nit: newProveedor.nit,
+        telefono: newProveedor.telefono || 'N/A',
+        email: newProveedor.email || 'N/A',
+        direccion: newProveedor.direccion || 'Ciudad',
+        regimen_tributario: newProveedor.regimen_tributario,
+        saldo_pendiente: 0.00
+      };
+    } catch (err: any) {
+      console.error('Error al guardar proveedor:', err);
+      showToast('NO se guardó el proveedor: ' + (err?.response?.data?.message || (err?.response?.data?.nombre || []).join?.(' ') || err?.message || 'error de servidor'));
+      return;
+    }
     setProveedores([...proveedores, provNuevo]);
     setShowNewProveedorModal(false);
     showToast(`Proveedor ${provNuevo.nombre} registrado correctamente.`);
@@ -970,7 +1095,7 @@ export default function Purchases() {
 
         <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm flex items-center justify-between">
           <div>
-            <p className="text-xs font-semibold text-slate-400">IVA Crédito Fiscal (12%)</p>
+            <p className="text-xs font-semibold text-slate-400">IVA Crédito Fiscal ({ivaPct})</p>
             <p className="text-2xl font-black text-emerald-600 mt-1">
               Q{totalIvaCreditoFiscal.toLocaleString('es-GT', { minimumFractionDigits: 2 })}
             </p>
@@ -1086,7 +1211,7 @@ export default function Purchases() {
                   <th className="py-3 px-4">Documento / Serie</th>
                   <th className="py-3 px-4">Proveedor & Origen</th>
                   <th className="py-3 px-4 text-center">Ítems con Foto</th>
-                  <th className="py-3 px-4 text-right">IVA Crédito (12%)</th>
+                  <th className="py-3 px-4 text-right">IVA Crédito ({ivaPct})</th>
                   <th className="py-3 px-4 text-right">Total Factura</th>
                   <th className="py-3 px-4 text-right">Saldo Pendiente</th>
                   <th className="py-3 px-4 text-center">Estado Pago</th>
@@ -1605,7 +1730,7 @@ export default function Purchases() {
                   <span>Q{selectedCompra.monto_exento.toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between text-slate-600">
-                  <span>IVA Crédito Fiscal (12%):</span>
+                  <span>IVA Crédito Fiscal ({ivaPct}):</span>
                   <span className="font-bold text-emerald-600">Q{selectedCompra.monto_iva.toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between text-slate-800 text-sm font-black border-t border-slate-200 pt-2">
@@ -1675,7 +1800,7 @@ export default function Purchases() {
       {/* 5.5 Modal Editar Compra Completa */}
       {editingCompra && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4">
-          <div className="bg-white w-full max-w-4xl rounded-3xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[90vh]">
+          <div className="bg-white w-full max-w-6xl rounded-3xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[90vh]">
             {/* Header del Modal */}
             <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/80 shrink-0">
               <div className="flex items-center gap-2.5">
@@ -1884,6 +2009,7 @@ export default function Purchases() {
                         <th className="py-2.5 px-3 w-32">SKU</th>
                         <th className="py-2.5 px-3 w-24 text-center">Cantidad</th>
                         <th className="py-2.5 px-3 w-28 text-right">Precio U. (Q)</th>
+                        <th className="py-2.5 px-3 w-32 text-right text-emerald-700">Precio Venta (Q)</th>
                         <th className="py-2.5 px-3 w-28 text-right">Subtotal</th>
                         <th className="py-2.5 px-2 w-10 text-center"></th>
                       </tr>
@@ -1894,7 +2020,11 @@ export default function Purchases() {
                         return (
                           <tr key={idx} className="hover:bg-slate-50/60 transition-colors">
                             <td className="py-2 px-3">
-                              <div className="w-10 h-10 rounded-xl bg-slate-100 border border-slate-200 overflow-hidden flex items-center justify-center shrink-0">
+                              <div
+                                onClick={() => photoUrl && setEnlargedPhotoItem({ descripcion: item.nombre_producto || item.descripcion, foto: photoUrl, sku: item.sku, talla: item.talla, color: item.color })}
+                                className={`w-10 h-10 rounded-xl bg-slate-100 border border-slate-200 overflow-hidden flex items-center justify-center shrink-0 ${photoUrl ? 'cursor-zoom-in hover:scale-105 transition-transform' : ''}`}
+                                title={photoUrl ? 'Clic para ver en grande' : undefined}
+                              >
                                 {photoUrl ? (
                                   <img src={photoUrl} alt="Foto" className="w-full h-full object-cover" />
                                 ) : (
@@ -1963,6 +2093,23 @@ export default function Purchases() {
                                 className="w-full px-2 py-1.5 text-right bg-white border border-slate-200 rounded-lg text-xs font-bold focus:ring-1 focus:ring-indigo-500"
                               />
                             </td>
+                            <td className="py-2 px-3">
+                              <input
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                placeholder="0.00"
+                                value={item.precio_venta ?? ''}
+                                onChange={(e) => {
+                                  const val = e.target.value === '' ? null : Math.max(0, parseFloat(e.target.value) || 0);
+                                  setEditFormData(prev => ({
+                                    ...prev,
+                                    detalles: prev.detalles.map((d, i) => i === idx ? { ...d, precio_venta: val } : d)
+                                  }));
+                                }}
+                                className="w-full px-2 py-1.5 text-right bg-emerald-50/60 border border-emerald-200 rounded-lg text-xs font-bold text-emerald-800 focus:ring-1 focus:ring-emerald-500"
+                              />
+                            </td>
                             <td className="py-2 px-3 text-right font-extrabold text-slate-800">
                               Q{(item.cantidad * item.precio_unitario).toFixed(2)}
                             </td>
@@ -1997,7 +2144,7 @@ export default function Purchases() {
               <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-2 text-xs">
                 {(() => {
                   const subtotal = editFormData.detalles.reduce((acc, it) => acc + (it.cantidad * it.precio_unitario), 0);
-                  const iva = Math.round((subtotal * 0.12 / 1.12) * 100) / 100;
+                  const iva = calcularIvaCompra(subtotal);
                   const total = subtotal;
                   const pagado = editingCompra.total_pagado || 0;
                   const saldo = Math.max(0, total - pagado);
@@ -2009,7 +2156,7 @@ export default function Purchases() {
                         <span className="font-semibold">Q{subtotal.toFixed(2)}</span>
                       </div>
                       <div className="flex justify-between text-slate-600">
-                        <span>IVA Crédito Fiscal (12% estimado):</span>
+                        <span>IVA Crédito Fiscal ({ivaPct} estimado):</span>
                         <span className="font-bold text-emerald-600">Q{iva.toFixed(2)}</span>
                       </div>
                       <div className="flex justify-between text-slate-800 text-sm font-black border-t border-slate-200 pt-2">
@@ -2276,7 +2423,7 @@ export default function Purchases() {
       {/* 7. Modal Registrar Nueva Compra con Scraper Integrado */}
       {showNewCompraModal && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-4xl rounded-3xl shadow-2xl border border-slate-200 overflow-hidden">
+          <div className="bg-white w-full max-w-6xl rounded-3xl shadow-2xl border border-slate-200 overflow-hidden">
             <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/80">
               <div className="flex items-center gap-2">
                 <div className="w-9 h-9 rounded-xl bg-indigo-600 text-white flex items-center justify-center font-black">
@@ -2547,6 +2694,17 @@ export default function Purchases() {
                   </div>
                 </div>
 
+                {/* Catálogo de tallas sugeridas (autocompletado al escribir) */}
+                <datalist id="tallas-comunes">
+                  {['Única', 'XS', 'S', 'M', 'L', 'XL', 'XXL', '2XL', '3XL', '4XL',
+                    '28', '30', '32', '34', '36', '38', '40',
+                    '0-3M', '3-6M', '6-9M', '12M', '18M', '24M',
+                    '2T', '3T', '4T', '5T', '6T', '8T', '10T', '12T',
+                    'Bebé', 'Infantil', 'Joven'].map((t) => (
+                    <option key={t} value={t} />
+                  ))}
+                </datalist>
+
                 <div className="space-y-3">
                   {newCompra.items.map((it, idx) => (
                     <div key={idx} className="bg-slate-50 p-3 rounded-2xl border border-slate-200 space-y-2">
@@ -2593,11 +2751,29 @@ export default function Purchases() {
                             <div>
                               <input
                                 type="text"
-                                placeholder="Talla (S, M, L)"
+                                list="tallas-comunes"
+                                placeholder="Talla * (elige o escribe)"
                                 value={it.talla || ''}
                                 onChange={(e) => handleItemChange(idx, 'talla', e.target.value)}
-                                className="w-full px-2 py-1 bg-white border border-slate-300 rounded-lg text-xs"
+                                className={`w-full px-2 py-1 bg-white rounded-lg text-xs border ${!(it.talla || '').trim() ? 'border-amber-400 ring-1 ring-amber-200' : 'border-slate-300'}`}
                               />
+                              <div className="flex flex-wrap gap-1 mt-1">
+                                {['XS', 'S', 'M', 'L', 'XL', 'XXL', 'Única'].map((t) => (
+                                  <button
+                                    key={t}
+                                    type="button"
+                                    onClick={() => handleItemChange(idx, 'talla', t)}
+                                    className={`px-1.5 py-0.5 rounded text-[10px] font-bold border transition-colors cursor-pointer ${
+                                      (it.talla || '').trim().toUpperCase() === t.toUpperCase()
+                                        ? 'bg-indigo-600 text-white border-indigo-600'
+                                        : 'bg-white text-slate-500 border-slate-200 hover:border-indigo-300 hover:text-indigo-600'
+                                    }`}
+                                  >
+                                    {t}
+                                  </button>
+                                ))}
+                              </div>
+                              <p className="text-[9px] text-slate-400 mt-0.5">¿No está tu talla? Escríbela (ej: 28, 2XL, 12, Bebé)</p>
                             </div>
                             <div>
                               <input
@@ -2661,6 +2837,19 @@ export default function Purchases() {
                             />
                           </div>
 
+                          <div className="w-24">
+                            <label className="block text-[10px] text-emerald-600 font-bold">Precio Venta (Q)</label>
+                            <input
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              placeholder="Q0.00"
+                              value={it.precio_venta || ''}
+                              onChange={(e) => handleItemChange(idx, 'precio_venta', e.target.value)}
+                              className="w-full px-2 py-1 bg-emerald-50/60 border border-emerald-200 rounded-lg text-xs text-right font-bold text-emerald-800"
+                            />
+                          </div>
+
                           <div className="w-24 text-right pt-3">
                             <span className="font-black text-slate-900 text-xs block">
                               Q{it.subtotal.toFixed(2)}
@@ -2684,7 +2873,7 @@ export default function Purchases() {
               {/* Resumen de liquidación con desglose de moneda */}
               <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3">
                 <div className="space-y-0.5">
-                  <span className="text-slate-500 block">IVA Crédito Fiscal (12%):</span>
+                  <span className="text-slate-500 block">IVA Crédito Fiscal ({ivaPct}):</span>
                   <span className="font-bold text-emerald-600 text-sm">
                     Q{ivaCalculadoNuevaCompra.toFixed(2)}
                   </span>
@@ -2701,6 +2890,16 @@ export default function Purchases() {
                   </span>
                 </div>
               </div>
+
+              {compraFormError && (
+                <div className="flex items-start gap-2.5 p-3.5 rounded-2xl bg-rose-50 border border-rose-300 text-rose-800">
+                  <AlertCircle className="w-4 h-4 mt-0.5 shrink-0 text-rose-600" />
+                  <div>
+                    <p className="text-xs font-extrabold">No se puede guardar la compra</p>
+                    <p className="text-xs font-medium mt-0.5">{compraFormError}</p>
+                  </div>
+                </div>
+              )}
 
               <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-200">
                 <button
@@ -2954,7 +3153,7 @@ export default function Purchases() {
       {enlargedPhotoItem && (
         <div 
           onClick={() => setEnlargedPhotoItem(null)}
-          className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 sm:p-6 animate-in fade-in duration-200"
+          className="fixed inset-0 z-[60] bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 sm:p-6 animate-in fade-in duration-200"
         >
           <div 
             onClick={(e) => e.stopPropagation()}

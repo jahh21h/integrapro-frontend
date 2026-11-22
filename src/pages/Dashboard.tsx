@@ -38,7 +38,7 @@ import {
 import { Line, Bar, Doughnut } from 'react-chartjs-2';
 import { EmpresaSaaS } from '../types';
 import TimeFormatToggle from '../components/TimeFormatToggle';
-import { getTipoRegimenSAT } from '../utils/tax';
+import { getTipoRegimenSAT, formatRegimenLabel } from '../utils/tax';
 
 ChartJS.register(
   CategoryScale,
@@ -56,16 +56,16 @@ ChartJS.register(
 const defaultEmpresasList: EmpresaSaaS[] = [
   {
     id: 1,
-    nombre: 'Corporación Comercial IntegraPro S.A.',
-    razon_social: 'IntegraPro Soluciones Empresariales Sociedad Anónima',
-    nit: '10429182-3',
+    nombre: 'Fashion Styles',
+    razon_social: 'Fashion Styles S.A.',
+    nit: '6322012-1',
     pais: 'GT',
     regimen: 'General (IVA 12%)',
-    plan: 'standard',
+    plan: 'enterprise',
     activa: true,
-    telefono: '+502 2334-9000',
-    email: 'facturacion@integrapro.com',
-    direccion: '7a Avenida 12-45 Zona 9, Guatemala'
+    telefono: '+502 4589-1234',
+    email: 'contacto@fashionstyles.gt',
+    direccion: 'Calzada Roosevelt, Mixco, Guatemala'
   },
   {
     id: 2,
@@ -112,12 +112,14 @@ const MESES = [
 
 interface DashboardProps {
   empresas?: EmpresaSaaS[];
+  currentEmpresa?: EmpresaSaaS;
   selectedEmpresaId?: number;
   onSelectEmpresa?: (id: number) => void;
 }
 
 export default function Dashboard({
   empresas = defaultEmpresasList,
+  currentEmpresa: propCurrentEmpresa,
   selectedEmpresaId = 1,
   onSelectEmpresa
 }: DashboardProps) {
@@ -125,9 +127,13 @@ export default function Dashboard({
   // Permite simular interactivamente el caso de tener solo 1 empresa configurada vs varias empresas
   const [singleCompanyMode, setSingleCompanyMode] = useState<boolean>(false);
 
+  useEffect(() => {
+    setActiveEmpresaId(selectedEmpresaId);
+  }, [selectedEmpresaId]);
+
   // Lista efectiva según si está en modo 1 empresa o multi-empresa
   const effectiveEmpresas = singleCompanyMode ? [empresas[0]] : empresas;
-  const currentEmpresa = effectiveEmpresas.find(e => e.id === activeEmpresaId) || effectiveEmpresas[0];
+  const currentEmpresa = propCurrentEmpresa || effectiveEmpresas.find(e => Number(e.id) === Number(activeEmpresaId)) || effectiveEmpresas[0];
 
   const isLiveSeller = currentEmpresa.id !== 22 && (
     currentEmpresa.id === 99 ||
@@ -156,12 +162,12 @@ export default function Dashboard({
 
   // Filtro de Fechas del Dashboard (Filament: FiltersForm con DatePicker startDate y endDate)
   const [dateRange, setDateRange] = useState({
-    preset: 'mes_actual',
-    startDate: '2026-11-01',
-    endDate: '2026-11-30'
+    preset: 'anio',
+    startDate: '2026-01-01',
+    endDate: '2026-12-31'
   });
 
-  // Base de Datos Dinámica por Empresa (Sincronizada con base de datos SQLite y modelos Eloquent de Laravel)
+  // Base de Datos Dinámica por Empresa (Sincronizada con base de datos real del Droplet)
   const companyLedgers: Record<number, {
     monthlySales2026: number[];
     monthlySales2025: number[];
@@ -191,79 +197,118 @@ export default function Dashboard({
     }[];
   }> = {
     1: {
-      // Empresa 1: Corporación Comercial IntegraPro S.A. (Régimen General 12%)
-      monthlySales2026: [42000, 48000, 56000, 52000, 68000, 74000, 81000, 79000, 89000, 94000, 118450, 128000],
-      monthlySales2025: [35000, 39000, 44000, 46000, 51000, 58000, 62000, 64000, 70000, 76000, 82000, 91000],
-      monthlyOrders2026: [456, 520, 610, 580, 740, 810, 880, 860, 970, 1020, 1284, 1390],
-      efectivoCaja: 18920.00,
-      stockCritico: 3,
+      // Empresa 1: Fashion Styles (Métricas Reales Extraídas de la Base de Datos Droplet)
+      // Total 2026: 951 órdenes y Q 179,475.50 facturados
+      monthlySales2026: [3828.00, 0, 35722.50, 0, 17435.00, 15669.00, 20538.00, 24330.00, 37093.00, 23285.00, 1575.00, 0],
+      monthlySales2025: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      monthlyOrders2026: [70, 0, 168, 0, 62, 77, 117, 145, 125, 150, 37, 0],
+      efectivoCaja: 1860.00,
+      stockCritico: 8,
       sucursales: [
-        { nombre: 'Sucursal Central - Ciudad', stock: 1240, valorCosto: 45800 },
-        { nombre: 'Sucursal Norte - Atlántico', stock: 890, valorCosto: 28400 },
-        { nombre: 'Sucursal Sur - Villa Nueva', stock: 650, valorCosto: 19200 }
+        { nombre: 'Sucursal Principal - Tienda & Bodega Central', stock: 3474, valorCosto: 142791.46 }
       ],
       demandProducts: [
         {
-          id: 1,
-          nombre: 'Aceite Vegetal 800ml (Caja x 12 unidades)',
-          sku: 'ACE-080',
-          foto: 'https://images.unsplash.com/photo-1474979266404-7eaacbcd87c5?w=150&auto=format&fit=crop&q=80',
-          clientes: ['Distribuidora San José', 'Tienda La Bendición'],
-          cantidad_solicitada: 35,
-          stock_actual: 4,
-          deficit: 31
-        },
-        {
-          id: 2,
-          nombre: 'Azúcar Blanca Fortificada 2.5kg (Fardo x 10)',
-          sku: 'AZU-250',
-          foto: 'https://images.unsplash.com/photo-1581441363689-1f3c3c414635?w=150&auto=format&fit=crop&q=80',
-          clientes: ['Supermercado Los Pinos'],
-          cantidad_solicitada: 20,
-          stock_actual: 2,
-          deficit: 18
-        },
-        {
-          id: 3,
-          nombre: 'Café Tostado y Molido Tradicional 400g',
-          sku: 'CAF-400',
-          foto: 'https://images.unsplash.com/photo-1559056199-641a0ac8b55e?w=150&auto=format&fit=crop&q=80',
-          clientes: ['Hotel & Restaurante Posada Real', 'Cafetería El Portal'],
-          cantidad_solicitada: 15,
+          id: 4155,
+          nombre: 'Serum Facial & Contorno de Ojos',
+          sku: 'CDD-0000003',
+          foto: 'https://images.unsplash.com/photo-1620916566398-39f1143ab7be?w=150&auto=format&fit=crop&q=80',
+          clientes: ['Clientas Boutique VIP', 'Venta en Tienda'],
+          cantidad_solicitada: 25,
           stock_actual: 1,
+          deficit: 24
+        },
+        {
+          id: 2908,
+          nombre: 'Juego Completo Depilación & Exfoliante 60g / Aceite 90ml',
+          sku: 'GNR-0000446',
+          foto: 'https://images.unsplash.com/photo-1556228720-195a672e8a03?w=150&auto=format&fit=crop&q=80',
+          clientes: ['Clientas Frecuentes', 'Venta Mostrador'],
+          cantidad_solicitada: 30,
+          stock_actual: 10,
+          deficit: 20
+        },
+        {
+          id: 2841,
+          nombre: 'Aceite Labial Hidratante Gloss',
+          sku: 'BLL-0000064',
+          foto: 'https://images.unsplash.com/photo-1586495777744-4413f21062fa?w=150&auto=format&fit=crop&q=80',
+          clientes: ['Compradoras Live', 'Venta en Caja'],
+          cantidad_solicitada: 25,
+          stock_actual: 6,
+          deficit: 19
+        },
+        {
+          id: 4161,
+          nombre: 'Taza Cerámica de Colección',
+          sku: 'GNR-0000581',
+          foto: 'https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd?w=150&auto=format&fit=crop&q=80',
+          clientes: ['Detalles & Regalos'],
+          cantidad_solicitada: 20,
+          stock_actual: 6,
           deficit: 14
+        },
+        {
+          id: 4127,
+          nombre: 'Mascarilla Capilar Tratamiento Intensivo',
+          sku: 'BLL-0000162',
+          foto: 'https://images.unsplash.com/photo-1535585209827-a15fcdbc4c2d?w=150&auto=format&fit=crop&q=80',
+          clientes: ['Cuidado Personal'],
+          cantidad_solicitada: 20,
+          stock_actual: 1,
+          deficit: 19
         }
       ],
       receivables: [
         {
-          id: 'FAC-1040',
-          cliente: 'Supermercado Los Pinos S.A.',
-          fecha: '2026-11-10',
-          fecha_vencimiento: '2026-11-20',
-          dias_restantes: 'En 4 días',
-          total: 12120.00,
-          saldo: 12120.00,
+          id: 'FAC-2423',
+          cliente: 'Darlyn Pinula',
+          fecha: '2026-05-15',
+          fecha_vencimiento: '2026-11-25',
+          dias_restantes: 'En 6 días',
+          total: 1310.00,
+          saldo: 1310.00,
+          urgencia: 'urgente'
+        },
+        {
+          id: 'FAC-2426',
+          cliente: 'Any Pueblito',
+          fecha: '2026-05-16',
+          fecha_vencimiento: '2026-11-28',
+          dias_restantes: 'En 9 días',
+          total: 580.00,
+          saldo: 580.00,
           urgencia: 'alerta'
         },
         {
-          id: 'FAC-1028',
-          cliente: 'Abarrotería El Esfuerzo',
-          fecha: '2026-11-04',
-          fecha_vencimiento: '2026-11-25',
-          dias_restantes: 'En 9 días',
-          total: 4350.00,
-          saldo: 2350.00,
+          id: 'FAC-2424',
+          cliente: 'Alejandra amiga Yesica',
+          fecha: '2026-05-15',
+          fecha_vencimiento: '2026-12-02',
+          dias_restantes: 'En 13 días',
+          total: 565.00,
+          saldo: 565.00,
+          urgencia: 'alerta'
+        },
+        {
+          id: 'FAC-2425',
+          cliente: 'Fabiola Tahuite (funeraria)',
+          fecha: '2026-05-15',
+          fecha_vencimiento: '2026-12-05',
+          dias_restantes: 'En 16 días',
+          total: 560.00,
+          saldo: 560.00,
           urgencia: 'normal'
         },
         {
-          id: 'FAC-1015',
-          cliente: 'Comercializadora del Sur Ltda.',
-          fecha: '2026-10-28',
-          fecha_vencimiento: '2026-11-18',
-          dias_restantes: 'En 2 días',
-          total: 8900.00,
-          saldo: 8900.00,
-          urgencia: 'urgente'
+          id: 'FAC-2422',
+          cliente: 'Kyara Santa Barbara',
+          fecha: '2026-05-15',
+          fecha_vencimiento: '2026-12-10',
+          dias_restantes: 'En 21 días',
+          total: 550.00,
+          saldo: 550.00,
+          urgencia: 'normal'
         }
       ]
     },
@@ -338,10 +383,45 @@ export default function Dashboard({
           urgencia: 'urgente'
         }
       ]
+    },
+    25: {
+      // Empresa 25: [QA-EMPRESA] IntegraPro Test (Entorno Demo Aislado)
+      monthlySales2026: [12000, 15000, 18000, 17000, 22000, 26000, 29000, 27000, 31000, 34000, 42500, 48000],
+      monthlySales2025: [10000, 11000, 14000, 15000, 17000, 19000, 22000, 21000, 25000, 27000, 32000, 36000],
+      monthlyOrders2026: [120, 145, 170, 160, 210, 240, 280, 265, 305, 330, 410, 460],
+      efectivoCaja: 5400.00,
+      stockCritico: 2,
+      sucursales: [
+        { nombre: 'Sucursal Demo Principal', stock: 350, valorCosto: 14500 }
+      ],
+      demandProducts: [
+        {
+          id: 1,
+          nombre: 'Smart Watch Pro Serie 8 Waterproof',
+          sku: 'WCH-DEMO-01',
+          foto: 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=150&auto=format&fit=crop&q=80',
+          clientes: ['Cliente Demo Corporativo'],
+          cantidad_solicitada: 15,
+          stock_actual: 3,
+          deficit: 12
+        }
+      ],
+      receivables: [
+        {
+          id: 'FAC-DEMO-101',
+          cliente: 'Distribuidora Central Demo',
+          fecha: '2026-11-10',
+          fecha_vencimiento: '2026-11-25',
+          dias_restantes: 'En 5 días',
+          total: 3500.00,
+          saldo: 1850.00,
+          urgencia: 'normal'
+        }
+      ]
     }
   };
 
-  const currentLedger = companyLedgers[activeEmpresaId] || companyLedgers[1];
+  const currentLedger = companyLedgers[activeEmpresaId] || companyLedgers[25] || companyLedgers[1];
 
   // DETERMINACIÓN DINÁMICA DE LOS MESES SEGÚN EL FILTRO TEMPORAL
   // Índices: 0: Ene, 1: Feb ... 10: Nov, 11: Dic
@@ -390,6 +470,7 @@ export default function Dashboard({
   const crecimientoOrdenesPct = pastYearOrders > 0 ? (((activeOrdenes - pastYearOrders) / pastYearOrders) * 100).toFixed(1) : '8.2';
 
   // Impuestos Dinámicos según Régimen Tributario de la Empresa (ImpuestosStatsWidget)
+  const regimenDisplay = formatRegimenLabel(currentEmpresa.regimen);
   const tipoRegimen = getTipoRegimenSAT(currentEmpresa.regimen);
   const esGeneral = tipoRegimen === 'general';
   const esPequeno = tipoRegimen === 'pequeno_contribuyente';
@@ -648,7 +729,7 @@ export default function Dashboard({
                   {currentEmpresa.nombre}
                 </h2>
                 <p className="text-xs text-slate-500 font-medium">
-                  Razón Social: <span className="text-slate-700">{currentEmpresa.razon_social}</span> • NIT: <span className="font-mono font-bold text-slate-700">{currentEmpresa.nit}</span> • {currentEmpresa.regimen}
+                  Razón Social: <span className="text-slate-700">{currentEmpresa.razon_social}</span> • NIT: <span className="font-mono font-bold text-slate-700">{currentEmpresa.nit}</span> • {regimenDisplay}
                 </p>
               </div>
             </div>
@@ -707,7 +788,7 @@ export default function Dashboard({
                   {currentEmpresa.nombre}
                 </h2>
                 <p className="text-xs text-slate-500 font-medium">
-                  Razón Social: <span className="text-slate-700">{currentEmpresa.razon_social}</span> • NIT: <span className="font-mono font-bold text-slate-700">{currentEmpresa.nit}</span> • {currentEmpresa.regimen}
+                  Razón Social: <span className="text-slate-700">{currentEmpresa.razon_social}</span> • NIT: <span className="font-mono font-bold text-slate-700">{currentEmpresa.nit}</span> • {regimenDisplay}
                 </p>
               </div>
             </div>
@@ -919,7 +1000,7 @@ export default function Dashboard({
             </span>
           </div>
           <span className="text-[11px] text-slate-500 font-medium">
-            Régimen: <strong className="text-slate-700">{currentEmpresa.regimen}</strong>
+            Régimen: <strong className="text-slate-700">{regimenDisplay}</strong>
           </span>
         </div>
       </div>
@@ -1042,28 +1123,44 @@ export default function Dashboard({
               <Building2 className="w-4 h-4" />
             </div>
           </div>
-          <p className="text-xl font-black text-slate-900 mt-2 truncate">{currentEmpresa.regimen}</p>
+          <p className="text-xl font-black text-slate-900 mt-2 truncate">{regimenDisplay}</p>
           <p className="text-xs text-slate-400 mt-1">
             Configurado en perfil fiscal de <strong className="text-slate-700">{currentEmpresa.nombre.split(' ')[0]}</strong>
           </p>
         </div>
 
-        <div className="bg-gradient-to-br from-white to-rose-50/40 p-5 rounded-2xl border border-rose-200 shadow-sm">
+        <div className={`p-5 rounded-2xl border shadow-sm ${
+          !esGeneral && !esPequeno
+            ? 'bg-gradient-to-br from-white to-amber-50/50 border-amber-200'
+            : esPequeno
+            ? 'bg-gradient-to-br from-white to-purple-50/40 border-purple-200'
+            : 'bg-gradient-to-br from-white to-rose-50/40 border-rose-200'
+        }`}>
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-rose-700 uppercase tracking-wider">Impuesto Neto SAT a Enterar</span>
-            <div className="w-8 h-8 rounded-xl bg-rose-100 text-rose-700 flex items-center justify-center">
+            <span className={`text-xs font-bold uppercase tracking-wider ${
+              !esGeneral && !esPequeno ? 'text-amber-800' : esPequeno ? 'text-purple-700' : 'text-rose-700'
+            }`}>
+              {!esGeneral && !esPequeno ? 'Régimen Informal (Sin IVA)' : esPequeno ? 'Monotributo SAT (5%)' : 'Impuesto Neto SAT a Enterar'}
+            </span>
+            <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${
+              !esGeneral && !esPequeno ? 'bg-amber-100 text-amber-700' : esPequeno ? 'bg-purple-100 text-purple-700' : 'bg-rose-100 text-rose-700'
+            }`}>
               <Calculator className="w-4 h-4" />
             </div>
           </div>
-          <p className="text-2xl font-black text-rose-700 mt-2">
+          <p className={`text-2xl font-black mt-2 ${
+            !esGeneral && !esPequeno ? 'text-amber-900' : esPequeno ? 'text-purple-700' : 'text-rose-700'
+          }`}>
             Q {impuestoNetoSat.toLocaleString('es-GT', { minimumFractionDigits: 2 })}
           </p>
-          <p className="text-xs text-rose-600/90 mt-1">
+          <p className={`text-xs mt-1 ${
+            !esGeneral && !esPequeno ? 'text-amber-700 font-medium' : esPequeno ? 'text-purple-600/90' : 'text-rose-600/90'
+          }`}>
             {esGeneral 
               ? `12% Débito (Q ${(debitoFiscal).toLocaleString('es-GT', { minimumFractionDigits: 2 })}) - Retenciones (Q ${(retencionesIva).toLocaleString('es-GT', { minimumFractionDigits: 2 })})` 
               : esPequeno
               ? `5% Pequeño Contribuyente (Q ${debitoFiscal.toLocaleString('es-GT', { minimumFractionDigits: 2 })})`
-              : 'Régimen Informal (Exento de IVA / Sin Débito SAT)'
+              : 'Negocio Informal • 0% IVA (Sin obligación de Débito Fiscal SAT)'
             }
           </p>
         </div>

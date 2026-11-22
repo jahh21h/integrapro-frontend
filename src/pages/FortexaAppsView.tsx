@@ -573,8 +573,7 @@ export default function FortexaAppsView({
       setLicenses(prev => prev.map(l => l.id === lic.id ? { ...l, expires_at: newExpiresAt, status: 'active' } : l));
       showToast(`🔄 ¡Licencia de Quantum (${lic.email}) renovada +${daysToAdd} días hasta ${newDateStr} en MySQL!`);
     } catch {
-      setLicenses(prev => prev.map(l => l.id === lic.id ? { ...l, expires_at: newExpiresAt, status: 'active' } : l));
-      showToast(`🔄 Licencia renovada localmente a ${newDateStr}`);
+      showToast(`⚠️ ERROR: no se pudo renovar la licencia en el servidor.`);
     }
   };
 
@@ -585,8 +584,7 @@ export default function FortexaAppsView({
       setLicenses(prev => prev.map(l => l.id === lic.id ? { ...l, hwid: null } : l));
       showToast(`🔓 HWID liberado para ${lic.email}. El cliente puede activar su nueva máquina.`);
     } catch {
-      setLicenses(prev => prev.map(l => l.id === lic.id ? { ...l, hwid: null } : l));
-      showToast(`🔓 HWID liberado localmente.`);
+      showToast(`⚠️ ERROR: no se pudo liberar el HWID en el servidor.`);
     }
   };
 

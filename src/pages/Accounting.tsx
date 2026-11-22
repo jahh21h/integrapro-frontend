@@ -26,16 +26,16 @@ interface AccountingProps {
 export default function Accounting({ currentEmpresa }: AccountingProps = {}) {
   const empresaActiva: EmpresaSaaS = currentEmpresa || {
     id: 1,
-    nombre: 'Corporación Comercial IntegraPro S.A.',
-    razon_social: 'IntegraPro Soluciones Empresariales Sociedad Anónima',
-    nit: '10429182-3',
+    nombre: 'Fashion Styles',
+    razon_social: 'Fashion Styles S.A.',
+    nit: '6322012-1',
     pais: 'GT',
-    regimen: 'General (IVA 12%)',
-    plan: 'standard',
+    regimen: 'Exento / Informal',
+    plan: 'enterprise',
     activa: true,
-    telefono: '+502 2334-9000',
-    email: 'facturacion@integrapro.com',
-    direccion: '7a Avenida 12-45 Zona 9, Guatemala'
+    telefono: '59440491',
+    email: 'integrapro@admin.com',
+    direccion: 'Ciudad de Guatemala'
   };
 
   const tipoRegimen = getTipoRegimenSAT(empresaActiva.regimen);

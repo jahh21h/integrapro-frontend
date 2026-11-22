@@ -14,10 +14,14 @@ import {
   ChevronLeft,
   ChevronRight
 } from 'lucide-react';
-import { Cliente } from '../types';
-import { REAL_CLIENTS } from '../data/realClients';
+import { Cliente, EmpresaSaaS } from '../types';
+import { getTenantClients } from '../data/realClients';
 
-export default function Clients() {
+interface ClientsProps {
+  currentEmpresa?: EmpresaSaaS;
+}
+
+export default function Clients({ currentEmpresa }: ClientsProps) {
   const [activeTab, setActiveTab] = useState<'directorio' | 'cxc'>('directorio');
   const [searchTerm, setSearchTerm] = useState('');
   const [showNewClienteModal, setShowNewClienteModal] = useState(false);
@@ -25,13 +29,15 @@ export default function Clients() {
   const [selectedCliente, setSelectedCliente] = useState<Cliente | null>(null);
   const [montoCobro, setMontoCobro] = useState('');
 
-  // Clientes reales sincronizados con el modelo Cliente y la base de datos de producción
-  const [clientes, setClientes] = useState<Cliente[]>(REAL_CLIENTS);
+  const effectiveEmpresaId = Number(currentEmpresa?.id ?? localStorage.getItem('integrapro_active_empresa_id') ?? 0);
 
-  // Sincronización automática
+  // Clientes aislados por tenant
+  const [clientes, setClientes] = useState<Cliente[]>(() => getTenantClients(effectiveEmpresaId));
+
+  // Sincronización automática al cambiar de empresa
   useEffect(() => {
-    setClientes(REAL_CLIENTS);
-  }, []);
+    setClientes(getTenantClients(effectiveEmpresaId));
+  }, [effectiveEmpresaId]);
 
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 25;

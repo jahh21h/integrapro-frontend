@@ -31,11 +31,13 @@ import {
   Flame,
   Lock,
   ExternalLink,
-  X
+  X,
+  LogOut
 } from 'lucide-react';
 import { REAL_SALES } from '../data/realSales';
 import { REAL_CLIENTS } from '../data/realClients';
 import { useTimeFormat } from '../context/TimeFormatContext';
+import { formatRegimenLabel, getTipoRegimenSAT } from '../utils/tax';
 
 interface LaunchpadHubProps {
   user: User;
@@ -43,6 +45,7 @@ interface LaunchpadHubProps {
   onNavigate: (tab: NavigationTab) => void;
   empresas?: EmpresaSaaS[];
   onSelectEmpresa?: (id: number) => void;
+  onLogout?: () => void;
 }
 
 interface HubCard {
@@ -591,21 +594,29 @@ export default function LaunchpadHub({
   selectedEmpresa,
   onNavigate,
   empresas,
-  onSelectEmpresa
+  onSelectEmpresa,
+  onLogout
 }: LaunchpadHubProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [activeCategory, setActiveCategory] = useState<'all' | 'operaciones' | 'finanzas' | 'gestion'>('all');
   const [selectedUpgradeCard, setSelectedUpgradeCard] = useState<HubCard | null>(null);
   const { formatTime } = useTimeFormat();
 
-  const isFortexa = (selectedEmpresa?.id ?? user.empresa_id) === 22;
+  const currentEmpId = Number(selectedEmpresa?.id ?? user.empresa_id);
+  const isFortexa = currentEmpId === 22;
+  const isFashionStyles = currentEmpId === 1;
+  const isDemoCompany = currentEmpId === 25;
   const isLiveOnlyCompany = !isFortexa && (
     selectedEmpresa?.plan === 'live_express' ||
     selectedEmpresa?.modules?.live_only === true ||
     selectedEmpresa?.id === 99 ||
     (selectedEmpresa?.modules?.pos === false && selectedEmpresa?.modules?.live_sales === true)
   );
-  const isInformal = isLiveOnlyCompany;
+  const rawReg = selectedEmpresa?.regimen || user.empresa_regimen || '';
+  const effectiveRegimen = formatRegimenLabel(rawReg);
+  const tipoRegimen = getTipoRegimenSAT(rawReg);
+  const isPequeno = tipoRegimen === 'pequeno_contribuyente';
+  const isInformal = tipoRegimen === 'exento' || isLiveOnlyCompany;
 
   // 1. Datos Operativos Dinámicos de Últimas Ventas
   const recentSales = useMemo(() => {
@@ -618,6 +629,16 @@ export default function LaunchpadHub({
         { id: 'LIC-QTM-205', cliente: 'Farmacia & Droguería Central', total: 'Q 999.00', metodo: 'Transferencia', hora: '08:10', status: 'Completado', desc: 'Quantum Store Red 5 PCs' },
       ];
     }
+    if (isDemoCompany) {
+      return [
+        { id: 'TKT-DEMO-001', cliente: 'Cliente Mostrador Demo', total: 'Q 450.00', metodo: 'Tarjeta POS', hora: '10:30', status: 'Completado', desc: 'Smart Watch Pro Serie 8 Waterproof' },
+        { id: 'TKT-DEMO-002', cliente: 'Distribuidora Central Demo', total: 'Q 220.00', metodo: 'Efectivo', hora: '09:45', status: 'Completado', desc: 'Audífonos Inalámbricos TWS Pro' },
+        { id: 'TKT-DEMO-003', cliente: 'Consumidor Final', total: 'Q 110.00', metodo: 'Transferencia', hora: '09:10', status: 'Completado', desc: 'Termo Inteligente Acero LED 500ml' },
+      ];
+    }
+    if (!isFashionStyles) {
+      return [];
+    }
     return REAL_SALES.slice(0, 5).map(s => ({
       id: s.id,
       cliente: s.cliente,
@@ -627,7 +648,7 @@ export default function LaunchpadHub({
       status: s.estado === 'Completada' ? 'Completado' : s.estado === 'Crédito' ? 'Pendiente' : 'Anulado',
       desc: s.productos.map(p => p.nombre).slice(0, 2).join(', ')
     }));
-  }, [isFortexa]);
+  }, [isFortexa, isDemoCompany, isFashionStyles]);
 
   // 2. Datos Operativos de Cuentas por Cobrar & Vencimientos
   const { receivables, totalCartera } = useMemo(() => {
@@ -640,6 +661,16 @@ export default function LaunchpadHub({
       ];
       return { receivables: recs, totalCartera: 34100 };
     }
+    if (isDemoCompany) {
+      const recs = [
+        { id: 'FAC-DEMO-101', cliente: 'Distribuidora Central Demo', saldo: 1850, fecha_venc: '25/11/2026', dias: 'En 5 días', total: 3500, urgencia: 'normal' as const },
+        { id: 'FAC-DEMO-102', cliente: 'Tech Store Guatemala Demo', saldo: 3200, fecha_venc: '22/11/2026', dias: 'En 2 días', total: 3200, urgencia: 'alerta' as const }
+      ];
+      return { receivables: recs, totalCartera: 5050 };
+    }
+    if (!isFashionStyles) {
+      return { receivables: [], totalCartera: 0 };
+    }
     const recs = REAL_CLIENTS.filter(c => c.saldo_actual > 0).slice(0, 5).map((c, i) => ({
       id: `CLI-${c.id_cliente}`,
       cliente: c.nombre_completo,
@@ -651,7 +682,7 @@ export default function LaunchpadHub({
     }));
     const total = REAL_CLIENTS.reduce((acc, c) => acc + c.saldo_actual, 0);
     return { receivables: recs, totalCartera: total };
-  }, [isFortexa]);
+  }, [isFortexa, isDemoCompany, isFashionStyles]);
 
   // 3. Datos de Demanda en Pre-Ventas & Déficit de Stock
   const demandProducts = useMemo(() => {
@@ -662,12 +693,22 @@ export default function LaunchpadHub({
         { id: 3, nombre: 'Gateway OBD2 Telemetría Pro', sku: 'GTW-OBD2-PRO', solicitado: 15, stock: 2, deficit: 13, clientes: ['Logística Central'] },
       ];
     }
+    if (isDemoCompany) {
+      return [
+        { id: 1, nombre: 'Smart Watch Pro Serie 8 Waterproof', sku: 'WCH-DEMO-01', solicitado: 15, stock: 3, deficit: 12, clientes: ['Cliente Demo Corporativo'] },
+        { id: 2, nombre: 'Audífonos Inalámbricos TWS Pro', sku: 'TWS-PRO-02', solicitado: 20, stock: 4, deficit: 16, clientes: ['Distribuidora Central Demo'] },
+        { id: 3, nombre: 'Termo Inteligente Acero LED 500ml', sku: 'TRM-LED-03', solicitado: 10, stock: 2, deficit: 8, clientes: ['Tech Store Demo'] }
+      ];
+    }
+    if (!isFashionStyles) {
+      return [];
+    }
     return [
-      { id: 1, nombre: 'Vestido de Gala Elegante Noche', sku: 'VES-GLAM-01', solicitado: 20, stock: 3, deficit: 17, clientes: ['Boutique Glamour', 'Cliente VIP'] },
-      { id: 2, nombre: 'Blusa Seda Premium Manga Larga', sku: 'BLU-SEDA-04', solicitado: 25, stock: 5, deficit: 20, clientes: ['Moda Express'] },
-      { id: 3, nombre: 'Pantalón Casual Slim Fit Dama', sku: 'PAN-SLIM-02', solicitado: 18, stock: 4, deficit: 14, clientes: ['Tienda La Elegancia'] },
+      { id: 4155, nombre: 'Serum Facial & Contorno de Ojos', sku: 'CDD-0000003', solicitado: 25, stock: 1, deficit: 24, clientes: ['Clientas Boutique VIP', 'Venta en Tienda'] },
+      { id: 2908, nombre: 'Juego Completo Depilación & Exfoliante', sku: 'GNR-0000446', solicitado: 30, stock: 10, deficit: 20, clientes: ['Clientas Frecuentes', 'Venta Mostrador'] },
+      { id: 2841, nombre: 'Aceite Labial Hidratante Gloss', sku: 'BLL-0000064', solicitado: 25, stock: 6, deficit: 19, clientes: ['Compradoras Live', 'Venta en Caja'] },
     ];
-  }, [isFortexa]);
+  }, [isFortexa, isDemoCompany, isFashionStyles]);
 
   // Definición de Tarjetas adaptadas con sus Widgets
   const allCards: HubCard[] = useMemo(() => {
@@ -1014,10 +1055,24 @@ export default function LaunchpadHub({
               <span>Centro de Operaciones • Bento Grid 3D</span>
             </div>
             
-            <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-white flex items-center gap-3">
-              <span>Hola, {user.name.split(' ')[0]}</span>
-              <span className="text-xl">👋</span>
-            </h1>
+            <div className="flex items-center justify-between gap-3 flex-wrap sm:flex-nowrap">
+              <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-white flex items-center gap-2.5">
+                <span>Hola, {user.name.split(' ')[0]}</span>
+                <span className="text-xl">👋</span>
+              </h1>
+
+              {onLogout && (
+                <button
+                  type="button"
+                  onClick={onLogout}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer shrink-0"
+                  title="Cerrar sesión en este dispositivo"
+                >
+                  <LogOut className="w-3.5 h-3.5 text-rose-400" />
+                  <span>Cerrar Sesión</span>
+                </button>
+              )}
+            </div>
             
             <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
               {isFortexa 
@@ -1027,8 +1082,8 @@ export default function LaunchpadHub({
                 : 'Punto de venta y gestión comercial para retail, catálogo de productos y facturación en caja.'}
             </p>
 
-            {/* Selector de Empresa Rápido en el Hero */}
-            {empresas && onSelectEmpresa && (
+            {/* Indicador o Selector de Empresa en el Hero */}
+            {empresas && onSelectEmpresa && empresas.length > 1 && (user.role === 'SuperAdmin' || user.email === 'admin@integrapro.com' || user.email === 'admin@admin.com') ? (
               <div className="pt-2 flex flex-wrap items-center gap-2 text-xs">
                 <span className="text-slate-400 font-medium">Empresa activa:</span>
                 <div className="inline-flex items-center gap-2 px-3 py-1 bg-white/15 hover:bg-white/20 transition-colors rounded-xl border border-white/20 backdrop-blur-sm">
@@ -1045,6 +1100,31 @@ export default function LaunchpadHub({
                     ))}
                   </select>
                 </div>
+
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-semibold text-[11px]">
+                  <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                  {selectedEmpresa?.nombre === 'Fortexa Technologies' ? 'Modo B2B Tech' : 'Modo Tienda POS'}
+                </span>
+              </div>
+            ) : (
+              <div className="pt-2 flex flex-wrap items-center gap-2 text-xs">
+                <span className="text-slate-400 font-medium">Empresa activa:</span>
+                <div className="inline-flex items-center gap-2 px-3 py-1 bg-white/15 rounded-xl border border-white/20 backdrop-blur-sm">
+                  <Building2 className="w-3.5 h-3.5 text-indigo-300" />
+                  <span className="text-white font-bold">
+                    {selectedEmpresa?.nombre || user.empresa_nombre}
+                  </span>
+                  <span className="text-[11px] text-slate-300 font-normal">
+                    ({effectiveRegimen})
+                  </span>
+                </div>
+
+                {isDemoCompany && (
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-indigo-500/30 text-indigo-200 border border-indigo-400/40 font-bold text-[11px]">
+                    <Sparkles className="w-3 h-3 text-indigo-300" />
+                    Entorno Demo Aislado
+                  </span>
+                )}
 
                 <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-semibold text-[11px]">
                   <CheckCircle2 className="w-3 h-3 text-emerald-400" />
@@ -1071,23 +1151,27 @@ export default function LaunchpadHub({
 
             <div className="bg-white/10 backdrop-blur-md rounded-2xl p-3 border border-white/10">
               <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">
-                {isFortexa ? 'ARR Recurrente' : 'Facturas FEL'}
+                {isFortexa ? 'ARR Recurrente' : isInformal ? 'Comprobantes' : 'Facturas FEL'}
               </span>
               <span className="text-base sm:text-lg font-black text-white block mt-0.5">
-                {isFortexa ? 'Q 24,500' : '18 emitidas'}
+                {isFortexa ? 'Q 24,500' : isFashionStyles ? (isInformal ? '951 emitidos' : '951 emitidas') : '3 emitidas'}
               </span>
               <span className="text-[10px] text-indigo-300 font-medium block mt-0.5">
-                {isFortexa ? 'Anualizado' : 'Hoy en línea'}
+                {isFortexa ? 'Anualizado' : isFashionStyles ? 'Q 179.4k facturados' : 'Modo Demo'}
               </span>
             </div>
 
             <div className="col-span-2 sm:col-span-1 bg-white/10 backdrop-blur-md rounded-2xl p-3 border border-white/10">
-              <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">Servicio SAT</span>
+              <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">
+                {isInformal ? 'Régimen Fiscal' : isPequeno ? 'Régimen Fiscal' : 'Servicio SAT'}
+              </span>
               <span className="text-base sm:text-lg font-black text-emerald-400 block mt-0.5 flex items-center gap-1.5">
                 <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                Online
+                {isInformal ? 'Exento / Informal' : isPequeno ? 'Pequeño Contribuyente' : 'Online FEL (12%)'}
               </span>
-              <span className="text-[10px] text-slate-300 font-medium block mt-0.5">DTE Infile GT</span>
+              <span className="text-[10px] text-slate-300 font-medium block mt-0.5">
+                {isInformal ? '0% IVA (Negocio no factura)' : isPequeno ? '5% Monotributo SAT' : 'DTE Infile GT'}
+              </span>
             </div>
           </div>
         </div>

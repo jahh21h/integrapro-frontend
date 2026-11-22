@@ -27,12 +27,14 @@ import {
   Video
 } from 'lucide-react';
 import { useTimeFormat } from '../context/TimeFormatContext';
+import { getRegimenBadge } from '../utils/tax';
 
 interface NavbarProps {
   user: User;
   onLogout: () => void;
   onOpenCommandPalette?: () => void;
   empresas?: EmpresaSaaS[];
+  selectedEmpresa?: EmpresaSaaS;
   selectedEmpresaId?: number;
   onSelectEmpresa?: (id: number) => void;
   activeTab?: NavigationTab;
@@ -47,6 +49,7 @@ export default function Navbar({
   onLogout, 
   onOpenCommandPalette,
   empresas,
+  selectedEmpresa,
   selectedEmpresaId,
   onSelectEmpresa,
   activeTab = 'hub',
@@ -59,6 +62,11 @@ export default function Navbar({
   const [appSwitcherOpen, setAppSwitcherOpen] = useState(false);
   const switcherRef = useRef<HTMLDivElement>(null);
   const { timeFormat, toggleTimeFormat, formatTime } = useTimeFormat();
+
+  const currentEmpId = Number(selectedEmpresaId ?? selectedEmpresa?.id ?? user.empresa_id);
+  const currentEmpObj = empresas?.find(e => Number(e.id) === currentEmpId) || selectedEmpresa;
+  const rawReg = currentEmpObj?.regimen || user.empresa_regimen || '';
+  const { label: displayRegimenLabel, badgeClass: displayRegimenBadgeClass } = getRegimenBadge(rawReg);
 
   useEffect(() => {
     const timer = setInterval(() => setNavTime(new Date()), 1000);
@@ -108,7 +116,7 @@ export default function Navbar({
   ];
 
   return (
-    <header className="h-16 bg-white border-b border-slate-200/80 sticky top-0 z-30 px-3 sm:px-6 flex items-center justify-between gap-3 shadow-xs">
+    <header className="h-16 bg-white border-b border-slate-200/80 sticky top-0 z-30 px-2.5 sm:px-6 flex items-center justify-between gap-2 sm:gap-3 shadow-xs">
       {/* Izquierda: Botón de Regreso a Menú Principal / App Switcher / Brand */}
       <div className="flex items-center gap-2 sm:gap-3 shrink-0">
         {/* Toggle para Drawer Lateral Opcional */}
@@ -230,15 +238,15 @@ export default function Navbar({
       </div>
 
       {/* Derecha: Empresa, Sucursal, Notificaciones, Perfil */}
-      <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+      <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
         {/* Selector de Empresa y Régimen Activo */}
-        {empresas && onSelectEmpresa && (
-          <div className="flex items-center gap-1.5 px-2.5 py-1 bg-slate-50 border border-slate-200/80 rounded-xl text-xs">
+        {empresas && onSelectEmpresa && empresas.length > 1 && (user.role === 'SuperAdmin' || user.role === 'Administrador' || user.email === 'admin@integrapro.com' || user.email === 'admin@admin.com' || user.email === 'jahh21.jh@gmail.com') ? (
+          <div className="flex items-center gap-1 sm:gap-1.5 px-2 sm:px-2.5 py-1 bg-slate-50 border border-slate-200/80 rounded-xl text-xs">
             <Building2 className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
             <select
-              value={selectedEmpresaId || user.empresa_id}
+              value={currentEmpId}
               onChange={(e) => onSelectEmpresa(Number(e.target.value))}
-              className="bg-transparent font-bold text-slate-800 focus:outline-none cursor-pointer max-w-[130px] sm:max-w-[180px] truncate"
+              className="bg-transparent font-bold text-slate-800 focus:outline-none cursor-pointer max-w-[95px] xs:max-w-[130px] sm:max-w-[180px] truncate text-[11px] sm:text-xs"
               title="Cambiar empresa asignada (Multi-Tenancy)"
             >
               {empresas.map((emp) => (
@@ -247,18 +255,21 @@ export default function Navbar({
                 </option>
               ))}
             </select>
-            <span className={`hidden xl:inline-block text-[10px] font-black px-2 py-0.5 rounded-full border shrink-0 ${
-              (user.empresa_regimen || '').toLowerCase().includes('peque') || (user.empresa_regimen || '').includes('5%')
-                ? 'bg-purple-50 text-purple-800 border-purple-200'
-                : (user.empresa_regimen || '').toLowerCase().includes('informal') || (user.empresa_regimen || '').toLowerCase().includes('exento')
-                ? 'bg-amber-50 text-amber-800 border-amber-200'
-                : 'bg-emerald-50 text-emerald-800 border-emerald-200'
-            }`}>
-              {(user.empresa_regimen || '').toLowerCase().includes('peque') || (user.empresa_regimen || '').includes('5%')
-                ? 'Pequeño Contribuyente (5%)'
-                : (user.empresa_regimen || '').toLowerCase().includes('informal') || (user.empresa_regimen || '').toLowerCase().includes('exento')
-                ? 'Informal / Exento (0% IVA)'
-                : 'General (IVA 12%)'}
+            <span className={`hidden sm:inline-block text-[10px] font-black px-2 py-0.5 rounded-full border shrink-0 ${displayRegimenBadgeClass}`}>
+              {displayRegimenLabel}
+            </span>
+          </div>
+        ) : (
+          <div className="flex items-center gap-1 sm:gap-1.5 px-2 sm:px-2.5 py-1 bg-slate-50 border border-slate-200/80 rounded-xl text-xs">
+            <Building2 className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+            <span 
+              className="font-bold text-slate-800 max-w-[95px] xs:max-w-[130px] sm:max-w-[180px] truncate text-[11px] sm:text-xs"
+              title={currentEmpObj?.nombre || user.empresa_nombre}
+            >
+              {currentEmpObj?.nombre || user.empresa_nombre}
+            </span>
+            <span className={`hidden sm:inline-block text-[10px] font-black px-2 py-0.5 rounded-full border shrink-0 ${displayRegimenBadgeClass}`}>
+              {displayRegimenLabel}
             </span>
           </div>
         )}
@@ -268,7 +279,7 @@ export default function Navbar({
           <button
             type="button"
             onClick={onEnterLiveMode}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-rose-500 via-pink-600 to-purple-600 hover:from-rose-600 hover:to-purple-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs hover:shadow-md cursor-pointer animate-in fade-in"
+            className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 bg-gradient-to-r from-rose-500 via-pink-600 to-purple-600 hover:from-rose-600 hover:to-purple-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs hover:shadow-md cursor-pointer animate-in fade-in"
             title="Alternar al entorno exclusivo de venta por TikTok Live (sin módulos del ERP)"
           >
             <Video className="w-3.5 h-3.5 animate-pulse text-white" />
@@ -298,10 +309,10 @@ export default function Navbar({
           </span>
         </button>
 
-        {/* Campana de Notificaciones con Badge */}
+        {/* Campana de Notificaciones con Badge (oculta en móvil para dar espacio al botón Salir) */}
         <button 
           type="button" 
-          className="relative p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition-colors"
+          className="hidden sm:block relative p-1.5 sm:p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition-colors shrink-0"
           title="Notificaciones"
         >
           <Bell className="w-4 h-4" />
@@ -312,8 +323,12 @@ export default function Navbar({
         <div className="h-6 w-px bg-slate-200 hidden sm:block" />
 
         {/* Usuario y Rol */}
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-indigo-600 to-indigo-500 text-white flex items-center justify-center font-bold text-xs shadow-xs">
+        <div 
+          onClick={onLogout}
+          className="flex items-center gap-2 cursor-pointer shrink-0"
+          title="Usuario actual. Toca para cerrar sesión"
+        >
+          <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-gradient-to-tr from-indigo-600 to-indigo-500 text-white flex items-center justify-center font-bold text-[11px] sm:text-xs shadow-xs">
             {user.name.slice(0, 2).toUpperCase()}
           </div>
           <div className="hidden xl:block text-left">
@@ -327,14 +342,15 @@ export default function Navbar({
           </div>
         </div>
 
-        {/* Botón Salir */}
+        {/* Botón Salir Destacado y Visible en cualquier ancho */}
         <button
           type="button"
           onClick={onLogout}
-          className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-colors"
+          className="flex items-center gap-1 px-2.5 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm shrink-0 cursor-pointer"
           title="Cerrar Sesión"
         >
-          <LogOut className="w-4 h-4" />
+          <LogOut className="w-3.5 h-3.5 text-white" />
+          <span className="text-[11px] sm:text-xs font-bold">Salir</span>
         </button>
       </div>
     </header>

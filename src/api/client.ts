@@ -17,8 +17,10 @@ apiClient.interceptors.request.use((config) => {
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
-  const activeEmpresaId = localStorage.getItem('integrapro_active_empresa_id') || '1';
-  config.headers['X-Empresa-ID'] = activeEmpresaId;
+  const activeEmpresaId = localStorage.getItem('integrapro_active_empresa_id');
+  if (activeEmpresaId) {
+    config.headers['X-Empresa-ID'] = activeEmpresaId;
+  }
   return config;
 }, (error) => {
   return Promise.reject(error);

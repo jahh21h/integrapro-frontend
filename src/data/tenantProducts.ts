@@ -276,8 +276,110 @@ export const TRANSPORTES_HERRERA_CATEGORIES = [
   'Frenos & Suspensión'
 ];
 
+export const DEMO_QA_PRODUCTS: RealProductItem[] = [
+  {
+    id: 8001,
+    sku: 'DEMO-SMART-01',
+    codigoBarras: '740200080011',
+    nombre: 'Smart Watch Pro Serie 8 (Edición Demo)',
+    categoria: 'Tecnología & Gadgets',
+    proveedor: 'Distribuidora Global Tech S.A.',
+    precioCompra: 140.00,
+    precioVenta: 295.00,
+    stockTotal: 45,
+    stockMinimo: 10,
+    stockPorSucursal: { central: 25, norte: 10, sur: 10 },
+    imagen: 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=400&auto=format&fit=crop&q=80'
+  },
+  {
+    id: 8002,
+    sku: 'DEMO-TWS-02',
+    codigoBarras: '740200080028',
+    nombre: 'Audífonos Inalámbricos Bluetooth Bass Pro',
+    categoria: 'Tecnología & Gadgets',
+    proveedor: 'Distribuidora Global Tech S.A.',
+    precioCompra: 65.00,
+    precioVenta: 165.00,
+    stockTotal: 60,
+    stockMinimo: 15,
+    stockPorSucursal: { central: 30, norte: 15, sur: 15 },
+    imagen: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=400&auto=format&fit=crop&q=80'
+  },
+  {
+    id: 8003,
+    sku: 'DEMO-TERMO-03',
+    codigoBarras: '740200080035',
+    nombre: 'Termo Inteligente Acero Inox Sensor LED 500ml',
+    categoria: 'Hogar & Oficina',
+    proveedor: 'Importadora Moderna de Guatemala',
+    precioCompra: 35.00,
+    precioVenta: 85.00,
+    stockTotal: 50,
+    stockMinimo: 12,
+    stockPorSucursal: { central: 30, norte: 10, sur: 10 },
+    imagen: 'https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd?w=400&auto=format&fit=crop&q=80'
+  },
+  {
+    id: 8004,
+    sku: 'DEMO-MOCHILA-04',
+    codigoBarras: '740200080042',
+    nombre: 'Mochila Ejecutiva Porta-Laptop Impermeable USB',
+    categoria: 'Accesorios & Moda',
+    proveedor: 'Importadora Moderna de Guatemala',
+    precioCompra: 75.00,
+    precioVenta: 175.00,
+    stockTotal: 30,
+    stockMinimo: 8,
+    stockPorSucursal: { central: 15, norte: 10, sur: 5 },
+    imagen: 'https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=400&auto=format&fit=crop&q=80'
+  },
+  {
+    id: 8005,
+    sku: 'DEMO-LAMPARA-05',
+    codigoBarras: '740200080059',
+    nombre: 'Lámpara de Escritorio LED Táctil Recargable',
+    categoria: 'Hogar & Oficina',
+    proveedor: 'Comercializadora Central de Iluminación',
+    precioCompra: 45.00,
+    precioVenta: 110.00,
+    stockTotal: 35,
+    stockMinimo: 10,
+    stockPorSucursal: { central: 20, norte: 10, sur: 5 },
+    imagen: 'https://images.unsplash.com/photo-1507473885765-e6ed057f782c?w=400&auto=format&fit=crop&q=80'
+  },
+  {
+    id: 8006,
+    sku: 'DEMO-KEYBOARD-06',
+    codigoBarras: '740200080066',
+    nombre: 'Teclado Mecánico Retroiluminado RGB Switch Blue',
+    categoria: 'Tecnología & Gadgets',
+    proveedor: 'Distribuidora Global Tech S.A.',
+    precioCompra: 130.00,
+    precioVenta: 275.00,
+    stockTotal: 25,
+    stockMinimo: 5,
+    stockPorSucursal: { central: 15, norte: 5, sur: 5 },
+    imagen: 'https://images.unsplash.com/photo-1587829741301-dc798b83add3?w=400&auto=format&fit=crop&q=80'
+  }
+];
+
+export const DEMO_QA_CATEGORIES = [
+  'Todas',
+  'Tecnología & Gadgets',
+  'Hogar & Oficina',
+  'Accesorios & Moda'
+];
+
 export function getTenantCatalog(empresaId?: number | string): TenantProductCatalog {
   const id = Number(empresaId);
+
+  // Empresa Demo QA / Demostraciones a Clientes (Tenant 25)
+  if (id === 25) {
+    return {
+      products: DEMO_QA_PRODUCTS,
+      categories: DEMO_QA_CATEGORIES
+    };
+  }
 
   // Fortexa Technologies (Tenant 22)
   if (id === 22) {
@@ -326,9 +428,17 @@ export function getTenantCatalog(empresaId?: number | string): TenantProductCata
     };
   }
 
-  // Por defecto (Empresa 1 - Fashion Styles y otras tiendas de retail / boutique)
+  // Empresa 1 (Fashion Styles) - Exclusivo de Fashion Styles
+  if (id === 1) {
+    return {
+      products: REAL_PRODUCTS,
+      categories: ['Todas', ...REAL_CATEGORIES]
+    };
+  }
+
+  // Por defecto para cualquier otra empresa nueva o sin catálogo local: inventario vacío aislado
   return {
-    products: REAL_PRODUCTS,
-    categories: ['Todas', ...REAL_CATEGORIES]
+    products: [],
+    categories: ['Todas']
   };
 }

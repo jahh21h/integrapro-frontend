@@ -22,7 +22,8 @@ import {
   X,
   Video,
   ShieldCheck,
-  ExternalLink
+  ExternalLink,
+  LogOut
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -34,6 +35,7 @@ interface SidebarProps {
   currentEmpresaId?: number;
   currentEmpresa?: EmpresaSaaS;
   onClose?: () => void;
+  onLogout?: () => void;
 }
 
 interface MenuItem {
@@ -59,7 +61,8 @@ export default function Sidebar({
   onApplyUpdate,
   currentEmpresaId,
   currentEmpresa,
-  onClose
+  onClose,
+  onLogout
 }: SidebarProps) {
   const [isCollapsed, setIsCollapsed] = useState<boolean>(() => {
     try {
@@ -498,6 +501,21 @@ export default function Sidebar({
             </div>
           )}
         </div>
+
+        {/* Botón Cerrar Sesión en Drawer */}
+        {onLogout && (
+          <button
+            type="button"
+            onClick={onLogout}
+            className={`mt-3 w-full flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 border border-rose-500/30 text-xs font-bold transition-all shadow-sm cursor-pointer ${
+              isCollapsed ? 'p-2' : ''
+            }`}
+            title="Cerrar sesión"
+          >
+            <LogOut className="w-4 h-4 text-rose-400" />
+            {!isCollapsed && <span>Cerrar Sesión</span>}
+          </button>
+        )}
       </div>
     </aside>
   );

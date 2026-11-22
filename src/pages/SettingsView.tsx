@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Building2, 
   Key, 
@@ -64,18 +64,20 @@ interface BoutiqueConfig {
 
 interface SettingsViewProps {
   currentEmpresa?: EmpresaSaaS;
+  empresas?: EmpresaSaaS[];
   onUpdateEmpresa?: (emp: EmpresaSaaS) => void;
+  onSelectEmpresa?: (id: number) => void;
 }
 
-export default function SettingsView({ currentEmpresa, onUpdateEmpresa }: SettingsViewProps = {}) {
+export default function SettingsView({ currentEmpresa, empresas: propEmpresas, onUpdateEmpresa, onSelectEmpresa }: SettingsViewProps = {}) {
   const [activeTab, setActiveTab] = useState<'empresa' | 'moneda' | 'fel' | 'pasarelas' | 'modulos' | 'multiempresa' | 'roles' | 'api' | 'conexiones' | 'token_scraper'>('empresa');
   const [notificationToast, setNotificationToast] = useState<string | null>(null);
   const { timeFormat, setTimeFormat } = useTimeFormat();
 
   const getRegimenKey = (regimenStr: string = '') => {
-    const clean = (regimenStr || '').toLowerCase();
+    const clean = (regimenStr || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
     if (clean.includes('peque') || clean.includes('5%')) return 'pequeno_contribuyente';
-    if (clean.includes('informal') || clean.includes('exento') || clean.includes('no factura')) return 'informal';
+    if (clean.includes('informal') || clean.includes('exento') || clean.includes('no factura') || clean.includes('0%')) return 'informal';
     return 'general';
   };
 
@@ -153,7 +155,7 @@ export default function SettingsView({ currentEmpresa, onUpdateEmpresa }: Settin
       razon_social: boutiqueConfig.nombre,
       nit: companyForm.nit || 'CF',
       pais: 'GT',
-      regimen: 'Exento / Informal',
+      regimen: currentEmpresa?.regimen || 'Exento / Informal',
       plan: 'basic',
       activa: true,
       telefono: boutiqueConfig.whatsapp,
@@ -173,7 +175,7 @@ export default function SettingsView({ currentEmpresa, onUpdateEmpresa }: Settin
       });
       showToast('✅ ¡Datos de tu tienda y cuentas bancarias actualizadas con éxito!');
     } catch {
-      showToast('✅ ¡Datos de tu boutique guardados localmente!');
+      showToast('⚠️ ERROR: los datos NO se guardaron en el servidor. Intenta de nuevo.');
     }
 
     if (onUpdateEmpresa) {
@@ -232,10 +234,13 @@ export default function SettingsView({ currentEmpresa, onUpdateEmpresa }: Settin
     bac_secret_key: '••••••••••••••••'
   });
 
+  const lastFetchedId = useRef<number | null>(null);
+
   // Sincronizar formulario cada vez que cambie la empresa activa en vivo desde el Droplet
   useEffect(() => {
-    const targetId = currentEmpresa?.id || activeEmpresaId;
-    if (targetId) {
+    const targetId = Number(currentEmpresa?.id || activeEmpresaId);
+    if (targetId && targetId !== lastFetchedId.current) {
+      lastFetchedId.current = targetId;
       setActiveEmpresaId(targetId);
       empresaApi.getById(targetId)
         .then((res: any) => {
@@ -247,7 +252,7 @@ export default function SettingsView({ currentEmpresa, onUpdateEmpresa }: Settin
               razon_social: res.razon_social || res.nombre || '',
               nit: res.nit || '',
               pais: res.pais || 'GT',
-              regimen_tributario_gt: res.regimen_tributario || 'general',
+              regimen_tributario_gt: getRegimenKey(res.regimen_tributario),
               telefono: res.telefono || '',
               email: res.email || '',
               direccion: res.direccion || '',
@@ -294,7 +299,7 @@ export default function SettingsView({ currentEmpresa, onUpdateEmpresa }: Settin
           }
         });
     }
-  }, [currentEmpresa, activeEmpresaId]);
+  }, [currentEmpresa?.id, activeEmpresaId]);
 
   // Toggles de Módulos (configuracion.modules en Laravel)
   const [modules, setModules] = useState({
@@ -322,7 +327,7 @@ export default function SettingsView({ currentEmpresa, onUpdateEmpresa }: Settin
   const [deleteConfirmationText, setDeleteConfirmationText] = useState('');
 
   // Directorio de Empresas Multi-Tenant sincronizado con la base de datos real (Fortexa Technologies como Cerebro SaaS)
-  const [empresasList] = useState<EmpresaSaaS[]>([
+  const [empresasList, setEmpresasList] = useState<EmpresaSaaS[]>(propEmpresas || [
     {
       id: 22,
       nombre: 'Fortexa Technologies',
@@ -342,7 +347,7 @@ export default function SettingsView({ currentEmpresa, onUpdateEmpresa }: Settin
       razon_social: 'Fashion Styles S.A.',
       nit: '6322012-1',
       pais: 'GT',
-      regimen: 'Exento / Informal',
+      regimen: 'General (IVA 12%)',
       plan: 'enterprise',
       activa: true,
       telefono: '59440491',
@@ -402,6 +407,12 @@ export default function SettingsView({ currentEmpresa, onUpdateEmpresa }: Settin
       direccion: '10 Avenida 1-46 Zona 2, Guatemala'
     }
   ]);
+
+  useEffect(() => {
+    if (propEmpresas && propEmpresas.length > 0) {
+      setEmpresasList(propEmpresas);
+    }
+  }, [propEmpresas]);
 
   // Gestión de Usuarios del Sistema (Laravel: UserResource / UsuarioResource)
   interface UsuarioItem {
@@ -564,33 +575,32 @@ export default function SettingsView({ currentEmpresa, onUpdateEmpresa }: Settin
     }, 1200);
   };
 
-  // 9. Conexiones Externas a Bases de Datos (Laravel: ConexionExterna & DatabaseSyncService)
-  const [conexiones, setConexiones] = useState<ConexionExterna[]>([
-    {
-      id: 1,
-      id_empresa: 1,
-      nombre: 'Base Remota Sucursal Quetzaltenango',
-      driver: 'mysql',
-      host: '190.85.120.44',
-      port: 3306,
-      database: 'integra_xela_db',
-      username: 'sync_user',
-      activo: true,
-      ultima_sincronizacion: '16/11/2026 18:30:15'
-    },
-    {
-      id: 2,
-      id_empresa: 1,
-      nombre: 'Servidor Central Bodega Escuintla',
-      driver: 'pgsql',
-      host: '10.0.4.15',
-      port: 5432,
-      database: 'bodega_central',
-      username: 'postgres_sync',
-      activo: true,
-      ultima_sincronizacion: '15/11/2026 21:00:00'
+  // 9. Conexiones Externas a Bases de Datos (Laravel: ConexionExterna)
+  const [conexiones, setConexiones] = useState<ConexionExterna[]>([]);
+  const [isLoadingConexiones, setIsLoadingConexiones] = useState<boolean>(false);
+
+  const fetchConexiones = async () => {
+    setIsLoadingConexiones(true);
+    try {
+      const data = await externalConnectionsApi.getAll();
+      const list = Array.isArray(data) ? data : (data?.data ?? []);
+      setConexiones(list.map((c: any) => ({
+        ...c,
+        ultima_sincronizacion: c.ultima_sincronizacion
+          ? new Date(c.ultima_sincronizacion).toLocaleString('es-GT')
+          : null
+      })));
+    } catch (err) {
+      console.warn('Error cargando conexiones externas:', err);
+    } finally {
+      setIsLoadingConexiones(false);
     }
-  ]);
+  };
+
+  useEffect(() => {
+    fetchConexiones();
+  }, []);
+
   const [showNewConnModal, setShowNewConnModal] = useState(false);
   const [testingConnId, setTestingConnId] = useState<number | null>(null);
   const [syncingConnId, setSyncingConnId] = useState<number | null>(null);
@@ -607,10 +617,11 @@ export default function SettingsView({ currentEmpresa, onUpdateEmpresa }: Settin
   const handleTestConnection = async (conn: ConexionExterna) => {
     setTestingConnId(conn.id);
     try {
-      await externalConnectionsApi.testConnection(conn.id);
-      showToast(`✅ Conexión exitosa con ${conn.nombre} (${conn.driver.toUpperCase()})`);
-    } catch {
-      showToast(`✅ Conexión verificada con ${conn.nombre} [Host: ${conn.host}:${conn.port}]`);
+      const res = await externalConnectionsApi.testConnection(conn.id);
+      showToast(`✅ ${res?.message || `Conexión exitosa con ${conn.nombre}`}`);
+    } catch (err: any) {
+      const msg = err?.response?.data?.message;
+      showToast(`❌ ${msg || `No se pudo conectar con ${conn.nombre}`}`);
     } finally {
       setTestingConnId(null);
     }
@@ -619,53 +630,67 @@ export default function SettingsView({ currentEmpresa, onUpdateEmpresa }: Settin
   const handleSyncConnection = async (conn: ConexionExterna) => {
     setSyncingConnId(conn.id);
     try {
-      await externalConnectionsApi.sync(conn.id);
-    } catch {
-      // Mock fallback si backend está fuera de línea
-    }
-    setTimeout(() => {
-      const nowStr = new Date().toLocaleString('es-GT');
-      setConexiones(prev => prev.map(c => c.id === conn.id ? { ...c, ultima_sincronizacion: nowStr } : c));
+      const res = await externalConnectionsApi.sync(conn.id);
+      showToast(`🔄 ${res?.message || 'Sincronización completada.'}`);
+    } catch (err: any) {
+      const msg = err?.response?.data?.message;
+      showToast(`⚠️ ${msg || 'La sincronización no está disponible.'}`);
+    } finally {
       setSyncingConnId(null);
-      showToast(`🔄 Catálogo sincronizado exitosamente desde ${conn.nombre}`);
-    }, 1200);
+    }
   };
 
-  const handleSaveConnection = (e: React.FormEvent) => {
+  const handleSaveConnection = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newConnForm.nombre || !newConnForm.host || !newConnForm.database || !newConnForm.username) {
       showToast('⚠️ Por favor completa todos los campos requeridos');
       return;
     }
-    const created: ConexionExterna = {
-      id: Date.now(),
-      id_empresa: activeEmpresaId,
-      nombre: newConnForm.nombre,
-      driver: newConnForm.driver,
-      host: newConnForm.host,
-      port: Number(newConnForm.port),
-      database: newConnForm.database,
-      username: newConnForm.username,
-      activo: true,
-      ultima_sincronizacion: null
-    };
-    setConexiones(prev => [created, ...prev]);
-    setShowNewConnModal(false);
-    setNewConnForm({
-      nombre: '',
-      driver: 'mysql',
-      host: '',
-      port: 3306,
-      database: '',
-      username: '',
-      password: ''
-    });
-    showToast(`✅ Conexión ${created.nombre} registrada exitosamente.`);
+    try {
+      const res = await externalConnectionsApi.create({
+        nombre: newConnForm.nombre,
+        driver: newConnForm.driver,
+        host: newConnForm.host,
+        port: Number(newConnForm.port),
+        database: newConnForm.database,
+        username: newConnForm.username,
+        password: newConnForm.password || undefined
+      });
+      const created: ConexionExterna = res?.conexion ?? { ...newConnForm, id: Date.now(), id_empresa: activeEmpresaId, activo: true, ultima_sincronizacion: null };
+      setConexiones(prev => [created, ...prev]);
+      setShowNewConnModal(false);
+      setNewConnForm({
+        nombre: '',
+        driver: 'mysql',
+        host: '',
+        port: 3306,
+        database: '',
+        username: '',
+        password: ''
+      });
+      showToast(res?.message || `✅ Conexión ${created.nombre} registrada exitosamente.`);
+    } catch (err: any) {
+      const msg = err?.response?.data?.message || err?.response?.data?.errors
+        ? JSON.stringify(err?.response?.data?.errors)
+        : 'No se pudo registrar la conexión.';
+      showToast(`⚠️ ${msg}`);
+    }
   };
 
-  const handleDeleteConnection = (id: number) => {
-    setConexiones(prev => prev.filter(c => c.id !== id));
-    showToast('🗑️ Conexión externa eliminada.');
+  const handleDeleteConnection = async (id: number) => {
+    const conn = conexiones.find(c => c.id === id);
+    if (!conn) return;
+    if (!window.confirm(`¿Eliminar la conexión "${conn.nombre}" (${conn.host}:${conn.port})? Esta acción no se puede deshacer.`)) {
+      return;
+    }
+    try {
+      const res = await externalConnectionsApi.delete(id);
+      setConexiones(prev => prev.filter(c => c.id !== id));
+      showToast(res?.message || `🗑️ Conexión "${conn.nombre}" eliminada.`);
+    } catch (err: any) {
+      const msg = err?.response?.data?.message;
+      showToast(msg || `No se pudo eliminar la conexión "${conn.nombre}". Intenta de nuevo.`);
+    }
   };
 
   const showToast = (msg: string) => {
@@ -680,10 +705,13 @@ export default function SettingsView({ currentEmpresa, onUpdateEmpresa }: Settin
       ? 'General (IVA 12%)'
       : companyForm.regimen_tributario_gt === 'pequeno_contribuyente'
       ? 'Pequeño Contribuyente (5%)'
-      : 'Exento / Informal';
+      : 'Informal / Exento (0% IVA)';
+
+    const empIdNum = Number(activeEmpresaId || currentEmpresa?.id || 1);
+    lastFetchedId.current = empIdNum;
 
     const updated: EmpresaSaaS = {
-      id: activeEmpresaId,
+      id: empIdNum,
       nombre: companyForm.nombre,
       razon_social: companyForm.razon_social,
       nit: companyForm.nit,
@@ -697,7 +725,7 @@ export default function SettingsView({ currentEmpresa, onUpdateEmpresa }: Settin
     };
 
     try {
-      await empresaApi.update(activeEmpresaId, {
+      await empresaApi.update(empIdNum, {
         nombre: companyForm.nombre,
         razon_social: companyForm.razon_social,
         nit: companyForm.nit,
@@ -740,7 +768,7 @@ export default function SettingsView({ currentEmpresa, onUpdateEmpresa }: Settin
       showToast(`✅ ¡Cambios guardados en vivo en el Droplet! Régimen: ${regimenStr}`);
     } catch (err: any) {
       console.error('Error guardando en droplet:', err);
-      showToast(`⚠️ Guardado localmente (servidor: ${err.message})`);
+      showToast(`⚠️ ERROR: NO se guardó en el servidor (${err?.response?.data?.message || err.message})`);
     }
 
     if (onUpdateEmpresa) {
@@ -751,6 +779,7 @@ export default function SettingsView({ currentEmpresa, onUpdateEmpresa }: Settin
   };
 
   const handleSwitchEmpresa = (emp: EmpresaSaaS) => {
+    lastFetchedId.current = null;
     setActiveEmpresaId(emp.id);
     localStorage.setItem('integrapro_active_empresa_id', emp.id.toString());
     setCompanyForm(prev => ({
@@ -765,7 +794,9 @@ export default function SettingsView({ currentEmpresa, onUpdateEmpresa }: Settin
       direccion: emp.direccion,
       plan_type: emp.plan
     }));
-    if (onUpdateEmpresa) {
+    if (onSelectEmpresa) {
+      onSelectEmpresa(emp.id);
+    } else if (onUpdateEmpresa) {
       onUpdateEmpresa(emp);
     }
     showToast(`🏢 Cambiado a empresa: ${emp.nombre}`);
@@ -2842,7 +2873,9 @@ export default function SettingsView({ currentEmpresa, onUpdateEmpresa }: Settin
           {conexiones.length === 0 && (
             <div className="text-center py-12 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
               <Database className="w-10 h-10 text-slate-300 mx-auto mb-2" />
-              <p className="text-xs font-bold text-slate-700">No hay conexiones externas registradas</p>
+              <p className="text-xs font-bold text-slate-700">
+                {isLoadingConexiones ? 'Cargando conexiones...' : 'No hay conexiones externas registradas'}
+              </p>
               <p className="text-[11px] text-slate-400 mt-0.5">Haga clic en "+ Nueva Conexión" para integrar una base de datos remota.</p>
             </div>
           )}

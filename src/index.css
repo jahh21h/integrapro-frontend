@@ -6,6 +6,25 @@
   body {
     font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
   }
+
+  input, textarea, select {
+    color: #0f172a;
+  }
+
+  input::placeholder, textarea::placeholder {
+    color: #64748b;
+    opacity: 1;
+  }
+}
+
+/* Inputs en tema oscuro: el autollenado de Chrome mantiene texto blanco y fondo oscuro */
+.autofill-dark:-webkit-autofill,
+.autofill-dark:-webkit-autofill:hover,
+.autofill-dark:-webkit-autofill:focus {
+  -webkit-text-fill-color: #f8fafc;
+  -webkit-box-shadow: 0 0 0 1000px #1e293b inset;
+  caret-color: #f8fafc;
+  transition: background-color 9999s ease-out 0s;
 }
 
 .glass-panel {

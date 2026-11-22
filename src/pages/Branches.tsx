@@ -14,6 +14,7 @@ import {
 import { useTimeFormat } from '../context/TimeFormatContext';
 import TimeFormatToggle from '../components/TimeFormatToggle';
 import SpecificTimePicker from '../components/SpecificTimePicker';
+import { EmpresaSaaS } from '../types';
 
 interface SucursalItem {
   id: number;
@@ -31,58 +32,83 @@ interface SucursalItem {
   radio_permitido?: number;
 }
 
-export default function Branches() {
+interface BranchesProps {
+  currentEmpresa?: EmpresaSaaS;
+}
+
+export default function Branches({ currentEmpresa }: BranchesProps = {}) {
   const { formatSchedule, formatTime } = useTimeFormat();
   const [showNewBranchModal, setShowNewBranchModal] = useState(false);
   const [notificationToast, setNotificationToast] = useState<string | null>(null);
 
-  const [sucursales, setSucursales] = useState<SucursalItem[]>([
-    {
-      id: 1,
-      nombre: 'Sucursal Central - Ciudad',
-      codigo: 'SUC-001',
-      direccion: '7a Avenida 12-45 Zona 9, Ciudad de Guatemala',
-      telefono: '+502 2334-9000',
-      encargado: 'Juan Carlos Morales',
-      empleadosCount: 12,
-      productosStockCount: 1240,
-      estado: 'Operando',
-      horario: 'Lunes a Sábado: 7:00 AM - 8:00 PM',
-      latitud: 14.5986,
-      longitud: -90.5187,
-      radio_permitido: 50
-    },
-    {
-      id: 2,
-      nombre: 'Sucursal Norte - Carretera al Atlántico',
-      codigo: 'SUC-002',
-      direccion: 'Km 14.5 Carretera al Atlántico, Zona 18',
-      telefono: '+502 2256-4100',
-      encargado: 'Roberto Gómez Pérez',
-      empleadosCount: 6,
-      productosStockCount: 680,
-      estado: 'Operando',
-      horario: 'Lunes a Domingo: 8:00 AM - 7:00 PM',
-      latitud: 14.6542,
-      longitud: -90.4612,
-      radio_permitido: 50
-    },
-    {
-      id: 3,
-      nombre: 'Sucursal Sur - Villa Nueva',
-      codigo: 'SUC-003',
-      direccion: 'Calzada Concepción 5-10, Villa Nueva',
-      telefono: '+502 6630-1820',
-      encargado: 'Elena María Reyes',
-      empleadosCount: 8,
-      productosStockCount: 820,
-      estado: 'Operando',
-      horario: 'Lunes a Sábado: 8:00 AM - 6:00 PM',
-      latitud: 14.5263,
-      longitud: -90.5891,
-      radio_permitido: 50
+  const [sucursales, setSucursales] = useState<SucursalItem[]>(() => {
+    if (currentEmpresa?.id === 25) {
+      return [
+        {
+          id: 101,
+          nombre: 'Sucursal Demo Principal',
+          codigo: 'SUC-DEMO-01',
+          direccion: '10 Avenida 1-46 Zona 2, Ciudad de Guatemala',
+          telefono: '+502 3569-2079',
+          encargado: 'Administrador Demo',
+          empleadosCount: 2,
+          productosStockCount: 350,
+          estado: 'Operando',
+          horario: 'Lunes a Sábado: 8:00 AM - 6:00 PM',
+          latitud: 14.6400,
+          longitud: -90.5100,
+          radio_permitido: 50
+        }
+      ];
     }
-  ]);
+    return [
+      {
+        id: 1,
+        nombre: 'Sucursal Central - Ciudad',
+        codigo: 'SUC-001',
+        direccion: '7a Avenida 12-45 Zona 9, Ciudad de Guatemala',
+        telefono: '+502 2334-9000',
+        encargado: 'Juan Carlos Morales',
+        empleadosCount: 12,
+        productosStockCount: 1240,
+        estado: 'Operando',
+        horario: 'Lunes a Sábado: 7:00 AM - 8:00 PM',
+        latitud: 14.5986,
+        longitud: -90.5187,
+        radio_permitido: 50
+      },
+      {
+        id: 2,
+        nombre: 'Sucursal Norte - Carretera al Atlántico',
+        codigo: 'SUC-002',
+        direccion: 'Km 14.5 Carretera al Atlántico, Zona 18',
+        telefono: '+502 2256-4100',
+        encargado: 'Roberto Gómez Pérez',
+        empleadosCount: 6,
+        productosStockCount: 680,
+        estado: 'Operando',
+        horario: 'Lunes a Domingo: 8:00 AM - 7:00 PM',
+        latitud: 14.6542,
+        longitud: -90.4612,
+        radio_permitido: 50
+      },
+      {
+        id: 3,
+        nombre: 'Sucursal Sur - Villa Nueva',
+        codigo: 'SUC-003',
+        direccion: 'Calzada Concepción 5-10, Villa Nueva',
+        telefono: '+502 6630-1820',
+        encargado: 'Elena María Reyes',
+        empleadosCount: 8,
+        productosStockCount: 820,
+        estado: 'Operando',
+        horario: 'Lunes a Sábado: 8:00 AM - 6:00 PM',
+        latitud: 14.5263,
+        longitud: -90.5891,
+        radio_permitido: 50
+      }
+    ];
+  });
 
   const [newBranch, setNewBranch] = useState({
     nombre: '',

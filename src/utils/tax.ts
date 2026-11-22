@@ -26,10 +26,49 @@ export function getTipoRegimenSAT(regimenStr: string = ''): TipoRegimenSAT {
   if (clean.includes('pequeno') || clean.includes('pequeno contribuyente') || clean.includes('5%')) {
     return 'pequeno_contribuyente';
   }
-  if (clean.includes('exento') || clean.includes('informal') || clean.includes('no factura')) {
+  if (clean.includes('exento') || clean.includes('informal') || clean.includes('no factura') || clean.includes('0%')) {
     return 'exento';
   }
   return 'general';
+}
+
+/**
+ * Retorna la etiqueta estándar del régimen para mostrar al usuario
+ */
+export function formatRegimenLabel(regimenStr: string = ''): string {
+  const tipo = getTipoRegimenSAT(regimenStr);
+  if (tipo === 'pequeno_contribuyente') return 'Pequeño Contribuyente (5%)';
+  if (tipo === 'exento') return 'Informal / Exento (0% IVA)';
+  return 'General (IVA 12%)';
+}
+
+/**
+ * Retorna el badge y estilo del régimen para barras de navegación y tarjetas
+ */
+export function getRegimenBadge(regimenStr: string = '') {
+  const tipo = getTipoRegimenSAT(regimenStr);
+  if (tipo === 'pequeno_contribuyente') {
+    return {
+      tipo,
+      label: 'Pequeño Contribuyente (5%)',
+      badgeClass: 'bg-purple-50 text-purple-800 border-purple-200',
+      shortLabel: '5% SAT'
+    };
+  }
+  if (tipo === 'exento') {
+    return {
+      tipo,
+      label: 'Informal / Exento (0% IVA)',
+      badgeClass: 'bg-amber-50 text-amber-800 border-amber-200',
+      shortLabel: '0% IVA'
+    };
+  }
+  return {
+    tipo,
+    label: 'General (IVA 12%)',
+    badgeClass: 'bg-emerald-50 text-emerald-800 border-emerald-200',
+    shortLabel: 'IVA 12%'
+  };
 }
 
 /**

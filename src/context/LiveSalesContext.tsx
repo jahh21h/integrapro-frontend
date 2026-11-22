@@ -1,6 +1,80 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { LiveCustomerBag, LiveSession, LiveCartItem } from '../types';
 
+export interface BoutiqueLivePolicy {
+  tipo: 'quincenal' | '24_horas' | 'horas' | 'dias';
+  horas?: number;
+  dias?: number;
+  horaLimite?: string;
+  vende_shein?: boolean;
+}
+
+export function getLiveDueDate(
+  createdDateStr: string = new Date().toISOString(),
+  policy?: BoutiqueLivePolicy,
+  customDueDateStr?: string
+): {
+  dueDate: Date;
+  formattedDate: string;
+  daysRemaining: number;
+  isExpired: boolean;
+  cycleName: string;
+} {
+  let dueDate: Date;
+  let cycleName: string;
+
+  if (customDueDateStr) {
+    dueDate = new Date(customDueDateStr);
+    cycleName = 'Plazo Ajustado';
+  } else if (policy?.tipo === '24_horas') {
+    const created = new Date(createdDateStr);
+    dueDate = new Date(created.getTime() + 24 * 60 * 60 * 1000);
+    cycleName = 'Plazo 24 Horas';
+  } else if (policy?.tipo === 'horas') {
+    const created = new Date(createdDateStr);
+    const h = policy.horas && policy.horas > 0 ? policy.horas : 24;
+    dueDate = new Date(created.getTime() + h * 60 * 60 * 1000);
+    cycleName = `Plazo ${h} Horas`;
+  } else if (policy?.tipo === 'dias') {
+    const created = new Date(createdDateStr);
+    const d = policy.dias && policy.dias > 0 ? policy.dias : 2;
+    dueDate = new Date(created.getTime() + d * 24 * 60 * 60 * 1000);
+    cycleName = `Plazo ${d} Días`;
+  } else {
+    // Por defecto: Quincenal y Fin de Mes (+5 días de gracia)
+    const created = new Date(createdDateStr);
+    const year = created.getFullYear();
+    const month = created.getMonth();
+    const day = created.getDate();
+
+    if (day <= 15) {
+      dueDate = new Date(year, month, 20, 23, 59, 59);
+      cycleName = 'Corte Quincena (Día 20)';
+    } else {
+      dueDate = new Date(year, month + 1, 5, 23, 59, 59);
+      cycleName = 'Corte Fin de Mes (Día 5)';
+    }
+  }
+
+  const now = new Date();
+  const diffTime = dueDate.getTime() - now.getTime();
+  const daysRemaining = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  const isExpired = diffTime < 0;
+
+  const monthNames = [
+    'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+    'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
+  ];
+  
+  const isShortTime = policy?.tipo === '24_horas' || policy?.tipo === 'horas';
+  const hoursStr = dueDate.toLocaleTimeString('es-GT', { hour: '2-digit', minute: '2-digit', hour12: true });
+  const formattedDate = isShortTime
+    ? `${dueDate.getDate()} de ${monthNames[dueDate.getMonth()]} (${hoursStr})`
+    : `${dueDate.getDate()} de ${monthNames[dueDate.getMonth()]}`;
+
+  return { dueDate, formattedDate, daysRemaining, isExpired, cycleName };
+}
+
 interface LiveSalesContextType {
   isLiveActive: boolean;
   currentSession: LiveSession | null;
@@ -23,7 +97,11 @@ interface LiveSalesContextType {
   ) => void;
   updateItemPrice: (bagId: string, itemId: string, newPrice: number) => void;
   removeItemFromBag: (bagId: string, itemId: string) => void;
-  updateShippingCost: (bagId: string, cost: number, courier?: 'Guatex' | 'Forza Delivery' | 'Cargo Expreso' | 'Mensajero Local' | 'Recoge en Tienda') => void;
+  updateShippingCost: (bagId: string, cost: number, courier?: 'Guatex' | 'Forza Delivery' | 'Cargo Expreso' | 'Mensajero Local' | 'Recoge en Tienda' | 'Entrega Personal / Cercana') => void;
+  updateShippingOptions: (bagId: string, incluyeEnvio: boolean, cost: number, courier?: any) => void;
+  updateSheinUnification: (bagId: string, unificada: boolean, montoShein?: number, descripcion?: string) => void;
+  updateBagDueDate: (bagId: string, newDueDate: string) => void;
+  releaseExpiredBagsToStock: (policy?: BoutiqueLivePolicy) => number;
   updateBagStatus: (
     bagId: string,
     status: LiveCustomerBag['estado'],
@@ -31,9 +109,10 @@ interface LiveSalesContextType {
     boleta?: string
   ) => void;
   cancelBag: (bagId: string) => void;
+  deleteBag: (bagId: string) => void;
   findOpenBagByCustomer: (query: string, empresaId: number) => LiveCustomerBag | undefined;
   sendWhatsAppSummary: (bag: LiveCustomerBag) => void;
-  getStockReservationCount: (productId: number) => number;
+  getStockReservationCount: (productId: number, empresaId?: number) => number;
 }
 
 const LiveSalesContext = createContext<LiveSalesContextType | undefined>(undefined);
@@ -243,6 +322,15 @@ export const LiveSalesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     direccion_envio?: string,
     empresa_id: number = 1
   ): LiveCustomerBag => {
+    let policy: BoutiqueLivePolicy | undefined;
+    try {
+      const raw = localStorage.getItem('integrapro_boutique_config_' + empresa_id);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed.live_policy) policy = parsed.live_policy;
+      }
+    } catch {}
+
     const newBag: LiveCustomerBag = {
       id: 'BAG-' + Date.now().toString().slice(-5),
       cliente_nombre: cliente_nombre.trim(),
@@ -252,8 +340,13 @@ export const LiveSalesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       empresa_id,
       items: [],
       subtotal: 0,
+      incluye_envio: true,
       costo_envio: 35.00, // Envío estándar Guatex
       total: 35.00,
+      es_unificada_shein: false,
+      monto_shein: 0,
+      descripcion_shein: '',
+      fecha_vencimiento: getLiveDueDate(new Date().toISOString(), policy).dueDate.toISOString(),
       estado: 'abierta',
       metodo_pago: 'transferencia',
       empresa_envio: 'Guatex',
@@ -305,7 +398,9 @@ export const LiveSalesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
       const updatedItems = [...bag.items, newItem];
       const subtotal = updatedItems.reduce((acc, it) => acc + (it.precio_final * it.cantidad), 0);
-      const total = subtotal + bag.costo_envio;
+      const shippingCost = bag.incluye_envio !== false ? bag.costo_envio : 0;
+      const sheinMonto = (bag.es_unificada_shein && bag.monto_shein) ? Number(bag.monto_shein) : 0;
+      const total = subtotal + shippingCost + sheinMonto;
 
       return {
         ...bag,
@@ -342,7 +437,9 @@ export const LiveSalesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       });
 
       const subtotal = updatedItems.reduce((acc, it) => acc + (it.precio_final * it.cantidad), 0);
-      const total = subtotal + bag.costo_envio;
+      const shippingCost = bag.incluye_envio !== false ? bag.costo_envio : 0;
+      const sheinMonto = (bag.es_unificada_shein && bag.monto_shein) ? Number(bag.monto_shein) : 0;
+      const total = subtotal + shippingCost + sheinMonto;
 
       return {
         ...bag,
@@ -361,7 +458,9 @@ export const LiveSalesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
       const updatedItems = bag.items.filter(it => it.id !== itemId);
       const subtotal = updatedItems.reduce((acc, it) => acc + (it.precio_final * it.cantidad), 0);
-      const total = subtotal + (updatedItems.length > 0 ? bag.costo_envio : 0);
+      const shippingCost = (updatedItems.length > 0 && bag.incluye_envio !== false) ? bag.costo_envio : 0;
+      const sheinMonto = (bag.es_unificada_shein && bag.monto_shein) ? Number(bag.monto_shein) : 0;
+      const total = subtotal + shippingCost + sheinMonto;
 
       return {
         ...bag,
@@ -376,19 +475,104 @@ export const LiveSalesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const updateShippingCost = (
     bagId: string,
     cost: number,
-    courier?: 'Guatex' | 'Forza Delivery' | 'Cargo Expreso' | 'Mensajero Local' | 'Recoge en Tienda'
+    courier?: 'Guatex' | 'Forza Delivery' | 'Cargo Expreso' | 'Mensajero Local' | 'Recoge en Tienda' | 'Entrega Personal / Cercana'
   ) => {
     setBags(prev => prev.map(bag => {
       if (bag.id !== bagId) return bag;
-      const total = bag.subtotal + cost;
+      const incluyeEnvio = cost > 0;
+      const sheinMonto = (bag.es_unificada_shein && bag.monto_shein) ? Number(bag.monto_shein) : 0;
+      const total = bag.subtotal + cost + sheinMonto;
       return {
         ...bag,
         costo_envio: cost,
+        incluye_envio: incluyeEnvio,
         empresa_envio: courier || bag.empresa_envio,
         total,
         actualizado_en: new Date().toISOString()
       };
     }));
+  };
+
+  // Actualizar si incluye o no envío (para entregas personales/vecinas a Q 0.00)
+  const updateShippingOptions = (
+    bagId: string,
+    incluyeEnvio: boolean,
+    cost: number,
+    courier?: any
+  ) => {
+    setBags(prev => prev.map(bag => {
+      if (bag.id !== bagId) return bag;
+      const actualCost = incluyeEnvio ? (cost > 0 ? cost : 35.00) : 0;
+      const sheinMonto = (bag.es_unificada_shein && bag.monto_shein) ? Number(bag.monto_shein) : 0;
+      const total = bag.subtotal + actualCost + sheinMonto;
+      return {
+        ...bag,
+        incluye_envio: incluyeEnvio,
+        costo_envio: actualCost,
+        empresa_envio: incluyeEnvio ? (courier || bag.empresa_envio || 'Guatex') : 'Entrega Personal / Cercana',
+        total,
+        actualizado_en: new Date().toISOString()
+      };
+    }));
+  };
+
+  // Unificar con pedido SHEIN
+  const updateSheinUnification = (
+    bagId: string,
+    unificada: boolean,
+    montoShein?: number,
+    descripcion?: string
+  ) => {
+    setBags(prev => prev.map(bag => {
+      if (bag.id !== bagId) return bag;
+      const shippingCost = bag.incluye_envio !== false ? bag.costo_envio : 0;
+      const shein = unificada ? (Number(montoShein) || 0) : 0;
+      const total = bag.subtotal + shippingCost + shein;
+      return {
+        ...bag,
+        es_unificada_shein: unificada,
+        monto_shein: shein,
+        descripcion_shein: descripcion !== undefined ? descripcion : bag.descripcion_shein,
+        total,
+        actualizado_en: new Date().toISOString()
+      };
+    }));
+  };
+
+  // Ajustar fecha límite de una canasta específica (excepción o prórroga)
+  const updateBagDueDate = (bagId: string, newDueDate: string) => {
+    setBags(prev => prev.map(bag => {
+      if (bag.id !== bagId) return bag;
+      return {
+        ...bag,
+        fecha_vencimiento: newDueDate,
+        actualizado_en: new Date().toISOString()
+      };
+    }));
+  };
+
+  // Libera todas las canastas vencidas devolviendo el stock inmediatamente a inventario
+  const releaseExpiredBagsToStock = (policy?: BoutiqueLivePolicy): number => {
+    let releasedCount = 0;
+    setBags(prev => prev.map(bag => {
+      if (bag.estado === 'abierta' || bag.estado === 'pendiente_pago') {
+        const { isExpired } = getLiveDueDate(bag.creado_en, policy, bag.fecha_vencimiento);
+        if (isExpired && bag.items.length > 0) {
+          releasedCount++;
+          return {
+            ...bag,
+            estado: 'cancelada',
+            items: [], // vacía las prendas para liberar el stock de inmediato
+            subtotal: 0,
+            total: 0,
+            notas: (bag.notas ? bag.notas + ' | ' : '') + 'Vencida - Prendas devueltas al stock por corte de quincena/mes.',
+            actualizado_en: new Date().toISOString()
+          };
+        }
+      }
+      return bag;
+    }));
+    return releasedCount;
   };
 
   const updateBagStatus = (
@@ -425,6 +609,11 @@ export const LiveSalesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     }));
   };
 
+  // ELIMINAR CANASTA DEFINITIVAMENTE: Remueve la canasta de la sesión y libera stock
+  const deleteBag = (bagId: string) => {
+    setBags(prev => prev.filter(bag => bag.id !== bagId));
+  };
+
   // Buscar canasta abierta para unificar con el Punto de Venta (POS)
   const findOpenBagByCustomer = (query: string, empresaId: number): LiveCustomerBag | undefined => {
     if (!query) return undefined;
@@ -451,7 +640,7 @@ export const LiveSalesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       if (raw) boutiqueConfig = JSON.parse(raw);
     } catch {}
 
-    const storeName = boutiqueConfig?.nombre || (bag.empresa_id === 99 ? 'Boutique Chic Live' : 'Fashion Styles');
+    const storeName = boutiqueConfig?.nombre || (bag.empresa_id === 99 ? 'Boutique Chic Live' : bag.empresa_id === 1 ? 'Fashion Styles' : 'Mi Tienda');
     const biAcc = boutiqueConfig?.bi_cuenta || '025-014829-1';
     const biHolder = boutiqueConfig?.bi_titular || storeName;
     const banruralAcc = boutiqueConfig?.banrural_cuenta || '3402-09812-4';
@@ -459,16 +648,35 @@ export const LiveSalesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     const bacAcc = boutiqueConfig?.bac_cuenta || '90-128472-0';
     const bacHolder = boutiqueConfig?.bac_titular || storeName;
 
+    const policy = boutiqueConfig?.live_policy as BoutiqueLivePolicy | undefined;
+    const dueDate = getLiveDueDate(bag.creado_en, policy, bag.fecha_vencimiento);
+    const esUnificada = Boolean(bag.es_unificada_shein && (bag.monto_shein || 0) > 0);
+    const incluyeEnvio = bag.incluye_envio !== false && bag.costo_envio > 0;
+
     let message = `*🌸 ¡HOLA ${bag.cliente_nombre.toUpperCase()}! GRACIAS POR TUS COMPRAS EN ${storeName.toUpperCase()} 🛍️*\n\n`;
-    message += `Te compartimos el detalle oficial y unificado de tu canasta:\n`;
-    message += `━━━━━━━━━━━━━━━━━━━━━\n`;
+
+    if (esUnificada) {
+      message += `Te compartimos tu *CUENTA UNIFICADA DE ENTREGA CONJUNTA (SHEIN + TIKTOK LIVE)*:\n`;
+      message += `━━━━━━━━━━━━━━━━━━━━━\n`;
+      message += `📦 *1. PEDIDO SHEIN:*\n`;
+      message += `   • Saldo / Total: *Q ${(bag.monto_shein || 0).toFixed(2)}*\n`;
+      if (bag.descripcion_shein) {
+        message += `   • Detalle: ${bag.descripcion_shein}\n`;
+      }
+      message += `\n`;
+      message += `👗 *2. PRENDAS GANADAS EN TIKTOK LIVE (${bag.items.length} piezas):*\n`;
+    } else {
+      message += `Te compartimos el detalle oficial de tu canasta del *TIKTOK LIVE*:\n`;
+      message += `━━━━━━━━━━━━━━━━━━━━━\n`;
+      message += `👗 *PRENDAS GANADAS EN EL LIVE (${bag.items.length} piezas):*\n`;
+    }
 
     bag.items.forEach((it, idx) => {
       message += `${idx + 1}. *${it.nombre}*\n`;
       if (it.talla) message += `   • Talla: ${it.talla} ${it.color ? '• Color: ' + it.color : ''}\n`;
       if (it.es_remate) {
         message += `   • Precio Normal: ~Q ${it.precio_original.toFixed(2)}~\n`;
-        message += `   • *🔥 PRECIO REMATE LIVE: Q ${it.precio_final.toFixed(2)}* (¡Ahorraste Q ${it.descuento.toFixed(2)}!)\n`;
+        message += `   • *🔥 PRECIO REMATE: Q ${it.precio_final.toFixed(2)}* (¡Ahorraste Q ${it.descuento.toFixed(2)}!)\n`;
       } else {
         message += `   • Precio: Q ${it.precio_final.toFixed(2)}\n`;
       }
@@ -476,30 +684,48 @@ export const LiveSalesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     });
 
     message += `━━━━━━━━━━━━━━━━━━━━━\n`;
-    message += `*Subtotal Prendas:* Q ${bag.subtotal.toFixed(2)}\n`;
-    message += `*Envío (${bag.empresa_envio || 'Guatex / Mensajería'}):* Q ${bag.costo_envio.toFixed(2)}\n`;
-    message += `*💰 TOTAL A PAGAR:* *Q ${bag.total.toFixed(2)}*\n\n`;
+    if (esUnificada) {
+      message += `*Subtotal Pedido SHEIN:* Q ${(bag.monto_shein || 0).toFixed(2)}\n`;
+      message += `*Subtotal Prendas Live:* Q ${bag.subtotal.toFixed(2)}\n`;
+    } else {
+      message += `*Subtotal Prendas:* Q ${bag.subtotal.toFixed(2)}\n`;
+    }
+
+    if (incluyeEnvio) {
+      message += `*Envío (${bag.empresa_envio || 'Guatex / Mensajería'}):* Q ${bag.costo_envio.toFixed(2)}\n`;
+      if (esUnificada) {
+        message += `✨ *(¡Todo se entrega en un solo paquete para que no pagues doble flete!)*\n`;
+      }
+    } else {
+      message += `*Entrega:* *Entrega Personal / Sin Costo de Envío (¡Q 0.00!)* ✨\n`;
+    }
+
+    message += `*💰 TOTAL A PAGAR:* *Q ${bag.total.toFixed(2)}*\n`;
+    message += `📅 *Fecha Límite de Pago:* *${dueDate.formattedDate}* (Plazo de 5 días de ${dueDate.cycleName.includes('Quincena') ? 'quincena' : 'inicio de mes'})\n\n`;
 
     if (bag.metodo_pago === 'contra_entrega') {
-      message += `📍 *Método de Pago:* Contra Entrega (Pagas en efectivo al recibir tu paquete).\n`;
+      message += `📍 *Método de Pago:* Contra Entrega (Pagas al recibir tu paquete).\n`;
       message += `🚚 *Dirección de Entrega:* ${bag.direccion_envio || 'Por confirmar'}\n\n`;
-      message += `¿Nos confirmas tu dirección para empacar tu pedido hoy mismo? ✨`;
+      message += `¿Nos confirmas tu dirección para programar tu entrega conjunta? ✨`;
     } else {
       message += `💳 *Método de Pago:* Transferencia o Depósito Bancario.\n\n`;
       message += `*Cuentas Monetarias Disponibles:*\n`;
       message += `🏦 *Banco Industrial (BI):* ${biAcc} (${biHolder})\n`;
       message += `🏦 *BANRURAL:* ${banruralAcc} (${banruralHolder})\n`;
       message += `🏦 *BAC Credomatic:* ${bacAcc} (${bacHolder})\n\n`;
-      message += `Por favor envíanos la foto de tu boleta o comprobante aquí mismo para programar tu despacho. ¡Gracias por apoyar nuestro negocio! 💖`;
+      message += `Por favor envíanos la foto de tu boleta o comprobante a este chat antes del *${dueDate.formattedDate}* para asegurar tu paquete. ¡Gracias por tu preferencia! 💖`;
     }
 
     const encoded = encodeURIComponent(message);
     window.open(`https://api.whatsapp.com/send?phone=${phone}&text=${encoded}`, '_blank');
   };
 
-  const getStockReservationCount = (productId: number): number => {
+  const getStockReservationCount = (productId: number, empresaId?: number): number => {
     return bags
-      .filter(b => b.estado === 'abierta' || b.estado === 'pendiente_pago' || b.estado === 'despachada')
+      .filter(b =>
+        (empresaId === undefined || Number(b.empresa_id) === Number(empresaId)) &&
+        (b.estado === 'abierta' || b.estado === 'pendiente_pago' || b.estado === 'despachada')
+      )
       .reduce((acc, b) => {
         const matching = b.items.filter(it => it.producto_id === productId);
         return acc + matching.reduce((sub, it) => sub + it.cantidad, 0);
@@ -519,8 +745,13 @@ export const LiveSalesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         updateItemPrice,
         removeItemFromBag,
         updateShippingCost,
+        updateShippingOptions,
+        updateSheinUnification,
+        updateBagDueDate,
+        releaseExpiredBagsToStock,
         updateBagStatus,
         cancelBag,
+        deleteBag,
         findOpenBagByCustomer,
         sendWhatsAppSummary,
         getStockReservationCount

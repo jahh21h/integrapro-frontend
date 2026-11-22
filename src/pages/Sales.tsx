@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { 
   Search, 
   Receipt, 
@@ -17,31 +17,41 @@ import {
   Copy,
   Building,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Pencil,
+  Trash2,
+  AlertTriangle,
+  Loader2,
+  Plus,
+  Minus,
+  AlertCircle,
+  RefreshCcw
 } from 'lucide-react';
 import { VendedorRendimiento, EmpresaSaaS } from '../types';
 import { calculateSaleTaxes } from '../utils/tax';
 import { exportToExcelCsv } from '../utils/export';
 import { salesApi } from '../api';
-import { REAL_SALES, REAL_COTIZACIONES, VentaItem, CotizacionItem } from '../data/realSales';
+import { getTenantSales, getTenantCotizaciones, VentaItem, CotizacionItem } from '../data/realSales';
+import { filterRecordsByTenant, getStoredActiveEmpresaId } from '../utils/tenant';
 
 interface SalesProps {
   currentEmpresa?: EmpresaSaaS;
 }
 
 export default function Sales({ currentEmpresa }: SalesProps = {}) {
+  const fallbackEmpresaId = getStoredActiveEmpresaId() || 0;
   const empresaActiva: EmpresaSaaS = currentEmpresa || {
-    id: 1,
-    nombre: 'Corporación Comercial IntegraPro S.A.',
-    razon_social: 'IntegraPro Soluciones Empresariales Sociedad Anónima',
-    nit: '10429182-3',
+    id: fallbackEmpresaId,
+    nombre: fallbackEmpresaId === 1 ? 'Fashion Styles' : 'Empresa Activa',
+    razon_social: fallbackEmpresaId === 1 ? 'Fashion Styles S.A.' : 'Empresa Activa',
+    nit: 'CF',
     pais: 'GT',
     regimen: 'General (IVA 12%)',
-    plan: 'standard',
+    plan: 'enterprise',
     activa: true,
-    telefono: '+502 2334-9000',
-    email: 'facturacion@integrapro.com',
-    direccion: '7a Avenida 12-45 Zona 9, Guatemala'
+    telefono: '',
+    email: '',
+    direccion: 'Ciudad de Guatemala'
   };
 
   const [activeTab, setActiveTab] = useState<'ventas' | 'cotizaciones' | 'vendedores'>('ventas');
@@ -50,24 +60,48 @@ export default function Sales({ currentEmpresa }: SalesProps = {}) {
   const [selectedSaleDetail, setSelectedSaleDetail] = useState<VentaItem | null>(null);
   const [notificationToast, setNotificationToast] = useState<string | null>(null);
   const [copiedUuid, setCopiedUuid] = useState(false);
+  const [isLoadingSales, setIsLoadingSales] = useState(false);
 
-  // Datos reales sincronizados desde Droplet (Aislamiento Multi-Tenant)
-  const [sales, setSales] = useState<VentaItem[]>(REAL_SALES);
-  useEffect(() => {
-    salesApi.getAll({ per_page: 100 })
+  // Estados para Modificar y Eliminar Ventas
+  const [saleToDelete, setSaleToDelete] = useState<VentaItem | null>(null);
+  const [isDeletingSale, setIsDeletingSale] = useState(false);
+
+  const [editingSale, setEditingSale] = useState<VentaItem | null>(null);
+  const [editSaleForm, setEditSaleForm] = useState<any>(null);
+  const [isSavingSale, setIsSavingSale] = useState(false);
+
+  const showToast = (msg: string) => {
+    setNotificationToast(msg);
+    setTimeout(() => setNotificationToast(null), 4000);
+  };
+
+  // Datos reales sincronizados desde Droplet (Aislamiento Multi-Tenant Estricto)
+  const [sales, setSales] = useState<VentaItem[]>(() => getTenantSales(empresaActiva.id));
+
+  const fetchSales = () => {
+    const targetEmpresaId = Number(empresaActiva.id);
+    setIsLoadingSales(true);
+    salesApi.getAll({ id_empresa: targetEmpresaId, per_page: 150 })
       .then(res => {
         const liveSales = res?.data || res;
         if (Array.isArray(liveSales)) {
-          if (liveSales.length === 0) {
-            setSales([]);
+          const { items: tenantSales, rejectedCount } = filterRecordsByTenant(liveSales, targetEmpresaId);
+          if (rejectedCount > 0) {
+            console.warn(
+              `[Multi-Tenant Guard] Ventas bloqueó ${rejectedCount} venta(s) ajenas o sin id_empresa para la empresa #${targetEmpresaId}.`
+            );
+          }
+          if (tenantSales.length === 0) {
+            setSales(getTenantSales(targetEmpresaId));
           } else {
-            const mapped: VentaItem[] = liveSales.map((s: any) => {
+            const mapped: VentaItem[] = tenantSales.map((s: any) => {
               const totalMonto = Number(s.total) || 0;
               const sub = Number(s.subtotal) || Number((totalMonto / 1.12).toFixed(2));
               const ivaVal = Number(s.iva) || Number((totalMonto - sub).toFixed(2));
               const metodo = s.metodo_pago_principal === 'tarjeta' ? 'Tarjeta POS' : (s.metodo_pago_principal === 'transferencia' ? 'Transferencia' : (s.metodo_pago_principal === 'credito' ? 'Crédito' : 'Efectivo'));
               const items = Array.isArray(s.detalles) ? s.detalles.map((d: any) => ({
-                nombre: d.producto?.nombre || d.nombre_producto || 'Producto',
+                id_producto: d.id_producto,
+                nombre: d.producto?.nombre || d.nombre_producto || `Producto #${d.id_producto}`,
                 cantidad: Number(d.cantidad) || 1,
                 precioUnitario: Number(d.precio_unitario) || 0,
                 subtotal: Number(d.subtotal) || 0,
@@ -76,6 +110,8 @@ export default function Sales({ currentEmpresa }: SalesProps = {}) {
 
               return {
                 id: String(s.id_venta || s.id),
+                rawId: s.id_venta || s.id,
+                idCliente: s.id_cliente,
                 cliente: s.cliente ? `${s.cliente.nombre || ''} ${s.cliente.apellido || ''}`.trim() : (s.nombre_cliente || 'Consumidor Final'),
                 nit: s.cliente?.nit || s.nit_cliente || 'CF',
                 sucursal: s.sucursal?.nombre || 'Sucursal Principal',
@@ -85,16 +121,19 @@ export default function Sales({ currentEmpresa }: SalesProps = {}) {
                 iva: ivaVal,
                 total: totalMonto,
                 metodoPago: metodo,
+                metodoPagoRaw: s.metodo_pago_principal || 'efectivo',
+                observaciones: s.observaciones || '',
+                rawDetalles: s.detalles || [],
                 estado: s.estado_pago === 'anulada' ? 'Anulada' : (s.metodo_pago_principal === 'credito' ? 'Crédito' : 'Completada'),
-                vendedor: s.empleado ? `${s.empleado.nombre || ''} ${s.empleado.apellido || ''}`.trim() : 'Katy G',
+                vendedor: s.empleado ? `${s.empleado.nombre || ''} ${s.empleado.apellido || ''}`.trim() : 'Caja Principal',
                 dte: s.dte_uuid ? ({
                   uuid: s.dte_uuid,
                   serie: s.dte_serie || 'DTE-A1',
                   numero: s.dte_numero || '1001',
                   fechaHoraCertificacion: s.fecha || new Date().toISOString(),
                   fechaCertificacion: s.fecha || new Date().toISOString(),
-                  nitEmisor: '6322012-1',
-                  nombreEmisor: 'Fashion Styles',
+                  nitEmisor: empresaActiva.nit || 'CF',
+                  nombreEmisor: empresaActiva.razon_social || empresaActiva.nombre,
                   nitReceptor: s.cliente?.nit || s.nit_cliente || 'CF',
                   nombreReceptor: s.cliente ? `${s.cliente.nombre || ''} ${s.cliente.apellido || ''}`.trim() : (s.nombre_cliente || 'Consumidor Final'),
                   montoTotal: totalMonto,
@@ -109,66 +148,169 @@ export default function Sales({ currentEmpresa }: SalesProps = {}) {
           }
         }
       })
-      .catch(() => {});
+      .catch((err) => {
+        console.warn('Error fetching live sales:', err);
+        setSales(getTenantSales(targetEmpresaId));
+      })
+      .finally(() => {
+        setIsLoadingSales(false);
+      });
+  };
+
+  useEffect(() => {
+    setSales(getTenantSales(empresaActiva.id));
+    fetchSales();
   }, [empresaActiva.id]);
 
-  const [quotes, setQuotes] = useState<CotizacionItem[]>(REAL_COTIZACIONES);
-  useEffect(() => {
-    setQuotes(REAL_COTIZACIONES);
-  }, []);
-
-  // Vendedores reales del Droplet (Katy G, Jonathan Alexander Herrera Hernández, Byron Herrera, Francisco Hernández)
-  const [vendedores] = useState<VendedorRendimiento[]>([
-    {
-      id_empleado: 1,
-      nombre: 'Katy G',
-      sucursal: 'Sucursal Principal',
-      ventas_count: 948,
-      total_vendido: 179205.50,
-      meta_mensual: 150000.00,
-      porcentaje_cumplido: 119.5,
-      comision_acumulada: 5376.17, // 3% comisión
-      ticket_promedio: 189.04
-    },
-    {
-      id_empleado: 603,
-      nombre: 'Jonathan Alexander Herrera Hernández',
-      sucursal: 'Sucursal Principal',
-      ventas_count: 40,
-      total_vendido: 2395.04,
-      meta_mensual: 5000.00,
-      porcentaje_cumplido: 47.9,
-      comision_acumulada: 71.85,
-      ticket_promedio: 59.88
-    },
-    {
-      id_empleado: 604,
-      nombre: 'Byron Herrera',
-      sucursal: 'Sucursal Principal',
-      ventas_count: 3,
-      total_vendido: 245.00,
-      meta_mensual: 1000.00,
-      porcentaje_cumplido: 24.5,
-      comision_acumulada: 7.35,
-      ticket_promedio: 81.67
-    },
-    {
-      id_empleado: 605,
-      nombre: 'Francisco Hernández',
-      sucursal: 'Sucursal Principal',
-      ventas_count: 2,
-      total_vendido: 245.00,
-      meta_mensual: 1000.00,
-      porcentaje_cumplido: 24.5,
-      comision_acumulada: 7.35,
-      ticket_promedio: 122.50
-    }
-  ]);
-
-  const showToast = (msg: string) => {
-    setNotificationToast(msg);
-    setTimeout(() => setNotificationToast(null), 3500);
+  // Manejador para Abrir Edición de Venta
+  const handleOpenEditSale = (s: VentaItem) => {
+    setEditingSale(s);
+    setEditSaleForm({
+      id_cliente: s.idCliente || null,
+      nombreCliente: s.cliente,
+      metodo_pago: s.metodoPagoRaw || 'efectivo',
+      observaciones: s.observaciones || '',
+      descuentoGlobal: 0,
+      detalles: s.productos && s.productos.length > 0 
+        ? s.productos.map((p: any, idx: number) => ({
+            id_producto: p.id_producto || (idx + 1),
+            nombre: p.nombre,
+            cantidad: p.cantidad,
+            precio_unitario: p.precioUnitario,
+            descuento: p.descuento || 0,
+            subtotal: p.subtotal || (p.cantidad * p.precioUnitario)
+          }))
+        : [{ id_producto: 2745, nombre: 'Producto General', cantidad: 1, precio_unitario: s.total, descuento: 0, subtotal: s.total }]
+    });
   };
+
+  // Guardar Modificación de Venta
+  const handleSaveEditSale = async () => {
+    if (!editingSale || !editSaleForm) return;
+    if (editSaleForm.detalles.length === 0) {
+      alert('La venta debe contener al menos un producto.');
+      return;
+    }
+
+    setIsSavingSale(true);
+    try {
+      const payload = {
+        id_cliente: editSaleForm.id_cliente,
+        metodo_pago: editSaleForm.metodo_pago,
+        observaciones: editSaleForm.observaciones,
+        descuento: Number(editSaleForm.descuentoGlobal) || 0,
+        detalles: editSaleForm.detalles.map((d: any) => ({
+          id_producto: d.id_producto,
+          cantidad: Number(d.cantidad),
+          precio_unitario: Number(d.precio_unitario),
+          descuento: Number(d.descuento) || 0
+        }))
+      };
+
+      await salesApi.updateSale(editingSale.rawId || editingSale.id, payload);
+      showToast(`Venta #${editingSale.id} modificada exitosamente. Stock actualizado en inventario.`);
+      setEditingSale(null);
+      setEditSaleForm(null);
+      fetchSales();
+    } catch (err: any) {
+      console.error('Error al actualizar venta:', err);
+      const errMsg = err?.response?.data?.message || err?.message || 'Error al actualizar venta.';
+      alert(`⚠️ NO SE PUDO MODIFICAR LA VENTA:\n\n${errMsg}`);
+    } finally {
+      setIsSavingSale(false);
+    }
+  };
+
+  // Confirmar y Eliminar Venta (Devolviendo Stock)
+  const handleConfirmDeleteSale = async () => {
+    if (!saleToDelete) return;
+    setIsDeletingSale(true);
+    try {
+      await salesApi.deleteSale(saleToDelete.rawId || saleToDelete.id);
+      showToast(`Venta #${saleToDelete.id} eliminada. Stock de prendas restaurado al inventario.`);
+      setSales(prev => prev.filter(s => s.id !== saleToDelete.id));
+      setSaleToDelete(null);
+    } catch (err: any) {
+      console.error('Error al eliminar venta:', err);
+      const errMsg = err?.response?.data?.message || err?.message || 'Error al anular la venta.';
+      alert(`⚠️ NO SE PUDO ELIMINAR LA VENTA:\n\n${errMsg}`);
+    } finally {
+      setIsDeletingSale(false);
+    }
+  };
+
+  const [quotes, setQuotes] = useState<CotizacionItem[]>(() => getTenantCotizaciones(empresaActiva.id));
+  useEffect(() => {
+    setQuotes(getTenantCotizaciones(empresaActiva.id));
+  }, [empresaActiva.id]);
+
+  // Vendedores adaptados por Tenant para aislamiento estricto
+  const vendedores = useMemo<VendedorRendimiento[]>(() => {
+    if (empresaActiva.id === 1) {
+      return [
+        {
+          id_empleado: 1,
+          nombre: 'Katy G',
+          sucursal: 'Sucursal Principal',
+          ventas_count: 948,
+          total_vendido: 179205.50,
+          meta_mensual: 150000.00,
+          porcentaje_cumplido: 119.5,
+          comision_acumulada: 5376.17, // 3% comisión
+          ticket_promedio: 189.04
+        },
+        {
+          id_empleado: 603,
+          nombre: 'Jonathan Alexander Herrera Hernández',
+          sucursal: 'Sucursal Principal',
+          ventas_count: 40,
+          total_vendido: 2395.04,
+          meta_mensual: 5000.00,
+          porcentaje_cumplido: 47.9,
+          comision_acumulada: 71.85,
+          ticket_promedio: 59.88
+        },
+        {
+          id_empleado: 604,
+          nombre: 'Byron Herrera',
+          sucursal: 'Sucursal Principal',
+          ventas_count: 3,
+          total_vendido: 245.00,
+          meta_mensual: 1000.00,
+          porcentaje_cumplido: 24.5,
+          comision_acumulada: 7.35,
+          ticket_promedio: 81.67
+        },
+        {
+          id_empleado: 605,
+          nombre: 'Francisco Hernández',
+          sucursal: 'Sucursal Principal',
+          ventas_count: 2,
+          total_vendido: 245.00,
+          meta_mensual: 1000.00,
+          porcentaje_cumplido: 24.5,
+          comision_acumulada: 7.35,
+          ticket_promedio: 122.50
+        }
+      ];
+    }
+    if (empresaActiva.id === 25) {
+      return [
+        {
+          id_empleado: 901,
+          nombre: 'Asesor Comercial Demo',
+          sucursal: 'Sucursal Demo Principal',
+          ventas_count: 3,
+          total_vendido: 780.00,
+          meta_mensual: 5000.00,
+          porcentaje_cumplido: 15.6,
+          comision_acumulada: 23.40,
+          ticket_promedio: 260.00
+        }
+      ];
+    }
+    return [];
+  }, [empresaActiva.id]);
 
   const handleConvertQuote = (quote: CotizacionItem) => {
     showToast(`Cotización ${quote.id} convertida a Venta exitosamente en Caja Central.`);
@@ -269,6 +411,15 @@ export default function Sales({ currentEmpresa }: SalesProps = {}) {
         </div>
 
         <div className="flex items-center gap-2">
+          <button 
+            type="button" 
+            onClick={fetchSales}
+            className="px-3.5 py-2.5 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 shadow-sm transition-all flex items-center gap-2 hover:border-slate-300 cursor-pointer"
+            title="Recargar ventas en tiempo real desde la Base de Datos"
+          >
+            <RefreshCcw className={`w-4 h-4 text-indigo-600 ${isLoadingSales ? 'animate-spin' : ''}`} />
+            <span>Actualizar</span>
+          </button>
           <button 
             type="button" 
             onClick={handleExportSales}
@@ -468,13 +619,37 @@ export default function Sales({ currentEmpresa }: SalesProps = {}) {
                         Q {s.total.toFixed(2)}
                       </td>
                       <td className="py-3 px-4 text-center">
-                        <button
-                          onClick={() => setSelectedSaleDetail(s)}
-                          className="px-2.5 py-1.5 bg-slate-100 hover:bg-emerald-50 hover:text-emerald-700 text-slate-700 font-bold rounded-xl text-xs transition-colors inline-flex items-center gap-1"
-                        >
-                          <Eye className="w-3.5 h-3.5" />
-                          <span>Ver DTE</span>
-                        </button>
+                        <div className="flex items-center justify-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => setSelectedSaleDetail(s)}
+                            className="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition-colors inline-flex items-center gap-1 cursor-pointer"
+                            title="Ver Comprobante / DTE"
+                          >
+                            <Eye className="w-3.5 h-3.5 text-slate-600" />
+                            <span className="hidden xl:inline">Ver</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => handleOpenEditSale(s)}
+                            className="p-1.5 bg-amber-50 hover:bg-amber-100 text-amber-700 font-bold rounded-xl text-xs transition-colors inline-flex items-center gap-1 cursor-pointer"
+                            title="Modificar Venta"
+                          >
+                            <Pencil className="w-3.5 h-3.5 text-amber-600" />
+                            <span className="hidden xl:inline">Modificar</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => setSaleToDelete(s)}
+                            className="p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold rounded-xl text-xs transition-colors inline-flex items-center gap-1 cursor-pointer"
+                            title="Eliminar / Anular Venta y Restaurar Stock"
+                          >
+                            <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+                            <span className="hidden xl:inline">Eliminar</span>
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -617,13 +792,13 @@ export default function Sales({ currentEmpresa }: SalesProps = {}) {
               <div className="bg-white/10 backdrop-blur-md px-4 py-2.5 rounded-2xl border border-white/10 text-center">
                 <span className="text-[10px] font-bold text-slate-300 uppercase block">Comisiones del Mes</span>
                 <span className="text-base font-black text-emerald-300">
-                  Q {vendedores.reduce((a, b) => a + b.comision_acumulada, 0).toLocaleString('es-GT', { minimumFractionDigits: 2 })}
+                  Q {vendedores.reduce((a: number, b: any) => a + (b.comision_acumulada || 0), 0).toLocaleString('es-GT', { minimumFractionDigits: 2 })}
                 </span>
               </div>
               <div className="bg-white/10 backdrop-blur-md px-4 py-2.5 rounded-2xl border border-white/10 text-center">
                 <span className="text-[10px] font-bold text-slate-300 uppercase block">Venta Global</span>
                 <span className="text-base font-black text-amber-300">
-                  Q {vendedores.reduce((a, b) => a + b.total_vendido, 0).toLocaleString('es-GT', { minimumFractionDigits: 2 })}
+                  Q {vendedores.reduce((a: number, b: any) => a + (b.total_vendido || 0), 0).toLocaleString('es-GT', { minimumFractionDigits: 2 })}
                 </span>
               </div>
             </div>
@@ -655,7 +830,7 @@ export default function Sales({ currentEmpresa }: SalesProps = {}) {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 font-medium">
-                  {vendedores.map((v, index) => (
+                  {vendedores.map((v: VendedorRendimiento, index: number) => (
                     <tr key={v.id_empleado} className="hover:bg-slate-50/70 transition-colors">
                       <td className="py-3.5 px-4 font-black">
                         {index === 0 && <span className="text-amber-500 text-base">🥇 #1</span>}
@@ -910,6 +1085,337 @@ export default function Sales({ currentEmpresa }: SalesProps = {}) {
               >
                 <Printer className="w-3.5 h-3.5" />
                 <span>Imprimir Ticket</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DE CONFIRMACIÓN: ELIMINAR / ANULAR VENTA CON RETORNO DE STOCK */}
+      {saleToDelete && (
+        <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl max-w-md w-full shadow-2xl border border-slate-200 overflow-hidden">
+            <div className="p-6 text-center space-y-4">
+              <div className="w-14 h-14 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center mx-auto border border-rose-100 shadow-sm">
+                <AlertTriangle className="w-7 h-7" />
+              </div>
+              <div className="space-y-1.5">
+                <h3 className="text-lg font-black text-slate-900 tracking-tight">
+                  ¿Anular y Eliminar Venta #{saleToDelete.id}?
+                </h3>
+                <p className="text-xs text-slate-500 leading-relaxed">
+                  Esta acción anulará la venta efectuada a <strong className="text-slate-800">{saleToDelete.cliente}</strong> por un total de <strong className="text-slate-900">Q {saleToDelete.total.toFixed(2)}</strong>.
+                </p>
+              </div>
+
+              <div className="bg-amber-50 rounded-2xl p-3.5 border border-amber-200 text-left flex items-start gap-3">
+                <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                <div className="text-[11px] text-amber-900 leading-normal">
+                  <p className="font-bold">Restauración automática de stock:</p>
+                  <p className="mt-0.5 text-amber-800">
+                    Las unidades de los {saleToDelete.productos?.length || 1} productos de esta venta se reintegrarán de inmediato al inventario físico de la sucursal y se registrará la devolución en el Kardex.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-end gap-2.5">
+              <button
+                type="button"
+                disabled={isDeletingSale}
+                onClick={() => setSaleToDelete(null)}
+                className="px-4 py-2.5 text-xs font-bold text-slate-600 hover:bg-slate-200 rounded-xl transition-all disabled:opacity-50 cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                disabled={isDeletingSale}
+                onClick={handleConfirmDeleteSale}
+                className="px-5 py-2.5 bg-rose-600 hover:bg-rose-700 active:bg-rose-800 text-white text-xs font-black rounded-xl transition-all shadow-md shadow-rose-600/20 flex items-center gap-2 disabled:opacity-50 cursor-pointer"
+              >
+                {isDeletingSale ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Eliminando & Restaurando Stock...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-4 h-4" />
+                    <span>Confirmar Anulación</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL PARA MODIFICAR VENTA */}
+      {editingSale && editSaleForm && (
+        <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-200 overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-2xl w-full shadow-2xl border border-slate-200 overflow-hidden my-8">
+            <div className="p-6 bg-gradient-to-r from-slate-900 to-indigo-950 text-white flex items-center justify-between">
+              <div>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-300">Modificación de Registro</span>
+                <h3 className="text-lg font-black tracking-tight text-white flex items-center gap-2 mt-0.5">
+                  <Pencil className="w-5 h-5 text-indigo-400" />
+                  Editar Venta #{editingSale.id}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setEditingSale(null);
+                  setEditSaleForm(null);
+                }}
+                className="p-2 text-slate-400 hover:text-white hover:bg-white/10 rounded-xl transition-all cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-5 max-h-[75vh] overflow-y-auto">
+              {/* Información del Cliente y Pago */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Cliente</label>
+                  <input
+                    type="text"
+                    disabled
+                    value={editSaleForm.nombreCliente}
+                    className="w-full px-3.5 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-xs text-slate-600 font-semibold cursor-not-allowed"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Método de Pago</label>
+                  <select
+                    value={editSaleForm.metodo_pago}
+                    onChange={(e) => setEditSaleForm({ ...editSaleForm, metodo_pago: e.target.value })}
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer"
+                  >
+                    <option value="efectivo">Efectivo</option>
+                    <option value="tarjeta">Tarjeta POS</option>
+                    <option value="transferencia">Transferencia Bancaria</option>
+                    <option value="credito">Crédito</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Observaciones / Motivo de Modificación</label>
+                <input
+                  type="text"
+                  placeholder="Ej: Corrección de cantidad solicitada por clienta..."
+                  value={editSaleForm.observaciones}
+                  onChange={(e) => setEditSaleForm({ ...editSaleForm, observaciones: e.target.value })}
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                />
+              </div>
+
+              {/* Lista de Líneas de Productos */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-bold text-slate-700">Prendas & Productos de la Venta</label>
+                  <span className="text-[11px] text-slate-400 font-medium">
+                    {editSaleForm.detalles.length} {editSaleForm.detalles.length === 1 ? 'línea' : 'líneas'}
+                  </span>
+                </div>
+
+                <div className="border border-slate-200 rounded-2xl overflow-hidden divide-y divide-slate-100 bg-slate-50/50">
+                  {editSaleForm.detalles.map((d: any, idx: number) => {
+                    const lineGross = Number(d.cantidad) * Number(d.precio_unitario);
+                    const lineTotal = Math.max(0, lineGross - (Number(d.descuento) || 0));
+
+                    return (
+                      <div key={idx} className="p-3.5 bg-white flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-bold text-slate-900 truncate" title={d.nombre}>
+                            {d.nombre}
+                          </p>
+                          <p className="text-[10px] text-slate-400 font-mono mt-0.5">ID Producto: #{d.id_producto}</p>
+                        </div>
+
+                        <div className="flex items-center gap-3">
+                          {/* Selector de Cantidad */}
+                          <div className="flex items-center border border-slate-200 rounded-xl bg-slate-50 overflow-hidden">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const newDetalles = [...editSaleForm.detalles];
+                                if (newDetalles[idx].cantidad > 1) {
+                                  newDetalles[idx].cantidad -= 1;
+                                  newDetalles[idx].subtotal = (newDetalles[idx].cantidad * newDetalles[idx].precio_unitario) - (newDetalles[idx].descuento || 0);
+                                  setEditSaleForm({ ...editSaleForm, detalles: newDetalles });
+                                }
+                              }}
+                              className="p-1.5 text-slate-500 hover:text-slate-800 hover:bg-slate-200 transition-colors cursor-pointer"
+                            >
+                              <Minus className="w-3.5 h-3.5" />
+                            </button>
+                            <input
+                              type="number"
+                              min="1"
+                              value={d.cantidad}
+                              onChange={(e) => {
+                                const val = Math.max(1, parseInt(e.target.value) || 1);
+                                const newDetalles = [...editSaleForm.detalles];
+                                newDetalles[idx].cantidad = val;
+                                newDetalles[idx].subtotal = (val * newDetalles[idx].precio_unitario) - (newDetalles[idx].descuento || 0);
+                                setEditSaleForm({ ...editSaleForm, detalles: newDetalles });
+                              }}
+                              className="w-12 text-center text-xs font-black bg-transparent border-none focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const newDetalles = [...editSaleForm.detalles];
+                                newDetalles[idx].cantidad += 1;
+                                newDetalles[idx].subtotal = (newDetalles[idx].cantidad * newDetalles[idx].precio_unitario) - (newDetalles[idx].descuento || 0);
+                                setEditSaleForm({ ...editSaleForm, detalles: newDetalles });
+                              }}
+                              className="p-1.5 text-slate-500 hover:text-slate-800 hover:bg-slate-200 transition-colors cursor-pointer"
+                            >
+                              <Plus className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+
+                          {/* Precio Unitario */}
+                          <div className="w-24">
+                            <span className="text-[9px] text-slate-400 block">P. Unitario</span>
+                            <div className="relative">
+                              <span className="absolute left-2 top-2 text-[10px] text-slate-400">Q</span>
+                              <input
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                value={d.precio_unitario}
+                                onChange={(e) => {
+                                  const val = parseFloat(e.target.value) || 0;
+                                  const newDetalles = [...editSaleForm.detalles];
+                                  newDetalles[idx].precio_unitario = val;
+                                  newDetalles[idx].subtotal = (newDetalles[idx].cantidad * val) - (newDetalles[idx].descuento || 0);
+                                  setEditSaleForm({ ...editSaleForm, detalles: newDetalles });
+                                }}
+                                className="w-full pl-5 pr-2 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-mono font-bold text-slate-800 focus:outline-none"
+                              />
+                            </div>
+                          </div>
+
+                          {/* Descuento por Línea */}
+                          <div className="w-20">
+                            <span className="text-[9px] text-amber-700 block">Desc. (Q)</span>
+                            <input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              value={d.descuento || 0}
+                              onChange={(e) => {
+                                const val = parseFloat(e.target.value) || 0;
+                                const newDetalles = [...editSaleForm.detalles];
+                                newDetalles[idx].descuento = val;
+                                newDetalles[idx].subtotal = (newDetalles[idx].cantidad * newDetalles[idx].precio_unitario) - val;
+                                setEditSaleForm({ ...editSaleForm, detalles: newDetalles });
+                              }}
+                              className="w-full px-2 py-1.5 bg-amber-50/50 border border-amber-200 rounded-lg text-xs font-mono font-bold text-amber-800 focus:outline-none"
+                            />
+                          </div>
+
+                          {/* Subtotal de Línea */}
+                          <div className="w-20 text-right">
+                            <span className="text-[9px] text-slate-400 block">Total</span>
+                            <span className="text-xs font-black text-slate-900 font-mono">
+                              Q {lineTotal.toFixed(2)}
+                            </span>
+                          </div>
+
+                          {/* Eliminar Línea */}
+                          <button
+                            type="button"
+                            title="Eliminar producto de la venta"
+                            disabled={editSaleForm.detalles.length <= 1}
+                            onClick={() => {
+                              if (editSaleForm.detalles.length <= 1) {
+                                alert('La venta debe contener al menos un producto.');
+                                return;
+                              }
+                              const newDetalles = editSaleForm.detalles.filter((_: any, i: number) => i !== idx);
+                              setEditSaleForm({ ...editSaleForm, detalles: newDetalles });
+                            }}
+                            className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Resumen Total y Advertencia de Inventario */}
+              {(() => {
+                const totalGross = editSaleForm.detalles.reduce((acc: number, d: any) => acc + (Number(d.cantidad) * Number(d.precio_unitario)), 0);
+                const totalDesc = editSaleForm.detalles.reduce((acc: number, d: any) => acc + (Number(d.descuento) || 0), 0);
+                const grandTotal = Math.max(0, totalGross - totalDesc);
+
+                return (
+                  <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
+                    <div className="flex items-center justify-between text-xs text-slate-500">
+                      <span>Subtotal Bruto:</span>
+                      <span className="font-mono">Q {totalGross.toFixed(2)}</span>
+                    </div>
+                    {totalDesc > 0 && (
+                      <div className="flex items-center justify-between text-xs text-amber-700 font-semibold">
+                        <span>Descuento Aplicado:</span>
+                        <span className="font-mono">-Q {totalDesc.toFixed(2)}</span>
+                      </div>
+                    )}
+                    <div className="flex items-center justify-between text-sm font-black text-slate-900 pt-2 border-t border-slate-200">
+                      <span>TOTAL ACTUALIZADO:</span>
+                      <span className="font-mono text-indigo-700 text-base">Q {grandTotal.toFixed(2)}</span>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              <div className="p-3 bg-indigo-50/60 rounded-xl border border-indigo-100 flex items-start gap-2.5">
+                <AlertCircle className="w-4 h-4 text-indigo-600 shrink-0 mt-0.5" />
+                <p className="text-[11px] text-indigo-900 leading-normal">
+                  <strong>Sincronización de Stock:</strong> Si aumentas o disminuyes prendas, el stock en MySQL y el Kardex se ajustarán automáticamente al guardar.
+                </p>
+              </div>
+            </div>
+
+            <div className="p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-end gap-2.5">
+              <button
+                type="button"
+                disabled={isSavingSale}
+                onClick={() => {
+                  setEditingSale(null);
+                  setEditSaleForm(null);
+                }}
+                className="px-4 py-2.5 text-xs font-bold text-slate-600 hover:bg-slate-200 rounded-xl transition-all disabled:opacity-50 cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                disabled={isSavingSale}
+                onClick={handleSaveEditSale}
+                className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white text-xs font-black rounded-xl transition-all shadow-md shadow-indigo-600/20 flex items-center gap-2 disabled:opacity-50 cursor-pointer"
+              >
+                {isSavingSale ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Guardando & Sincronizando...</span>
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 className="w-4 h-4" />
+                    <span>Guardar Cambios</span>
+                  </>
+                )}
               </button>
             </div>
           </div>

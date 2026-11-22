@@ -6306,3 +6306,77 @@ export const REAL_CLIENTS: Cliente[] = [
     "limite_credito": 5000.0
   }
 ];
+
+export const DEMO_CLIENTS: Cliente[] = [
+  {
+    id_cliente: 1,
+    nombre: "Comercial Los Álamos",
+    apellido: "S.A.",
+    nombre_completo: "Comercial Los Álamos S.A. (Demo)",
+    nit: "1234567-8",
+    telefono: "5555-0101",
+    email: "compras@losalamos.demo.gt",
+    direccion: "Zona 10, Ciudad de Guatemala",
+    tipo_cliente: "mayorista",
+    descuento_aplicable: 5.0,
+    dias_credito: 30,
+    saldo_actual: 1200.0,
+    limite_credito: 10000.0
+  },
+  {
+    id_cliente: 2,
+    nombre: "Distribuidora San José",
+    apellido: "Demo",
+    nombre_completo: "Distribuidora San José (Demo)",
+    nit: "8765432-1",
+    telefono: "5555-0202",
+    email: "ventas@sanjose.demo.gt",
+    direccion: "Calzada Roosevelt, Guatemala",
+    tipo_cliente: "mayorista",
+    descuento_aplicable: 10.0,
+    dias_credito: 45,
+    saldo_actual: 2450.0,
+    limite_credito: 15000.0
+  },
+  {
+    id_cliente: 3,
+    nombre: "María Fernanda",
+    apellido: "Castillo",
+    nombre_completo: "María Fernanda Castillo (Consumidor Final)",
+    nit: "C/F",
+    telefono: "5555-0303",
+    email: "mfer.castillo@ejemplo.gt",
+    direccion: "Carretera a El Salvador",
+    tipo_cliente: "normal",
+    descuento_aplicable: 0.0,
+    dias_credito: 0,
+    saldo_actual: 0.0,
+    limite_credito: 2000.0
+  },
+  {
+    id_cliente: 4,
+    nombre: "Tecnología & Soluciones",
+    apellido: "del Sur",
+    nombre_completo: "Tecnología & Soluciones del Sur (Demo)",
+    nit: "4567890-2",
+    telefono: "5555-0404",
+    email: "administracion@tecdelsur.demo.gt",
+    direccion: "Zona 4, Edificio Empresarial",
+    tipo_cliente: "vip",
+    descuento_aplicable: 5.0,
+    dias_credito: 15,
+    saldo_actual: 850.0,
+    limite_credito: 8000.0
+  }
+];
+
+export function getTenantClients(empresaId?: number | string): Cliente[] {
+  const id = Number(empresaId);
+  if (id === 1) {
+    return REAL_CLIENTS;
+  }
+  if (id === 25) {
+    return DEMO_CLIENTS;
+  }
+  return [];
+}

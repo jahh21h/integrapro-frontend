@@ -1,6 +1,38 @@
+import axios from 'axios';
 import apiClient from './client';
 
 export { apiClient };
+
+// Subida de archivos (multipart): se usa axios directo para que el navegador
+// fije el Content-Type con boundary (el cliente JSON por defecto lo rompería).
+const API_BASE = (import.meta as any).env?.VITE_API_URL || 'https://app.integrapro.app/api';
+
+const getActiveEmpresaHeader = (): Record<string, string> => {
+  const activeId = localStorage.getItem('integrapro_active_empresa_id');
+  return activeId ? { 'X-Empresa-ID': activeId } : {};
+};
+
+const withTenantParam = <T extends Record<string, any>>(params?: T): (T & { id_empresa?: number }) | undefined => {
+  const explicit = params?.id_empresa ?? params?.empresa_id;
+  if (explicit !== undefined && explicit !== null) {
+    return { ...params, id_empresa: Number(explicit) } as T & { id_empresa?: number };
+  }
+  const stored = localStorage.getItem('integrapro_active_empresa_id');
+  const parsed = stored ? Number(stored) : NaN;
+  if (Number.isFinite(parsed) && parsed > 0) {
+    return { ...(params || {}), id_empresa: parsed } as T & { id_empresa?: number };
+  }
+  return params;
+};
+
+const multipartConfig = () => ({
+  headers: {
+    'Authorization': `Bearer ${localStorage.getItem('integrapro_token') || ''}`,
+    ...getActiveEmpresaHeader(),
+    'Accept': 'application/json',
+  },
+  timeout: 60000,
+});
 
 // ==========================================
 // 1. AUTENTICACIÓN (Sanctum)
@@ -44,8 +76,8 @@ export const dashboardApi = {
 // 3. INVENTARIO & PRODUCTOS
 // ==========================================
 export const inventoryApi = {
-  getAll: async (params?: { search?: string; category?: string; page?: number; per_page?: number }) => {
-    const res = await apiClient.get('/inventory', { params });
+  getAll: async (params?: { search?: string; category?: string; page?: number; per_page?: number; id_empresa?: number; order_by_stock?: boolean; only_with_stock?: boolean }) => {
+    const res = await apiClient.get('/inventory', { params: withTenantParam(params) });
     return res.data;
   },
   getById: async (id: number) => {
@@ -56,8 +88,21 @@ export const inventoryApi = {
     const res = await apiClient.post('/inventory', productData);
     return res.data;
   },
+  createWithImage: async (formData: FormData) => {
+    const res = await axios.post(`${API_BASE}/inventory`, formData, multipartConfig());
+    return res.data;
+  },
+  updateWithImage: async (id: number | string, formData: FormData) => {
+    // POST + _method=PUT: multipart sobre PUT puede fallar en algunos servidores
+    const res = await axios.post(`${API_BASE}/inventory/${id}?_method=PUT`, formData, multipartConfig());
+    return res.data;
+  },
   update: async (id: number, productData: any) => {
     const res = await apiClient.put(`/inventory/${id}`, productData);
+    return res.data;
+  },
+  delete: async (id: number | string) => {
+    const res = await apiClient.delete(`/inventory/${id}`);
     return res.data;
   },
   checkSku: async (sku: string) => {
@@ -65,15 +110,15 @@ export const inventoryApi = {
     return res.data;
   },
   getCategories: async () => {
-    const res = await apiClient.get('/inventory/categories');
+    const res = await apiClient.get('/inventory/categories', { params: withTenantParam() });
     return res.data;
   },
   getSuppliers: async () => {
-    const res = await apiClient.get('/inventory/suppliers');
+    const res = await apiClient.get('/inventory/suppliers', { params: withTenantParam() });
     return res.data;
   },
   search: async (query: string) => {
-    const res = await apiClient.get('/productos/search', { params: { q: query } });
+    const res = await apiClient.get('/productos/search', { params: withTenantParam({ q: query }) });
     return res.data;
   }
 };
@@ -82,8 +127,8 @@ export const inventoryApi = {
 // 4. VENTAS, CLIENTES & FACTURACIÓN FEL
 // ==========================================
 export const salesApi = {
-  getAll: async (params?: { page?: number; search?: string; per_page?: number }) => {
-    const res = await apiClient.get('/sales', { params });
+  getAll: async (params?: { page?: number; search?: string; per_page?: number; id_empresa?: number }) => {
+    const res = await apiClient.get('/sales', { params: withTenantParam(params) });
     return res.data;
   },
   getById: async (id: number) => {
@@ -94,8 +139,16 @@ export const salesApi = {
     const res = await apiClient.post('/sales', saleData);
     return res.data;
   },
-  getClients: async () => {
-    const res = await apiClient.get('/clients');
+  updateSale: async (id: number | string, saleData: any) => {
+    const res = await apiClient.put(`/sales/${id}`, saleData);
+    return res.data;
+  },
+  deleteSale: async (id: number | string) => {
+    const res = await apiClient.delete(`/sales/${id}`);
+    return res.data;
+  },
+  getClients: async (params?: { search?: string; per_page?: number; id_empresa?: number }) => {
+    const res = await apiClient.get('/clients', { params: withTenantParam(params) });
     return res.data;
   },
   createClient: async (clientData: any) => {
@@ -103,7 +156,7 @@ export const salesApi = {
     return res.data;
   },
   getCredits: async () => {
-    const res = await apiClient.get('/sales/credits');
+    const res = await apiClient.get('/sales/credits', { params: withTenantParam() });
     return res.data;
   },
   addPayment: async (saleId: number, paymentData: { monto: number; metodo_pago: string; referencia?: string }) => {
@@ -117,7 +170,7 @@ export const salesApi = {
 // ==========================================
 export const quotationsApi = {
   getAll: async () => {
-    const res = await apiClient.get('/quotations');
+    const res = await apiClient.get('/quotations', { params: withTenantParam() });
     return res.data;
   },
   create: async (quotationData: any) => {
@@ -134,8 +187,16 @@ export const quotationsApi = {
 // 6. COMPRAS & PROVEEDORES
 // ==========================================
 export const purchasesApi = {
-  getAll: async (params?: { search?: string; page?: number; all?: boolean }) => {
-    const res = await apiClient.get('/purchases', { params });
+  getSuppliers: async (params?: { id_empresa?: number }) => {
+    const res = await apiClient.get('/suppliers', { params: withTenantParam(params) });
+    return res.data;
+  },
+  createSupplier: async (data: any) => {
+    const res = await apiClient.post('/suppliers', data);
+    return res.data;
+  },
+  getAll: async (params?: { search?: string; page?: number; all?: boolean; id_empresa?: number }) => {
+    const res = await apiClient.get('/purchases', { params: withTenantParam(params) });
     return res.data;
   },
   getById: async (id: number | string) => {
@@ -288,6 +349,10 @@ export const externalConnectionsApi = {
     const res = await apiClient.post('/conexiones-externas', data);
     return res.data;
   },
+  delete: async (id: number) => {
+    const res = await apiClient.delete(`/conexiones-externas/${id}`);
+    return res.data;
+  },
   testConnection: async (id: number) => {
     const res = await apiClient.post(`/conexiones-externas/${id}/test`);
     return res.data;
@@ -317,11 +382,11 @@ export const inventoryTransferApi = {
 // ==========================================
 export const empresaApi = {
   getAll: async () => {
-    const res = await apiClient.get('/empresas');
+    const res = await apiClient.get(`/empresas?_t=${Date.now()}`);
     return res.data;
   },
   getById: async (id: number | string) => {
-    const res = await apiClient.get(`/empresas/${id}`);
+    const res = await apiClient.get(`/empresas/${id}?_t=${Date.now()}`);
     return res.data;
   },
   update: async (id: number | string, data: any) => {

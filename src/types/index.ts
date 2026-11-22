@@ -1,6 +1,7 @@
 export type TimeFormat = '12h' | '24h';
 
 export type UserRole = 
+  | 'SuperAdmin'
   | 'Administrador' 
   | 'Gerente de Sucursal' 
   | 'Cajero / Ventas' 
@@ -132,6 +133,7 @@ export interface DetalleCompraItem {
   cantidad: number;
   precio_unitario: number;
   precio_compra?: number;
+  precio_venta?: number | null;
   precio_origen?: number | null;
   costo_con_envio?: number | null;
   subtotal: number;
@@ -418,10 +420,16 @@ export interface LiveCustomerBag {
   estado: 'abierta' | 'pendiente_pago' | 'despachada' | 'liquidada' | 'cancelada';
   metodo_pago?: 'transferencia' | 'contra_entrega' | 'efectivo' | 'tarjeta';
   boleta_comprobante?: string;
-  empresa_envio?: 'Guatex' | 'Forza Delivery' | 'Cargo Expreso' | 'Mensajero Local' | 'Recoge en Tienda';
+  empresa_envio?: 'Guatex' | 'Forza Delivery' | 'Cargo Expreso' | 'Mensajero Local' | 'Recoge en Tienda' | 'Entrega Personal / Cercana';
   notas?: string;
   creado_en: string;
   actualizado_en: string;
+  // Campos del ciclo de cobranza y consolidación SHEIN
+  incluye_envio?: boolean;
+  es_unificada_shein?: boolean;
+  monto_shein?: number;
+  descripcion_shein?: string;
+  fecha_vencimiento?: string;
 }
 
 export interface LiveSession {
