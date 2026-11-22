@@ -99,6 +99,7 @@ export default function Navbar({
   });
 
   useEffect(() => {
+    setNotifOpen(false);
     try {
       const saved = localStorage.getItem('integrapro_read_notifs_' + currentEmpId);
       setReadNotifIds(saved ? JSON.parse(saved) : []);
@@ -120,8 +121,8 @@ export default function Navbar({
       return Math.ceil((target.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
     };
 
-    // 1. Notificaciones para el Dueño de Plataforma (Fortexa): cobranza y nuevos trials de todos los inquilinos
-    if (isPlatformAdmin && Array.isArray(allEmpresas)) {
+    // 1. Notificaciones para el Dueño de Plataforma (solo visibles dentro de Fortexa #22 para no mezclar al cambiar a Fashion Styles o Demo QA)
+    if (isPlatformAdmin && currentEmpId === 22 && Array.isArray(allEmpresas)) {
       allEmpresas
         .filter(e => e.id !== 1 && e.id !== 22 && e.id !== 99)
         .forEach(emp => {
