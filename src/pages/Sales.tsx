@@ -1480,7 +1480,7 @@ export default function Sales({ currentEmpresa }: SalesProps = {}) {
           onClick={handleClosePdfViewer}
         >
           <div
-            className="bg-white w-full max-w-4xl h-[90vh] rounded-3xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col"
+            className="bg-white w-full max-w-5xl h-[92vh] rounded-3xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="px-4 py-3 bg-slate-900 text-white flex items-center justify-between gap-3 shrink-0">
@@ -1527,7 +1527,7 @@ export default function Sales({ currentEmpresa }: SalesProps = {}) {
 
             <div className="flex-1 bg-slate-100">
               <iframe
-                src={pdfViewer.url}
+                src={`${pdfViewer.url}#view=FitH&navpanes=0`}
                 title={`Comprobante PDF Venta #${pdfViewer.saleId}`}
                 className="w-full h-full border-0"
               />
