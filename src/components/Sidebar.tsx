@@ -86,6 +86,8 @@ export default function Sidebar({
 
   const activeEmpresaId = currentEmpresaId ?? user.empresa_id;
   const isFortexa = activeEmpresaId === 22;
+  const hasPosEnabled = !isFortexa && currentEmpresa?.modules?.pos !== false;
+  const hasLiveEnabled = !isFortexa && (currentEmpresa?.modules?.live_sales ?? activeEmpresaId === 1);
 
   const commercialItems: MenuItem[] = isFortexa ? [
     { 
@@ -117,18 +119,18 @@ export default function Sidebar({
       icon: Clock3,
     },
   ] : [
-    { 
-      id: 'pos', 
+    ...(hasPosEnabled ? [{ 
+      id: 'pos' as NavigationTab, 
       label: 'Punto de Venta (POS)', 
       icon: Zap,
-      badge: { text: 'Caja', variant: 'emerald' }
-    },
-    { 
-      id: 'live_sales', 
+      badge: { text: 'Caja', variant: 'emerald' as const }
+    }] : []),
+    ...(hasLiveEnabled ? [{ 
+      id: 'live_sales' as NavigationTab, 
       label: 'TikTok Live Commerce', 
       icon: Video,
-      badge: { text: 'Live', variant: 'emerald' }
-    },
+      badge: { text: 'Live', variant: 'emerald' as const }
+    }] : []),
     { 
       id: 'inventario', 
       label: 'Inventario & Bodega', 

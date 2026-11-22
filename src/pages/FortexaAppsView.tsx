@@ -31,7 +31,11 @@ import {
   Video,
   Sparkles,
   Sliders,
-  Zap
+  Zap,
+  Lock,
+  Power,
+  X,
+  Send
 } from 'lucide-react';
 import { SoftwareLicenseItem, SignedLicenseItem, EmpresaSaaS } from '../types';
 import { softwareLicenseApi, empresaApi } from '../api';
@@ -63,6 +67,7 @@ interface FortexaAppsViewProps {
   currentEmpresa?: EmpresaSaaS;
   empresas?: EmpresaSaaS[];
   onUpdateEmpresa?: (emp: EmpresaSaaS) => void;
+  onCreateEmpresa?: (emp: EmpresaSaaS) => void;
   onSelectEmpresa?: (id: number) => void;
 }
 
@@ -70,6 +75,7 @@ export default function FortexaAppsView({
   currentEmpresa,
   empresas = [],
   onUpdateEmpresa,
+  onCreateEmpresa,
   onSelectEmpresa
 }: FortexaAppsViewProps) {
   const [activeSubTab, setActiveSubTab] = useState<'rutafuel' | 'quantum' | 'integrapro' | 'live_commerce'>('integrapro');
@@ -165,18 +171,30 @@ export default function FortexaAppsView({
       compras: isForceLiveOnly ? false : Boolean(saasPlanForm.hasPurchases),
       purchases: isForceLiveOnly ? false : Boolean(saasPlanForm.hasPurchases),
       sucursales: isForceLiveOnly ? false : true,
-      inventory: true,
-      inventario: true,
-      clients: true,
-      clientes: true,
+      inventory: isForceLiveOnly ? true : Boolean(saasPlanForm.hasInventory),
+      inventario: isForceLiveOnly ? true : Boolean(saasPlanForm.hasInventory),
+      clients: isForceLiveOnly ? true : Boolean(saasPlanForm.hasClients),
+      clientes: isForceLiveOnly ? true : Boolean(saasPlanForm.hasClients),
       dashboard: true
     };
 
+    const nextPlan = isForceLiveOnly ? 'live_express' : saasPlanForm.plan;
     const updatedEmpresa: EmpresaSaaS = {
       ...editingEmpresaSaaS,
-      plan: isForceLiveOnly ? 'live_express' : saasPlanForm.plan,
+      plan: nextPlan,
       modules: updatedModules
     };
+
+    // Persistir plan y módulos en vivo en MySQL (excepto demo local #99)
+    if (updatedEmpresa.id !== 99) {
+      empresaApi.update(updatedEmpresa.id, {
+        plan_type: nextPlan,
+        modules: updatedModules
+      }).catch(err => {
+        console.error('Error guardando plan/módulos en servidor:', err);
+        showToast(`⚠️ Cambio aplicado localmente pero falló sincronización en BD: ${err?.response?.data?.message || err.message}`);
+      });
+    }
 
     if (onUpdateEmpresa) {
       onUpdateEmpresa(updatedEmpresa);
@@ -184,12 +202,298 @@ export default function FortexaAppsView({
 
     setSaasEmpresas(prev => prev.map(e => e.id === updatedEmpresa.id ? updatedEmpresa : e));
 
-    showToast(`✅ Suscripción de ${updatedEmpresa.nombre} actualizada: ${
+    showToast(`✅ Suscripción de ${updatedEmpresa.nombre} guardada en MySQL: ${
       isForceLiveOnly ? 'Plan Solo Live Express (Q199/m)' : `Plan ${saasPlanForm.plan.toUpperCase()} ${saasPlanForm.hasLiveAddon ? '+ Add-on Live' : ''}`
     }`);
 
     setEditingEmpresaSaaS(null);
     return updatedEmpresa;
+  };
+
+  // =========================================================================
+  // FASE 1: ALTA Y ACTIVACIÓN DE NUEVO INQUILINO (CLIENTE SAAS) + SUSPENSIÓN
+  // =========================================================================
+  const [showNewTenantModal, setShowNewTenantModal] = useState<boolean>(false);
+  const [isCreatingTenant, setIsCreatingTenant] = useState<boolean>(false);
+  const [tenantCreateError, setTenantCreateError] = useState<string | null>(null);
+  const [togglingTenantId, setTogglingTenantId] = useState<number | null>(null);
+  const [createdTenantResult, setCreatedTenantResult] = useState<{
+    empresa: EmpresaSaaS;
+    adminName: string;
+    adminEmail: string;
+    plainPassword: string;
+    sucursalNombre: string;
+  } | null>(null);
+  const [copiedCredentials, setCopiedCredentials] = useState<boolean>(false);
+
+  const generateSecurePassword = () => {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    let code = 'IP-';
+    for (let i = 0; i < 6; i++) {
+      code += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return code;
+  };
+
+  const getInitialNewTenantForm = () => ({
+    nombre: '',
+    razon_social: '',
+    nit: 'CF',
+    regimen_tributario: 'general' as 'general' | 'pequeno_contribuyente' | 'informal',
+    telefono: '',
+    direccion: 'Ciudad de Guatemala',
+    sucursal_nombre: 'Sucursal Principal',
+    preset: 'retail' as 'retail' | 'admin_only' | 'standard' | 'enterprise' | 'live_express',
+    plan_type: 'basic' as 'live_express' | 'basic' | 'standard' | 'enterprise',
+    subscription_status: 'active' as 'active' | 'trial',
+    trial_days: 14,
+    hasPos: true,
+    hasLiveSales: false,
+    hasFel: true,
+    hasInventory: true,
+    hasClients: true,
+    hasPurchases: true,
+    hasAccounting: false,
+    hasHr: false,
+    admin_name: '',
+    admin_email: '',
+    admin_password: generateSecurePassword(),
+  });
+
+  const [newTenantForm, setNewTenantForm] = useState(getInitialNewTenantForm);
+
+  const applyTenantPreset = (preset: 'retail' | 'admin_only' | 'standard' | 'enterprise' | 'live_express') => {
+    if (preset === 'live_express') {
+      setNewTenantForm(prev => ({
+        ...prev,
+        preset,
+        plan_type: 'live_express',
+        regimen_tributario: 'informal',
+        hasPos: false,
+        hasLiveSales: true,
+        hasFel: false,
+        hasInventory: true,
+        hasClients: true,
+        hasPurchases: false,
+        hasAccounting: false,
+        hasHr: false,
+      }));
+    } else if (preset === 'admin_only') {
+      setNewTenantForm(prev => ({
+        ...prev,
+        preset,
+        plan_type: 'standard',
+        hasPos: false,
+        hasLiveSales: false,
+        hasFel: true,
+        hasInventory: true,
+        hasClients: true,
+        hasPurchases: true,
+        hasAccounting: true,
+        hasHr: true,
+      }));
+    } else if (preset === 'retail') {
+      setNewTenantForm(prev => ({
+        ...prev,
+        preset,
+        plan_type: 'basic',
+        hasPos: true,
+        hasLiveSales: false,
+        hasFel: true,
+        hasInventory: true,
+        hasClients: true,
+        hasPurchases: true,
+        hasAccounting: false,
+        hasHr: false,
+      }));
+    } else if (preset === 'standard') {
+      setNewTenantForm(prev => ({
+        ...prev,
+        preset,
+        plan_type: 'standard',
+        hasPos: true,
+        hasLiveSales: false,
+        hasFel: true,
+        hasInventory: true,
+        hasClients: true,
+        hasPurchases: true,
+        hasAccounting: true,
+        hasHr: true,
+      }));
+    } else {
+      setNewTenantForm(prev => ({
+        ...prev,
+        preset: 'enterprise',
+        plan_type: 'enterprise',
+        hasPos: true,
+        hasLiveSales: true,
+        hasFel: true,
+        hasInventory: true,
+        hasClients: true,
+        hasPurchases: true,
+        hasAccounting: true,
+        hasHr: true,
+      }));
+    }
+  };
+
+  const handleOpenNewTenantModal = () => {
+    setNewTenantForm(getInitialNewTenantForm());
+    setTenantCreateError(null);
+    setCreatedTenantResult(null);
+    setCopiedCredentials(false);
+    setShowNewTenantModal(true);
+  };
+
+  const handleCreateNewTenant = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newTenantForm.nombre.trim() || !newTenantForm.admin_name.trim() || !newTenantForm.admin_email.trim()) {
+      setTenantCreateError('Completa el nombre de la empresa, el nombre del administrador y su correo.');
+      return;
+    }
+
+    setIsCreatingTenant(true);
+    setTenantCreateError(null);
+
+    const isLiveOnly = newTenantForm.plan_type === 'live_express';
+    const modules = {
+      live_sales: isLiveOnly ? true : Boolean(newTenantForm.hasLiveSales),
+      live_only: isLiveOnly,
+      pos: isLiveOnly ? false : Boolean(newTenantForm.hasPos),
+      ventas: isLiveOnly ? false : Boolean(newTenantForm.hasFel),
+      sat_fel: isLiveOnly ? false : Boolean(newTenantForm.hasFel),
+      inventario: Boolean(newTenantForm.hasInventory),
+      inventory: Boolean(newTenantForm.hasInventory),
+      clientes: Boolean(newTenantForm.hasClients),
+      clients: Boolean(newTenantForm.hasClients),
+      compras: isLiveOnly ? false : Boolean(newTenantForm.hasPurchases),
+      purchases: isLiveOnly ? false : Boolean(newTenantForm.hasPurchases),
+      contabilidad: isLiveOnly ? false : Boolean(newTenantForm.hasAccounting),
+      accounting: isLiveOnly ? false : Boolean(newTenantForm.hasAccounting),
+      rrhh: isLiveOnly ? false : Boolean(newTenantForm.hasHr),
+      hr: isLiveOnly ? false : Boolean(newTenantForm.hasHr),
+      asistencia: isLiveOnly ? false : Boolean(newTenantForm.hasHr),
+      sucursales: !isLiveOnly,
+      dashboard: true,
+      configuracion: true,
+    };
+
+    try {
+      const res = await empresaApi.create({
+        nombre: newTenantForm.nombre.trim(),
+        razon_social: newTenantForm.razon_social.trim() || newTenantForm.nombre.trim(),
+        nit: newTenantForm.nit.trim() || 'CF',
+        pais: 'GT',
+        regimen_tributario: newTenantForm.regimen_tributario,
+        telefono: newTenantForm.telefono.trim(),
+        email: newTenantForm.admin_email.trim().toLowerCase(),
+        direccion: newTenantForm.direccion.trim() || 'Ciudad de Guatemala',
+        sucursal_nombre: newTenantForm.sucursal_nombre.trim() || 'Sucursal Principal',
+        plan_type: newTenantForm.plan_type,
+        subscription_status: newTenantForm.subscription_status,
+        trial_days: newTenantForm.subscription_status === 'trial' ? newTenantForm.trial_days : 0,
+        modules,
+        admin_name: newTenantForm.admin_name.trim(),
+        admin_email: newTenantForm.admin_email.trim().toLowerCase(),
+        admin_password: newTenantForm.admin_password.trim() || undefined,
+      });
+
+      const createdEmp = res?.empresa;
+      const mappedEmp: EmpresaSaaS = {
+        id: Number(createdEmp?.id_empresa || createdEmp?.id),
+        nombre: createdEmp?.nombre || newTenantForm.nombre.trim(),
+        razon_social: createdEmp?.razon_social || newTenantForm.razon_social.trim() || newTenantForm.nombre.trim(),
+        nit: createdEmp?.nit || newTenantForm.nit.trim() || 'CF',
+        pais: createdEmp?.pais || 'GT',
+        regimen: createdEmp?.regimen_tributario === 'pequeno_contribuyente'
+          ? 'Pequeño Contribuyente (5%)'
+          : createdEmp?.regimen_tributario === 'informal'
+          ? 'Exento / Informal'
+          : 'General (IVA 12%)',
+        plan: (createdEmp?.plan_type as any) || newTenantForm.plan_type,
+        activa: createdEmp?.activa !== false,
+        telefono: createdEmp?.telefono || '',
+        email: createdEmp?.email || newTenantForm.admin_email.trim(),
+        direccion: createdEmp?.direccion || '',
+        modules,
+      };
+
+      setSaasEmpresas(prev => [mappedEmp, ...prev.filter(x => x.id !== mappedEmp.id)]);
+      if (onCreateEmpresa) {
+        onCreateEmpresa(mappedEmp);
+      }
+
+      setCreatedTenantResult({
+        empresa: mappedEmp,
+        adminName: res?.admin_user?.name || newTenantForm.admin_name.trim(),
+        adminEmail: res?.admin_user?.email || newTenantForm.admin_email.trim().toLowerCase(),
+        plainPassword: res?.plain_password || newTenantForm.admin_password.trim(),
+        sucursalNombre: res?.sucursal?.nombre || newTenantForm.sucursal_nombre.trim() || 'Sucursal Principal',
+      });
+
+      showToast(`🚀 Inquilino "${mappedEmp.nombre}" (#${mappedEmp.id}) creado y activado en MySQL.`);
+    } catch (err: any) {
+      console.error('Error creando nuevo inquilino:', err);
+      const validationErrors = err?.response?.data?.errors;
+      const firstErr = validationErrors ? Object.values(validationErrors).flat()[0] : null;
+      setTenantCreateError(
+        String(firstErr || err?.response?.data?.message || 'No se pudo crear la empresa en el servidor.')
+      );
+    } finally {
+      setIsCreatingTenant(false);
+    }
+  };
+
+  const handleToggleEmpresaStatus = async (emp: EmpresaSaaS) => {
+    if (emp.id === 1 || emp.id === 22) {
+      showToast('⚠️ Las empresas base del sistema (Fortexa y Fashion Styles) no se pueden suspender.');
+      return;
+    }
+    const nextActive = !emp.activa;
+    const actionLabel = nextActive ? 'reactivar' : 'suspender (y cerrar sesiones activas)';
+    if (!window.confirm(`¿Seguro que deseas ${actionLabel} el acceso de "${emp.nombre}" (#${emp.id})?`)) {
+      return;
+    }
+
+    setTogglingTenantId(emp.id);
+    try {
+      if (emp.id !== 99) {
+        await empresaApi.update(emp.id, {
+          activa: nextActive,
+          subscription_status: nextActive ? 'active' : 'suspended',
+        });
+      }
+      const updatedEmp: EmpresaSaaS = { ...emp, activa: nextActive };
+      setSaasEmpresas(prev => prev.map(e => e.id === emp.id ? updatedEmp : e));
+      if (onUpdateEmpresa) {
+        onUpdateEmpresa(updatedEmp);
+      }
+      showToast(
+        nextActive
+          ? `✅ Servicio reactivado para "${emp.nombre}".`
+          : `⛔ Servicio suspendido para "${emp.nombre}". Sus sesiones activas fueron cerradas.`
+      );
+    } catch (err: any) {
+      showToast(`⚠️ Error actualizando estado: ${err?.response?.data?.message || err.message}`);
+    } finally {
+      setTogglingTenantId(null);
+    }
+  };
+
+  const getTenantWelcomeText = () => {
+    if (!createdTenantResult) return '';
+    return [
+      `🚀 *¡Bienvenido a IntegraPro Cloud!*`,
+      `Tu espacio privado ya está activo y configurado por *Fortexa Technologies*.`,
+      ``,
+      `🏢 *Empresa:* ${createdTenantResult.empresa.nombre} (ID #${createdTenantResult.empresa.id})`,
+      `📍 *Sucursal Inicial:* ${createdTenantResult.sucursalNombre}`,
+      `🌐 *Enlace de Acceso:* https://app.integrapro.app`,
+      `👤 *Usuario:* ${createdTenantResult.adminEmail}`,
+      `🔑 *Contraseña Temporal:* ${createdTenantResult.plainPassword}`,
+      ``,
+      `🔒 _Tu empresa opera en un entorno 100% aislado y privado._`,
+    ].join('\n');
   };
 
   // Modal para ajustar manualmente la fecha de corte (expires_at)
@@ -1961,12 +2265,22 @@ export default function FortexaAppsView({
                     Empresas Tenants & Suscripciones SaaS ({allEmpresas.length})
                   </h3>
                   <p className="text-xs text-slate-500">
-                    Administración de planes SaaS, activación del Add-on TikTok Live y control de módulos por empresa cliente.
+                    Administración de planes SaaS, alta de nuevos inquilinos aislados, suspensión de servicio y control de módulos.
                   </p>
                 </div>
-                <span className="text-xs font-bold text-slate-600 bg-slate-100 px-3 py-1 rounded-xl self-start sm:self-auto">
-                  {liveEnabledCount} con Módulo Live activo
-                </span>
+                <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+                  <span className="text-xs font-bold text-slate-600 bg-slate-100 px-3 py-1.5 rounded-xl">
+                    {liveEnabledCount} con Módulo Live activo
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleOpenNewTenantModal}
+                    className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 text-white text-xs font-black shadow-md shadow-indigo-600/25 flex items-center gap-1.5 transition-all cursor-pointer"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>Activar Nuevo Cliente (Inquilino)</span>
+                  </button>
+                </div>
               </div>
 
               <div className="border border-slate-200/80 rounded-2xl overflow-hidden shadow-xs">
@@ -1980,6 +2294,7 @@ export default function FortexaAppsView({
                         <th className="py-3 px-3.5">Plan SaaS Contratado</th>
                         <th className="py-3 px-3.5">Módulo TikTok Live</th>
                         <th className="py-3 px-3.5">Entorno de Usuario</th>
+                        <th className="py-3 px-3.5">Estado</th>
                         <th className="py-3 px-3.5 text-right">Gestión SaaS</th>
                       </tr>
                     </thead>
@@ -2033,10 +2348,28 @@ export default function FortexaAppsView({
                                   <Zap className="w-3 h-3 text-amber-600" />
                                   <span>Solo Live Express (0 ERP)</span>
                                 </span>
+                              ) : emp.modules?.pos === false ? (
+                                <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-blue-50 text-blue-800 border border-blue-200 inline-flex items-center gap-1">
+                                  <Layers className="w-3 h-3 text-blue-600" />
+                                  <span>Administrativo (Sin POS)</span>
+                                </span>
                               ) : (
                                 <span className="px-2 py-0.5 rounded-md text-[10px] font-medium bg-slate-100 text-slate-700 border border-slate-200 inline-flex items-center gap-1">
                                   <Layers className="w-3 h-3 text-slate-500" />
                                   <span>Suite ERP Completa</span>
+                                </span>
+                              )}
+                            </td>
+                            <td className="py-3.5 px-3.5">
+                              {emp.activa !== false ? (
+                                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 inline-flex items-center gap-1">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                                  Activa
+                                </span>
+                              ) : (
+                                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200 inline-flex items-center gap-1">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+                                  Suspendida
                                 </span>
                               )}
                             </td>
@@ -2051,6 +2384,22 @@ export default function FortexaAppsView({
                                   <Sliders className="w-3 h-3 text-indigo-400" />
                                   <span>Configurar</span>
                                 </button>
+                                {emp.id !== 1 && emp.id !== 22 && (
+                                  <button
+                                    type="button"
+                                    disabled={togglingTenantId === emp.id}
+                                    onClick={() => handleToggleEmpresaStatus(emp)}
+                                    className={`px-2 py-1 text-[11px] font-bold rounded-lg transition-all flex items-center gap-1 cursor-pointer border disabled:opacity-50 ${
+                                      emp.activa !== false
+                                        ? 'bg-rose-50 hover:bg-rose-100 text-rose-700 border-rose-200'
+                                        : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border-emerald-200'
+                                    }`}
+                                    title={emp.activa !== false ? 'Suspender acceso del cliente y cerrar sesiones' : 'Reactivar servicio del cliente'}
+                                  >
+                                    <Power className="w-3 h-3" />
+                                    <span>{emp.activa !== false ? 'Suspender' : 'Reactivar'}</span>
+                                  </button>
+                                )}
                                 {onSelectEmpresa && isOwnerOperableEmpresa(emp.id) ? (
                                   <button
                                     type="button"
@@ -2062,10 +2411,11 @@ export default function FortexaAppsView({
                                   </button>
                                 ) : (
                                   <span
-                                    className="px-2 py-1 bg-slate-100 text-slate-500 text-[10px] font-bold rounded-lg border border-slate-200"
+                                    className="px-2 py-1 bg-slate-100 text-slate-500 text-[10px] font-bold rounded-lg border border-slate-200 inline-flex items-center gap-1"
                                     title="Privacidad Multi-Tenant: los datos operativos de clientes externos son privados"
                                   >
-                                    🔒 Privado
+                                    <Lock className="w-3 h-3" />
+                                    <span>Privado</span>
                                   </span>
                                 )}
                               </div>
@@ -3093,7 +3443,7 @@ export default function FortexaAppsView({
                 Cancelar
               </button>
               <div className="flex items-center gap-2">
-                {onSelectEmpresa && (
+                {onSelectEmpresa && isOwnerOperableEmpresa(editingEmpresaSaaS.id) && (
                   <button
                     type="button"
                     onClick={() => {
@@ -3117,6 +3467,355 @@ export default function FortexaAppsView({
               </div>
             </div>
 
+          </div>
+        </div>
+      )}
+
+      {/* MODAL FASE 1: ACTIVAR NUEVO CLIENTE (INQUILINO SAAS AISLADO) */}
+      {showNewTenantModal && (
+        <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 max-w-2xl w-full max-h-[92vh] overflow-y-auto p-6 space-y-5 animate-in fade-in zoom-in-95 duration-200">
+            {/* Header */}
+            <div className="flex items-start justify-between gap-3 border-b border-slate-100 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-indigo-600 to-blue-600 text-white flex items-center justify-center shadow-lg shadow-indigo-600/25 shrink-0">
+                  <Building2 className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-slate-900">
+                    {createdTenantResult ? '¡Nuevo Cliente Activado en Producción!' : 'Activar Nuevo Cliente (Inquilino SaaS)'}
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    {createdTenantResult
+                      ? 'Espacio multi-tenant creado en MySQL con aislamiento total. Entrega estas credenciales al cliente.'
+                      : 'Crea en 1 paso: Empresa aislada + Sucursal Principal + Usuario Dueño (sin acceso a otros inquilinos).'}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowNewTenantModal(false)}
+                className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {createdTenantResult ? (
+              <div className="space-y-4">
+                <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 flex items-center gap-3">
+                  <CheckCircle2 className="w-6 h-6 text-emerald-600 shrink-0" />
+                  <div className="text-xs text-emerald-900">
+                    <p className="font-black">Inquilino #{createdTenantResult.empresa.id} — {createdTenantResult.empresa.nombre}</p>
+                    <p className="text-emerald-700 mt-0.5">
+                      Sucursal inicial: <strong>{createdTenantResult.sucursalNombre}</strong> • Aislamiento privado verificado.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="p-4 rounded-2xl bg-slate-900 text-slate-100 space-y-2.5 font-mono text-xs">
+                  <div className="flex justify-between gap-2 border-b border-slate-800 pb-2">
+                    <span className="text-slate-400">URL de Acceso:</span>
+                    <span className="text-indigo-300 font-bold">https://app.integrapro.app</span>
+                  </div>
+                  <div className="flex justify-between gap-2 border-b border-slate-800 pb-2">
+                    <span className="text-slate-400">Administrador:</span>
+                    <span className="text-white font-bold">{createdTenantResult.adminName}</span>
+                  </div>
+                  <div className="flex justify-between gap-2 border-b border-slate-800 pb-2">
+                    <span className="text-slate-400">Correo (Usuario):</span>
+                    <span className="text-emerald-300 font-bold">{createdTenantResult.adminEmail}</span>
+                  </div>
+                  <div className="flex justify-between gap-2">
+                    <span className="text-slate-400">Contraseña Inicial:</span>
+                    <span className="text-amber-300 font-black text-sm">{createdTenantResult.plainPassword}</span>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center justify-end gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText(getTenantWelcomeText());
+                      setCopiedCredentials(true);
+                      setTimeout(() => setCopiedCredentials(false), 2500);
+                    }}
+                    className="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+                  >
+                    {copiedCredentials ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4" />}
+                    <span>{copiedCredentials ? '¡Mensaje Copiado!' : 'Copiar Credenciales'}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const rawPhone = newTenantForm.telefono.replace(/\D/g, '');
+                      const waPhone = rawPhone ? (rawPhone.startsWith('502') ? rawPhone : `502${rawPhone}`) : '';
+                      const url = waPhone
+                        ? `https://api.whatsapp.com/send?phone=${waPhone}&text=${encodeURIComponent(getTenantWelcomeText())}`
+                        : `https://api.whatsapp.com/send?text=${encodeURIComponent(getTenantWelcomeText())}`;
+                      window.open(url, '_blank');
+                    }}
+                    className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black flex items-center gap-1.5 shadow-md shadow-emerald-600/20 cursor-pointer"
+                  >
+                    <Send className="w-4 h-4" />
+                    <span>Enviar por WhatsApp</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowNewTenantModal(false)}
+                    className="px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-black cursor-pointer"
+                  >
+                    Finalizar
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <form onSubmit={handleCreateNewTenant} className="space-y-5 text-xs">
+                {tenantCreateError && (
+                  <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 font-bold flex items-center gap-2">
+                    <ShieldAlert className="w-4 h-4 shrink-0" />
+                    <span>{tenantCreateError}</span>
+                  </div>
+                )}
+
+                {/* 1. Datos de la Empresa */}
+                <div className="space-y-3">
+                  <p className="font-black text-slate-900 uppercase tracking-wider text-[11px] flex items-center gap-1.5">
+                    <Building2 className="w-3.5 h-3.5 text-indigo-600" />
+                    1. Datos del Negocio (Nuevo Inquilino)
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1">Nombre Comercial *</label>
+                      <input
+                        type="text"
+                        required
+                        value={newTenantForm.nombre}
+                        onChange={(e) => setNewTenantForm({ ...newTenantForm, nombre: e.target.value })}
+                        placeholder="Ej. Ferretería El Constructor"
+                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-semibold focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1">Razón Social</label>
+                      <input
+                        type="text"
+                        value={newTenantForm.razon_social}
+                        onChange={(e) => setNewTenantForm({ ...newTenantForm, razon_social: e.target.value })}
+                        placeholder="Ej. Inversiones El Constructor S.A."
+                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-semibold focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1">NIT (o CF)</label>
+                      <input
+                        type="text"
+                        value={newTenantForm.nit}
+                        onChange={(e) => setNewTenantForm({ ...newTenantForm, nit: e.target.value })}
+                        placeholder="Ej. 1234567-8 o CF"
+                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-mono font-semibold focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1">Régimen Tributario SAT</label>
+                      <select
+                        value={newTenantForm.regimen_tributario}
+                        onChange={(e) => setNewTenantForm({ ...newTenantForm, regimen_tributario: e.target.value as any })}
+                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-semibold focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      >
+                        <option value="general">Régimen General (IVA 12%)</option>
+                        <option value="pequeno_contribuyente">Pequeño Contribuyente (5%)</option>
+                        <option value="informal">Exento / Informal (0%)</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1">Teléfono / WhatsApp</label>
+                      <input
+                        type="text"
+                        value={newTenantForm.telefono}
+                        onChange={(e) => setNewTenantForm({ ...newTenantForm, telefono: e.target.value })}
+                        placeholder="Ej. 5555-1234"
+                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-semibold focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1">Sucursal Inicial</label>
+                      <input
+                        type="text"
+                        value={newTenantForm.sucursal_nombre}
+                        onChange={(e) => setNewTenantForm({ ...newTenantForm, sucursal_nombre: e.target.value })}
+                        placeholder="Sucursal Principal"
+                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-semibold focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* 2. Plan y Perfil Operativo */}
+                <div className="space-y-3 pt-2 border-t border-slate-100">
+                  <p className="font-black text-slate-900 uppercase tracking-wider text-[11px] flex items-center gap-1.5">
+                    <Layers className="w-3.5 h-3.5 text-purple-600" />
+                    2. Perfil del Cliente & Módulos Activados
+                  </p>
+                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5">
+                    {[
+                      { id: 'retail', label: 'Retail / POS' },
+                      { id: 'admin_only', label: 'Admin (Sin POS)' },
+                      { id: 'standard', label: 'Estándar PyME' },
+                      { id: 'enterprise', label: 'Enterprise Full' },
+                      { id: 'live_express', label: 'Solo TikTok Live' },
+                    ].map(p => (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => applyTenantPreset(p.id as any)}
+                        className={`px-2.5 py-2 rounded-xl text-[11px] font-bold border transition-all cursor-pointer ${
+                          newTenantForm.preset === p.id
+                            ? 'bg-slate-900 text-white border-slate-900 shadow-sm'
+                            : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                        }`}
+                      >
+                        {p.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    {[
+                      { key: 'hasPos', label: 'Punto de Venta (POS)' },
+                      { key: 'hasInventory', label: 'Inventario & Bodega' },
+                      { key: 'hasFel', label: 'Ventas & FEL' },
+                      { key: 'hasClients', label: 'Clientes & CxC' },
+                      { key: 'hasPurchases', label: 'Compras & CxP' },
+                      { key: 'hasAccounting', label: 'Contabilidad SAT' },
+                      { key: 'hasHr', label: 'RRHH & Asistencia' },
+                      { key: 'hasLiveSales', label: 'TikTok Live' },
+                    ].map(mod => (
+                      <label
+                        key={mod.key}
+                        className="p-2 rounded-xl border border-slate-200 bg-slate-50/70 hover:bg-slate-100 flex items-center justify-between gap-2 cursor-pointer"
+                      >
+                        <span className="text-[11px] font-bold text-slate-700">{mod.label}</span>
+                        <input
+                          type="checkbox"
+                          checked={(newTenantForm as any)[mod.key]}
+                          onChange={(e) => setNewTenantForm({ ...newTenantForm, [mod.key]: e.target.checked })}
+                          className="w-4 h-4 text-indigo-600 rounded"
+                        />
+                      </label>
+                    ))}
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1">Estado Inicial de Suscripción</label>
+                      <select
+                        value={newTenantForm.subscription_status}
+                        onChange={(e) => setNewTenantForm({ ...newTenantForm, subscription_status: e.target.value as any })}
+                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-semibold"
+                      >
+                        <option value="active">Activa (Pagada)</option>
+                        <option value="trial">Prueba Gratis (Trial)</option>
+                      </select>
+                    </div>
+                    {newTenantForm.subscription_status === 'trial' && (
+                      <div>
+                        <label className="block font-bold text-slate-700 mb-1">Días de Prueba</label>
+                        <input
+                          type="number"
+                          min={1}
+                          max={90}
+                          value={newTenantForm.trial_days}
+                          onChange={(e) => setNewTenantForm({ ...newTenantForm, trial_days: Number(e.target.value) || 14 })}
+                          className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-mono font-bold"
+                        />
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* 3. Credenciales del Dueño */}
+                <div className="space-y-3 pt-2 border-t border-slate-100">
+                  <p className="font-black text-slate-900 uppercase tracking-wider text-[11px] flex items-center gap-1.5">
+                    <Key className="w-3.5 h-3.5 text-emerald-600" />
+                    3. Usuario Administrador del Cliente (Acceso Aislado)
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1">Nombre del Dueño *</label>
+                      <input
+                        type="text"
+                        required
+                        value={newTenantForm.admin_name}
+                        onChange={(e) => setNewTenantForm({ ...newTenantForm, admin_name: e.target.value })}
+                        placeholder="Ej. Carlos Méndez"
+                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-semibold focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1">Correo de Acceso *</label>
+                      <input
+                        type="email"
+                        required
+                        value={newTenantForm.admin_email}
+                        onChange={(e) => setNewTenantForm({ ...newTenantForm, admin_email: e.target.value })}
+                        placeholder="carlos@ferreteria.com"
+                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-semibold focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1 flex items-center justify-between">
+                        <span>Contraseña Inicial</span>
+                        <button
+                          type="button"
+                          onClick={() => setNewTenantForm({ ...newTenantForm, admin_password: generateSecurePassword() })}
+                          className="text-[10px] text-indigo-600 hover:underline cursor-pointer"
+                        >
+                          Generar otra
+                        </button>
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        minLength={6}
+                        value={newTenantForm.admin_password}
+                        onChange={(e) => setNewTenantForm({ ...newTenantForm, admin_password: e.target.value })}
+                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-mono font-bold text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Footer */}
+                <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2">
+                  <button
+                    type="button"
+                    disabled={isCreatingTenant}
+                    onClick={() => setShowNewTenantModal(false)}
+                    className="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold cursor-pointer"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isCreatingTenant}
+                    className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 text-white font-black shadow-md shadow-indigo-600/25 flex items-center gap-2 disabled:opacity-50 cursor-pointer"
+                  >
+                    {isCreatingTenant ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                        <span>Creando Inquilino en MySQL...</span>
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle2 className="w-4 h-4" />
+                        <span>Crear y Activar Empresa Cliente</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
+            )}
           </div>
         </div>
       )}

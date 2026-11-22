@@ -389,6 +389,10 @@ export const empresaApi = {
     const res = await apiClient.get(`/empresas/${id}?_t=${Date.now()}`);
     return res.data;
   },
+  create: async (data: any) => {
+    const res = await apiClient.post('/empresas', data);
+    return res.data;
+  },
   update: async (id: number | string, data: any) => {
     const res = await apiClient.put(`/empresas/${id}`, data);
     return res.data;

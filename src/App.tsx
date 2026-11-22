@@ -297,6 +297,10 @@ export default function App() {
         const mapped: EmpresaSaaS[] = validCompanies.map((e: any) => {
           const empId = e.id_empresa || e.id;
           const defaultMatch = DEFAULT_EMPRESAS_LIST.find(d => d.id === empId);
+          const cfgObj = typeof e.configuracion === 'string'
+            ? (() => { try { return JSON.parse(e.configuracion); } catch { return {}; } })()
+            : (e.configuracion || {});
+          const serverModules = cfgObj?.modules && typeof cfgObj.modules === 'object' ? cfgObj.modules : null;
           return {
             id: empId,
             nombre: e.nombre || 'Empresa Sin Nombre',
@@ -309,7 +313,7 @@ export default function App() {
             telefono: e.telefono || '',
             email: e.email || '',
             direccion: e.direccion || '',
-            modules: defaultMatch?.modules || {
+            modules: serverModules || defaultMatch?.modules || {
               live_sales: empId === 1,
               pos: true,
               inventory: true,
@@ -465,12 +469,32 @@ export default function App() {
     }
   };
 
-  // Protección: En Fortexa Technologies no aplica Punto de Venta (POS)
+  // Protección: En Fortexa Technologies o empresas con POS desactivado no aplica Punto de Venta (POS)
   useEffect(() => {
-    if (selectedEmpresaId === 22 && activeTab === 'pos') {
-      setActiveTab('fortexa_apps');
+    if (activeTab === 'pos') {
+      if (selectedEmpresaId === 22) {
+        setActiveTab('fortexa_apps');
+      } else if (selectedEmpresa?.modules?.pos === false) {
+        setActiveTab('hub');
+      }
     }
-  }, [selectedEmpresaId, activeTab]);
+  }, [selectedEmpresaId, selectedEmpresa?.modules?.pos, activeTab]);
+
+  const handleCreateEmpresa = (newEmp: EmpresaSaaS) => {
+    const formattedEmp: EmpresaSaaS = {
+      ...newEmp,
+      id: Number(newEmp.id),
+      regimen: formatRegimenLabel(newEmp.regimen)
+    };
+    setEmpresasList(prev => {
+      const exists = prev.some(e => Number(e.id) === Number(formattedEmp.id));
+      const updated = exists
+        ? prev.map(e => Number(e.id) === Number(formattedEmp.id) ? formattedEmp : e)
+        : [formattedEmp, ...prev];
+      localStorage.setItem('integrapro_empresas_list', JSON.stringify(updated));
+      return updated;
+    });
+  };
 
   const handleUpdateEmpresa = (updatedEmp: EmpresaSaaS) => {
     const formattedEmp: EmpresaSaaS = {
@@ -899,6 +923,7 @@ export default function App() {
                 currentEmpresa={selectedEmpresa} 
                 empresas={empresasList}
                 onUpdateEmpresa={handleUpdateEmpresa}
+                onCreateEmpresa={handleCreateEmpresa}
                 onSelectEmpresa={handleSelectEmpresa}
               />
             )}
@@ -953,14 +978,16 @@ export default function App() {
                 <span className="text-[10px] text-slate-400">Inicio</span>
               </button>
               {selectedEmpresaId !== 22 ? (
-                <button 
-                  type="button"
-                  onClick={() => { setActiveTab('pos'); setCommandPaletteOpen(false); }}
-                  className="w-full px-3 py-2 text-left rounded-xl hover:bg-slate-100 flex items-center justify-between text-slate-700 font-medium"
-                >
-                  <span className="flex items-center gap-2"><ShoppingCart className="w-4 h-4 text-indigo-600" /> Ir a Punto de Venta (POS)</span>
-                  <span className="text-[10px] text-slate-400">Atajo</span>
-                </button>
+                selectedEmpresa?.modules?.pos !== false && (
+                  <button 
+                    type="button"
+                    onClick={() => { setActiveTab('pos'); setCommandPaletteOpen(false); }}
+                    className="w-full px-3 py-2 text-left rounded-xl hover:bg-slate-100 flex items-center justify-between text-slate-700 font-medium"
+                  >
+                    <span className="flex items-center gap-2"><ShoppingCart className="w-4 h-4 text-indigo-600" /> Ir a Punto de Venta (POS)</span>
+                    <span className="text-[10px] text-slate-400">Atajo</span>
+                  </button>
+                )
               ) : (
                 <button 
                   type="button"

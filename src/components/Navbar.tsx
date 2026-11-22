@@ -85,6 +85,8 @@ export default function Navbar({
   }, []);
 
   const isFortexa = (selectedEmpresaId ?? user.empresa_id) === 22;
+  const hasPosEnabled = !isFortexa && currentEmpObj?.modules?.pos !== false;
+  const hasLiveEnabled = !isFortexa && (currentEmpObj?.modules?.live_sales ?? currentEmpId === 1);
 
   // Lista de aplicaciones para el App Switcher rápido (9 puntos)
   const quickApps: { id: NavigationTab; label: string; icon: React.ElementType; color: string; badge?: string }[] = isFortexa ? [
@@ -102,8 +104,8 @@ export default function Navbar({
     { id: 'configuracion', label: 'Configuración', icon: Settings, color: 'text-slate-600 bg-slate-100' },
   ] : [
     { id: 'hub', label: 'Menú Principal', icon: LayoutGrid, color: 'text-indigo-600 bg-indigo-50' },
-    { id: 'pos', label: 'Punto de Venta (POS)', icon: Zap, color: 'text-emerald-600 bg-emerald-50', badge: 'Caja' },
-    { id: 'live_sales', label: 'TikTok Live', icon: Video, color: 'text-rose-600 bg-rose-50', badge: 'Live' },
+    ...(hasPosEnabled ? [{ id: 'pos' as NavigationTab, label: 'Punto de Venta (POS)', icon: Zap, color: 'text-emerald-600 bg-emerald-50', badge: 'Caja' }] : []),
+    ...(hasLiveEnabled ? [{ id: 'live_sales' as NavigationTab, label: 'TikTok Live', icon: Video, color: 'text-rose-600 bg-rose-50', badge: 'Live' }] : []),
     { id: 'inventario', label: 'Inventario & Bodega', icon: Boxes, color: 'text-amber-600 bg-amber-50' },
     { id: 'ventas', label: 'Ventas & Facturación', icon: ReceiptText, color: 'text-blue-600 bg-blue-50' },
     { id: 'clientes', label: 'Clientes & Créditos', icon: Users, color: 'text-cyan-600 bg-cyan-50' },

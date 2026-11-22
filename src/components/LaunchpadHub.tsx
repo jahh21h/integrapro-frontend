@@ -770,20 +770,23 @@ export default function LaunchpadHub({
         widgetType: 'clients_roster'
       });
     } else {
-      cards.push({
-        id: 'pos',
-        title: 'Punto de Venta (POS Rápido)',
-        subtitle: 'Caja, Escaneo de Código y Tickets',
-        description: 'Venta rápida de mostrador, cobro con tarjeta, efectivo, cálculo de cambio y cierre de caja.',
-        icon: Zap,
-        gradient: 'from-emerald-500 via-teal-600 to-emerald-700',
-        glowColor: 'from-emerald-500/40 to-teal-500/40',
-        badge: { text: 'Caja Activa', color: 'bg-emerald-500/10 text-emerald-700 border-emerald-200' },
-        metric: 'Caja Lista para Facturar',
-        category: 'operaciones',
-        highlight: true,
-        widgetType: 'pos_terminal'
-      });
+      const hasPosModule = selectedEmpresa?.modules?.pos !== false;
+      if (hasPosModule) {
+        cards.push({
+          id: 'pos',
+          title: 'Punto de Venta (POS Rápido)',
+          subtitle: 'Caja, Escaneo de Código y Tickets',
+          description: 'Venta rápida de mostrador, cobro con tarjeta, efectivo, cálculo de cambio y cierre de caja.',
+          icon: Zap,
+          gradient: 'from-emerald-500 via-teal-600 to-emerald-700',
+          glowColor: 'from-emerald-500/40 to-teal-500/40',
+          badge: { text: 'Caja Activa', color: 'bg-emerald-500/10 text-emerald-700 border-emerald-200' },
+          metric: 'Caja Lista para Facturar',
+          category: 'operaciones',
+          highlight: true,
+          widgetType: 'pos_terminal'
+        });
+      }
 
       // Módulo de TikTok Live Commerce (Habilitado para Fashion Styles y clientes que contraten el Add-on)
       const hasLiveSales = selectedEmpresa?.modules?.live_sales ?? (selectedEmpresa?.id === 1);
@@ -1034,8 +1037,10 @@ export default function LaunchpadHub({
   // Identificar tarjeta Hero y Tall para el Bento Grid
   const heroCardId = isFortexa 
     ? 'fortexa_apps' 
-    : isInformal 
+    : isInformal && (selectedEmpresa?.modules?.live_sales ?? selectedEmpresa?.id === 1)
     ? 'live_sales' 
+    : selectedEmpresa?.modules?.pos === false
+    ? 'ventas'
     : 'pos';
   const heroCard = filteredCards.find(c => c.id === heroCardId);
   const tallCard = filteredCards.find(c => c.id === 'inventario');
