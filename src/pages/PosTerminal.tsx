@@ -40,6 +40,7 @@ import { inventoryApi, salesApi } from '../api';
 import { getTenantClients } from '../data/realClients';
 import { getTenantCatalog } from '../data/tenantProducts';
 import { filterRecordsByTenant, getStoredActiveEmpresaId } from '../utils/tenant';
+import { getLiveCache, setLiveCache } from '../utils/liveCache';
 
 interface Product {
   id: number;
@@ -87,7 +88,9 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
   const [tempDiscountValue, setTempDiscountValue] = useState<string>('');
 
   // Directorio de Clientes Aislado por Tenant
-  const [clientsList, setClientsList] = useState<Cliente[]>(() => getTenantClients(empresaActiva.id));
+  const [clientsList, setClientsList] = useState<Cliente[]>(() => {
+    return getLiveCache<Cliente[]>(empresaActiva.id, 'clients') ?? getTenantClients(empresaActiva.id);
+  });
   const [selectedClient, setSelectedClient] = useState<Cliente | null>(null);
   const { findOpenBagByCustomer } = useLiveSales();
 
@@ -168,6 +171,8 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
 
   const [isLiveConnected, setIsLiveConnected] = useState<boolean>(true);
   const [liveProducts, setLiveProducts] = useState<Product[]>(() => {
+    const cached = getLiveCache<Product[]>(empresaActiva.id, 'pos_products');
+    if (cached && cached.length > 0) return cached;
     const cat = getTenantCatalog(empresaActiva.id);
     return cat.products.map(p => ({
       id: p.id,
@@ -245,6 +250,9 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
           });
 
           setClientsList(mappedClients);
+          if (!q) {
+            setLiveCache(empresaActiva.id, 'clients', mappedClients);
+          }
           setTotalClientsCount(
             rejectedCount === 0 && res?.total !== undefined ? Number(res.total) || mappedClients.length : mappedClients.length
           );
@@ -274,7 +282,7 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
     return () => clearTimeout(timer);
   }, [clientSearchTerm, clientModalOpen, fetchClientsList]);
 
-  // Sincronización en vivo estrictamente aislada por empresa activa
+  // Sincronización en vivo estrictamente aislada por empresa activa (sin salto al usar caché en vivo)
   useEffect(() => {
     let cancelled = false;
     setCart([]);
@@ -282,18 +290,29 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
     setSelectedCategory('Todos');
     setSearchTerm('');
 
-    const cat = getTenantCatalog(empresaActiva.id);
-    setLiveProducts(cat.products.map(p => ({
-      id: p.id,
-      name: p.nombre,
-      price: p.precioVenta > 0 ? p.precioVenta : (p.precioCompra > 0 ? p.precioCompra : 10.00),
-      priceSource: p.precioVenta > 0 ? 'venta' as const : 'costo' as const,
-      stock: p.stockTotal > 0 ? p.stockTotal : 5,
-      category: p.categoria,
-      sku: p.sku,
-      image: p.imagen
-    })));
-    setClientsList(getTenantClients(empresaActiva.id));
+    const cachedProducts = getLiveCache<Product[]>(empresaActiva.id, 'pos_products');
+    if (cachedProducts && cachedProducts.length > 0) {
+      setLiveProducts(cachedProducts);
+    } else {
+      const cat = getTenantCatalog(empresaActiva.id);
+      setLiveProducts(cat.products.map(p => ({
+        id: p.id,
+        name: p.nombre,
+        price: p.precioVenta > 0 ? p.precioVenta : (p.precioCompra > 0 ? p.precioCompra : 10.00),
+        priceSource: p.precioVenta > 0 ? 'venta' as const : 'costo' as const,
+        stock: p.stockTotal > 0 ? p.stockTotal : 5,
+        category: p.categoria,
+        sku: p.sku,
+        image: p.imagen
+      })));
+    }
+
+    const cachedClients = getLiveCache<Cliente[]>(empresaActiva.id, 'clients');
+    if (cachedClients && cachedClients.length > 0) {
+      setClientsList(cachedClients);
+    } else {
+      setClientsList(getTenantClients(empresaActiva.id));
+    }
 
     inventoryApi.getAll({ id_empresa: empresaActiva.id, per_page: 250 })
       .then(res => {
@@ -320,6 +339,7 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
               sku: p.sku || `SKU-${p.id_producto}`,
               image: p.foto ? (p.foto.startsWith('http') ? p.foto : `https://app.integrapro.app/storage/${p.foto}`) : ''
             }));
+            setLiveCache(empresaActiva.id, 'pos_products', mapped);
             setLiveProducts(mapped);
             setIsLiveConnected(true);
           }
@@ -835,7 +855,7 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
   }
 
   return (
-    <div className="min-h-[calc(100vh-6rem)] lg:h-[calc(100vh-6rem)] flex flex-col lg:flex-row gap-4">
+    <div className="min-h-[540px] lg:h-[calc(100vh-11.5rem)] flex flex-col lg:flex-row gap-4">
       {/* Panel Izquierdo: Catálogo de Productos */}
       <div className="flex-1 flex flex-col bg-white rounded-3xl border border-slate-200/80 shadow-sm overflow-hidden min-h-[460px] lg:min-h-0">
         {/* Barra de Filtros y Búsqueda */}

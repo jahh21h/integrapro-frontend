@@ -33,6 +33,7 @@ import { exportToExcelCsv } from '../utils/export';
 import { salesApi } from '../api';
 import { getTenantSales, getTenantCotizaciones, VentaItem, CotizacionItem } from '../data/realSales';
 import { filterRecordsByTenant, getStoredActiveEmpresaId } from '../utils/tenant';
+import { getLiveCache, setLiveCache } from '../utils/liveCache';
 
 interface SalesProps {
   currentEmpresa?: EmpresaSaaS;
@@ -123,8 +124,10 @@ export default function Sales({ currentEmpresa }: SalesProps = {}) {
     setTimeout(() => setNotificationToast(null), 4000);
   };
 
-  // Datos reales sincronizados desde Droplet (Aislamiento Multi-Tenant Estricto)
-  const [sales, setSales] = useState<VentaItem[]>(() => getTenantSales(empresaActiva.id));
+  // Datos reales sincronizados desde Droplet (Aislamiento Multi-Tenant Estricto + Caché en vivo)
+  const [sales, setSales] = useState<VentaItem[]>(() => {
+    return getLiveCache<VentaItem[]>(empresaActiva.id, 'sales') ?? getTenantSales(empresaActiva.id);
+  });
 
   const fetchSales = () => {
     const targetEmpresaId = Number(empresaActiva.id);
@@ -192,13 +195,16 @@ export default function Sales({ currentEmpresa }: SalesProps = {}) {
                 productos: items
               };
             });
+            setLiveCache(targetEmpresaId, 'sales', mapped);
             setSales(mapped);
           }
         }
       })
       .catch((err) => {
         console.warn('Error fetching live sales:', err);
-        setSales(getTenantSales(targetEmpresaId));
+        if (!getLiveCache<VentaItem[]>(targetEmpresaId, 'sales')) {
+          setSales(getTenantSales(targetEmpresaId));
+        }
       })
       .finally(() => {
         setIsLoadingSales(false);
@@ -206,7 +212,8 @@ export default function Sales({ currentEmpresa }: SalesProps = {}) {
   };
 
   useEffect(() => {
-    setSales(getTenantSales(empresaActiva.id));
+    const cached = getLiveCache<VentaItem[]>(empresaActiva.id, 'sales');
+    setSales(cached ?? getTenantSales(empresaActiva.id));
     fetchSales();
   }, [empresaActiva.id]);
 

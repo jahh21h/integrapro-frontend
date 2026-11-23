@@ -38,6 +38,7 @@ import { Compra, Proveedor, DetalleCompraItem } from '../types';
 import { REAL_COMPRAS } from '../data/realPurchases';
 import { purchasesApi, scraperApi, apiClient } from '../api';
 import { filterRecordsByTenant, getStoredActiveEmpresaId } from '../utils/tenant';
+import { getLiveCache, setLiveCache } from '../utils/liveCache';
 
 function getProductPhotoUrl(foto?: string | null): string | null {
   if (!foto) return null;
@@ -104,8 +105,10 @@ export default function Purchases({ currentEmpresa }: { currentEmpresa?: Empresa
   const [monedaCompra, setMonedaCompra] = useState<'GTQ' | 'USD'>('GTQ');
   const [tipoCambio, setTipoCambio] = useState<number>(7.80);
 
-  // Proveedores sincronizados con base de datos del Droplet (aislados por empresa)
-  const [proveedores, setProveedores] = useState<Proveedor[]>([]);
+  // Proveedores sincronizados con base de datos del Droplet (aislados por empresa + caché en vivo)
+  const [proveedores, setProveedores] = useState<Proveedor[]>(() => {
+    return getLiveCache<Proveedor[]>(activeEmpresaId, 'suppliers') ?? [];
+  });
   const loadProveedores = (empresaIdOverride?: number) => {
     const targetEmpresaId = Number(empresaIdOverride ?? activeEmpresaId);
     return purchasesApi.getSuppliers({ id_empresa: targetEmpresaId }).then((res: any) => {
@@ -129,6 +132,7 @@ export default function Purchases({ currentEmpresa }: { currentEmpresa?: Empresa
         regimen_tributario: p.regimen_tributario || 'general',
         saldo_pendiente: 0
       }));
+      setLiveCache(targetEmpresaId, 'suppliers', mapped);
       setProveedores(mapped);
       // Asegurar que el proveedor seleccionado exista realmente en el servidor
       setNewCompra((prev: any) =>
@@ -138,18 +142,22 @@ export default function Purchases({ currentEmpresa }: { currentEmpresa?: Empresa
       );
     }).catch(err => {
       console.error('Error cargando proveedores del servidor:', err);
-      setProveedores([]);
+      if (!getLiveCache<Proveedor[]>(targetEmpresaId, 'suppliers')) {
+        setProveedores([]);
+      }
       setScraperToast('⚠️ No se pudieron cargar los proveedores del servidor.');
       setTimeout(() => setScraperToast(null), 8000);
     });
   };
   useEffect(() => {
-    setProveedores([]);
+    setProveedores(getLiveCache<Proveedor[]>(activeEmpresaId, 'suppliers') ?? []);
     loadProveedores(activeEmpresaId);
   }, [activeEmpresaId]);
 
-  // Historial de compras estrictamente aislado por empresa (REAL_COMPRAS es exclusivo de Fashion Styles #1)
-  const [compras, setCompras] = useState<Compra[]>(() => (activeEmpresaId === 1 ? REAL_COMPRAS : []));
+  // Historial de compras estrictamente aislado por empresa (con caché en vivo para evitar saltos)
+  const [compras, setCompras] = useState<Compra[]>(() => {
+    return getLiveCache<Compra[]>(activeEmpresaId, 'purchases') ?? (activeEmpresaId === 1 ? REAL_COMPRAS : []);
+  });
   // El saldo por pagar de cada proveedor se deriva de sus compras reales
   useEffect(() => {
     setProveedores(prev => prev.map(p => ({
@@ -207,17 +215,21 @@ export default function Purchases({ currentEmpresa }: { currentEmpresa?: Empresa
             url_manual: d.url_manual || '',
           })) : []
         }));
+        setLiveCache(targetEmpresaId, 'purchases', mapped);
         setCompras(mapped);
       }
     }).catch(err => {
       console.error('Error fetching live purchases from Droplet:', err);
-      setCompras(targetEmpresaId === 1 ? REAL_COMPRAS : []);
+      if (!getLiveCache<Compra[]>(targetEmpresaId, 'purchases')) {
+        setCompras(targetEmpresaId === 1 ? REAL_COMPRAS : []);
+      }
       setScraperToast('⚠️ No se pudo cargar el historial real de compras del servidor.');
       setTimeout(() => setScraperToast(null), 8000);
     });
   };
   useEffect(() => {
-    setCompras(activeEmpresaId === 1 ? REAL_COMPRAS : []);
+    const cached = getLiveCache<Compra[]>(activeEmpresaId, 'purchases');
+    setCompras(cached ?? (activeEmpresaId === 1 ? REAL_COMPRAS : []));
     loadCompras(activeEmpresaId);
   }, [activeEmpresaId]);
 

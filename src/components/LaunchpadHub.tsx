@@ -1,28 +1,29 @@
 import React, { useState, useMemo } from 'react';
+import { motion } from 'framer-motion';
 import { NavigationTab, User, EmpresaSaaS } from '../types';
-import { 
-  Boxes, 
-  Zap, 
-  ReceiptText, 
-  UserCheck, 
-  Store, 
-  Truck, 
-  Landmark, 
-  Users, 
-  Clock3, 
-  Sparkles, 
-  Settings, 
-  Cpu, 
-  Search, 
-  ArrowRight, 
-  Building2, 
-  CheckCircle2, 
-  ShieldCheck, 
-  Activity, 
-  TrendingUp, 
-  KeyRound, 
-  ShieldAlert, 
-  Check, 
+import {
+  Boxes,
+  Zap,
+  ReceiptText,
+  UserCheck,
+  Store,
+  Truck,
+  Landmark,
+  Users,
+  Clock3,
+  Sparkles,
+  Settings,
+  Cpu,
+  Search,
+  ArrowRight,
+  Building2,
+  CheckCircle2,
+  ShieldCheck,
+  Activity,
+  TrendingUp,
+  KeyRound,
+  ShieldAlert,
+  Check,
   Maximize2,
   ShoppingCart,
   Clock,
@@ -63,20 +64,20 @@ interface HubCard {
   metric?: string;
   category: 'operaciones' | 'finanzas' | 'gestion';
   highlight?: boolean;
-  widgetType: 
-    | 'fortexa_saas'
-    | 'pos_terminal'
-    | 'inventory_gauge'
-    | 'fel_invoice'
-    | 'analytics_chart'
-    | 'clients_roster'
-    | 'logistics_fleet'
-    | 'fiscal_ledger'
-    | 'hr_team'
-    | 'attendance_kiosk'
-    | 'branches_net'
-    | 'security_system'
-    | 'live_stream';
+  widgetType:
+  | 'fortexa_saas'
+  | 'pos_terminal'
+  | 'inventory_gauge'
+  | 'fel_invoice'
+  | 'analytics_chart'
+  | 'clients_roster'
+  | 'logistics_fleet'
+  | 'fiscal_ledger'
+  | 'hr_team'
+  | 'attendance_kiosk'
+  | 'branches_net'
+  | 'security_system'
+  | 'live_stream';
   isLocked?: boolean;
 }
 
@@ -88,7 +89,7 @@ function LiveStreamWidget() {
   return (
     <div className="relative h-28 rounded-2xl bg-gradient-to-br from-slate-950 via-purple-950 to-rose-950 p-3 overflow-hidden border border-rose-500/30 flex flex-col justify-between shadow-inner">
       <div className="absolute -top-10 -right-10 w-24 h-24 bg-rose-500/30 rounded-full blur-xl pointer-events-none group-hover:scale-150 transition-transform duration-500" />
-      
+
       <div className="flex items-center justify-between text-[10px]">
         <span className="flex items-center gap-1.5 font-bold text-rose-400">
           <span className="relative flex h-2 w-2">
@@ -134,7 +135,7 @@ function SaaSWallWidget() {
   return (
     <div className="relative h-28 rounded-2xl bg-gradient-to-br from-slate-950 via-indigo-950 to-slate-900 p-3 overflow-hidden border border-indigo-500/30 flex flex-col justify-between shadow-inner">
       <div className="absolute -top-10 -right-10 w-24 h-24 bg-indigo-500/30 rounded-full blur-xl pointer-events-none group-hover:scale-150 transition-transform duration-500" />
-      
+
       <div className="flex items-center justify-between text-[10px]">
         <span className="flex items-center gap-1.5 font-bold text-emerald-400">
           <span className="relative flex h-2 w-2">
@@ -180,7 +181,7 @@ function PosScannerWidget() {
   return (
     <div className="relative h-28 rounded-2xl bg-gradient-to-br from-slate-950 via-slate-900 to-emerald-950 p-3 overflow-hidden border border-emerald-500/30 flex flex-col justify-between shadow-inner">
       <div className="absolute -top-10 -right-10 w-24 h-24 bg-emerald-500/20 rounded-full blur-xl pointer-events-none group-hover:scale-150 transition-transform duration-500" />
-      
+
       <div className="flex items-center justify-between text-[10px]">
         <span className="flex items-center gap-1.5 font-bold text-emerald-400">
           <span className="relative flex h-2 w-2">
@@ -226,7 +227,7 @@ function InventoryGaugeWidget({ isTech = false }: { isTech?: boolean }) {
   return (
     <div className="relative h-28 rounded-2xl bg-gradient-to-br from-slate-950 via-slate-900 to-amber-950 p-3 overflow-hidden border border-amber-500/30 flex flex-col justify-between shadow-inner">
       <div className="absolute -top-10 -right-10 w-24 h-24 bg-amber-500/20 rounded-full blur-xl pointer-events-none group-hover:scale-150 transition-transform duration-500" />
-      
+
       <div className="flex items-center justify-between text-[10px]">
         <span className="flex items-center gap-1.5 font-bold text-amber-400">
           <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
@@ -263,7 +264,7 @@ function FelInvoiceWidget() {
   return (
     <div className="relative h-28 rounded-2xl bg-gradient-to-br from-slate-950 via-slate-900 to-blue-950 p-3 overflow-hidden border border-blue-500/30 flex flex-col justify-between shadow-inner">
       <div className="absolute -top-10 -right-10 w-24 h-24 bg-blue-500/20 rounded-full blur-xl pointer-events-none group-hover:scale-150 transition-transform duration-500" />
-      
+
       <div className="flex items-center justify-between text-[10px]">
         <span className="flex items-center gap-1.5 font-bold text-blue-400">
           <span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse" />
@@ -299,7 +300,7 @@ function AnalyticsChartWidget() {
   return (
     <div className="relative h-28 rounded-2xl bg-gradient-to-br from-slate-950 via-slate-900 to-rose-950 p-3 overflow-hidden border border-rose-500/30 flex flex-col justify-between shadow-inner">
       <div className="absolute -top-10 -right-10 w-24 h-24 bg-rose-500/20 rounded-full blur-xl pointer-events-none group-hover:scale-150 transition-transform duration-500" />
-      
+
       <div className="flex items-center justify-between text-[10px]">
         <span className="flex items-center gap-1.5 font-bold text-rose-400">
           <Activity className="w-3 h-3 text-rose-400 animate-pulse" />
@@ -331,7 +332,7 @@ function ClientsRosterWidget({ isB2B = false }: { isB2B?: boolean }) {
   return (
     <div className="relative h-28 rounded-2xl bg-gradient-to-br from-slate-950 via-slate-900 to-cyan-950 p-3 overflow-hidden border border-cyan-500/30 flex flex-col justify-between shadow-inner">
       <div className="absolute -top-10 -right-10 w-24 h-24 bg-cyan-500/20 rounded-full blur-xl pointer-events-none group-hover:scale-150 transition-transform duration-500" />
-      
+
       <div className="flex items-center justify-between text-[10px]">
         <span className="flex items-center gap-1.5 font-bold text-cyan-400">
           <Users className="w-3 h-3 text-cyan-400" />
@@ -368,7 +369,7 @@ function LogisticsFleetWidget() {
   return (
     <div className="relative h-28 rounded-2xl bg-gradient-to-br from-slate-950 via-slate-900 to-violet-950 p-3 overflow-hidden border border-violet-500/30 flex flex-col justify-between shadow-inner">
       <div className="absolute -top-10 -right-10 w-24 h-24 bg-violet-500/20 rounded-full blur-xl pointer-events-none group-hover:scale-150 transition-transform duration-500" />
-      
+
       <div className="flex items-center justify-between text-[10px]">
         <span className="flex items-center gap-1.5 font-bold text-violet-400">
           <Truck className="w-3 h-3 text-violet-400" />
@@ -403,7 +404,7 @@ function FiscalLedgerWidget() {
   return (
     <div className="relative h-28 rounded-2xl bg-gradient-to-br from-slate-950 via-slate-900 to-emerald-950 p-3 overflow-hidden border border-emerald-500/30 flex flex-col justify-between shadow-inner">
       <div className="absolute -top-10 -right-10 w-24 h-24 bg-emerald-500/20 rounded-full blur-xl pointer-events-none group-hover:scale-150 transition-transform duration-500" />
-      
+
       <div className="flex items-center justify-between text-[10px]">
         <span className="flex items-center gap-1.5 font-bold text-emerald-400">
           <Landmark className="w-3 h-3 text-emerald-400" />
@@ -439,7 +440,7 @@ function HrTeamWidget() {
   return (
     <div className="relative h-28 rounded-2xl bg-gradient-to-br from-slate-950 via-slate-900 to-teal-950 p-3 overflow-hidden border border-teal-500/30 flex flex-col justify-between shadow-inner">
       <div className="absolute -top-10 -right-10 w-24 h-24 bg-teal-500/20 rounded-full blur-xl pointer-events-none group-hover:scale-150 transition-transform duration-500" />
-      
+
       <div className="flex items-center justify-between text-[10px]">
         <span className="flex items-center gap-1.5 font-bold text-teal-400">
           <UserCheck className="w-3 h-3 text-teal-400" />
@@ -467,7 +468,7 @@ function AttendanceKioskWidget() {
   return (
     <div className="relative h-28 rounded-2xl bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 p-3 overflow-hidden border border-indigo-500/30 flex flex-col justify-between shadow-inner">
       <div className="absolute -top-10 -right-10 w-24 h-24 bg-indigo-500/20 rounded-full blur-xl pointer-events-none group-hover:scale-150 transition-transform duration-500" />
-      
+
       <div className="flex items-center justify-between text-[10px]">
         <span className="flex items-center gap-1.5 font-bold text-indigo-400">
           <Clock3 className="w-3 h-3 text-indigo-400" />
@@ -500,7 +501,7 @@ function BranchesNetWidget() {
   return (
     <div className="relative h-28 rounded-2xl bg-gradient-to-br from-slate-950 via-slate-900 to-blue-950 p-3 overflow-hidden border border-blue-500/30 flex flex-col justify-between shadow-inner">
       <div className="absolute -top-10 -right-10 w-24 h-24 bg-blue-500/20 rounded-full blur-xl pointer-events-none group-hover:scale-150 transition-transform duration-500" />
-      
+
       <div className="flex items-center justify-between text-[10px]">
         <span className="flex items-center gap-1.5 font-bold text-blue-400">
           <Store className="w-3 h-3 text-blue-400" />
@@ -530,7 +531,7 @@ function SecuritySystemWidget({ isInformal = false }: { isInformal?: boolean }) 
     return (
       <div className="relative h-28 rounded-2xl bg-gradient-to-br from-slate-950 via-indigo-950 to-slate-900 p-3 overflow-hidden border border-indigo-500/30 flex flex-col justify-between shadow-inner">
         <div className="absolute -top-10 -right-10 w-24 h-24 bg-indigo-500/20 rounded-full blur-xl pointer-events-none group-hover:scale-150 transition-transform duration-500" />
-        
+
         <div className="flex items-center justify-between text-[10px]">
           <span className="flex items-center gap-1.5 font-bold text-indigo-300">
             <Store className="w-3 h-3 text-indigo-400" />
@@ -559,7 +560,7 @@ function SecuritySystemWidget({ isInformal = false }: { isInformal?: boolean }) 
   return (
     <div className="relative h-28 rounded-2xl bg-gradient-to-br from-slate-950 via-slate-900 to-slate-900 p-3 overflow-hidden border border-slate-700 flex flex-col justify-between shadow-inner">
       <div className="absolute -top-10 -right-10 w-24 h-24 bg-slate-500/20 rounded-full blur-xl pointer-events-none group-hover:scale-150 transition-transform duration-500" />
-      
+
       <div className="flex items-center justify-between text-[10px]">
         <span className="flex items-center gap-1.5 font-bold text-slate-300">
           <Settings className="w-3 h-3 text-slate-400" />
@@ -943,7 +944,7 @@ export default function LaunchpadHub({
       icon: isInformal ? Store : Settings,
       gradient: isInformal ? 'from-indigo-600 to-purple-800' : 'from-slate-600 to-slate-800',
       glowColor: isInformal ? 'from-indigo-600/40 to-purple-600/40' : 'from-slate-600/40 to-slate-800/40',
-      badge: isInformal 
+      badge: isInformal
         ? { text: 'Perfil de Tienda', color: 'bg-indigo-500/10 text-indigo-700 border-indigo-200' }
         : { text: 'Ajustes del Sistema', color: 'bg-slate-500/10 text-slate-700 border-slate-200' },
       metric: isInformal ? 'Cuentas Bancarias & Envíos' : 'Configuración Global',
@@ -989,7 +990,7 @@ export default function LaunchpadHub({
   // Filtrado de tarjetas por búsqueda y categoría
   const filteredCards = useMemo(() => {
     return allCards.filter(card => {
-      const matchesSearch = 
+      const matchesSearch =
         card.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
         card.subtitle.toLowerCase().includes(searchTerm.toLowerCase()) ||
         card.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -1035,19 +1036,19 @@ export default function LaunchpadHub({
   };
 
   // Identificar tarjeta Hero y Tall para el Bento Grid
-  const heroCardId = isFortexa 
-    ? 'fortexa_apps' 
+  const heroCardId = isFortexa
+    ? 'fortexa_apps'
     : isInformal && (selectedEmpresa?.modules?.live_sales ?? selectedEmpresa?.id === 1)
-    ? 'live_sales' 
-    : selectedEmpresa?.modules?.pos === false
-    ? 'ventas'
-    : 'pos';
+      ? 'live_sales'
+      : selectedEmpresa?.modules?.pos === false
+        ? 'ventas'
+        : 'pos';
   const heroCard = filteredCards.find(c => c.id === heroCardId);
   const tallCard = filteredCards.find(c => c.id === 'inventario');
   const otherBentoCards = filteredCards.filter(c => c.id !== heroCard?.id && c.id !== tallCard?.id);
 
   return (
-    <div className="space-y-8 pb-16 animate-in fade-in duration-300">
+    <div className="space-y-8 pb-16">
       {/* 1. Hero Banner Principal */}
       <div className="relative overflow-hidden rounded-3xl p-6 sm:p-8 shadow-xl border bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white border-slate-800">
         <div className="absolute top-0 right-0 -mr-16 -mt-16 w-80 h-80 bg-indigo-500/20 rounded-full blur-3xl pointer-events-none" />
@@ -1059,7 +1060,7 @@ export default function LaunchpadHub({
               <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
               <span>Centro de Operaciones • Bento Grid 3D</span>
             </div>
-            
+
             <div className="flex items-center justify-between gap-3 flex-wrap sm:flex-nowrap">
               <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-white flex items-center gap-2.5">
                 <span>Hola, {user.name.split(' ')[0]}</span>
@@ -1078,13 +1079,13 @@ export default function LaunchpadHub({
                 </button>
               )}
             </div>
-            
+
             <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
-              {isFortexa 
-                ? 'Consola tecnológica para gestionar RutaFuel Pro, licencias de software, contratos y cortes automáticos.' 
+              {isFortexa
+                ? 'Consola tecnológica para gestionar RutaFuel Pro, licencias de software, contratos y cortes automáticos.'
                 : selectedEmpresa?.id === 99
-                ? 'Panel Live Express para vendedoras de TikTok Live: canastas abiertas, catálogo de prendas, remates en vivo y cobros por WhatsApp.'
-                : 'Punto de venta y gestión comercial para retail, catálogo de productos y facturación en caja.'}
+                  ? 'Panel Live Express para vendedoras de TikTok Live: canastas abiertas, catálogo de prendas, remates en vivo y cobros por WhatsApp.'
+                  : 'Punto de venta y gestión comercial para retail, catálogo de productos y facturación en caja.'}
             </p>
 
             {/* Indicador o Selector de Empresa en el Hero */}
@@ -1206,52 +1207,52 @@ export default function LaunchpadHub({
         <div className="flex items-center gap-1.5 overflow-x-auto w-full sm:w-auto pb-1 sm:pb-0">
           <button
             onClick={() => setActiveCategory('all')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 ${
-              activeCategory === 'all'
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 ${activeCategory === 'all'
                 ? 'bg-slate-900 text-white shadow-xs'
                 : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-            }`}
+              }`}
           >
             Todos ({filteredCards.length})
           </button>
           <button
             onClick={() => setActiveCategory('operaciones')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 ${
-              activeCategory === 'operaciones'
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 ${activeCategory === 'operaciones'
                 ? 'bg-indigo-600 text-white shadow-xs'
                 : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-            }`}
+              }`}
           >
             Operaciones Comerciales
           </button>
           <button
             onClick={() => setActiveCategory('finanzas')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 ${
-              activeCategory === 'finanzas'
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 ${activeCategory === 'finanzas'
                 ? 'bg-indigo-600 text-white shadow-xs'
                 : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-            }`}
+              }`}
           >
             Finanzas & Compras
           </button>
           <button
             onClick={() => setActiveCategory('gestion')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 ${
-              activeCategory === 'gestion'
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 ${activeCategory === 'gestion'
                 ? 'bg-indigo-600 text-white shadow-xs'
                 : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-            }`}
+              }`}
           >
             Gestión & Talento
           </button>
         </div>
       </div>
 
-      {/* 3. Cuadrícula Bento Grid 3D de Módulos */}
+      {/* 3. Cuadrícula Bento Grid 3D de Módulos con física Spring (Framer Motion) */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
         {/* TARJETA HERO DOBLE (Punto de Venta en Fashion Styles o Suscripciones en Fortexa o Live en Live Seller) */}
         {heroCard && (
-          <div
+          <motion.div
+            initial={false}
+            whileHover={{ y: -5 }}
+            whileTap={{ scale: 0.99 }}
+            transition={{ type: 'spring', stiffness: 320, damping: 24 }}
             onClick={() => {
               if (heroCard.isLocked) {
                 setSelectedUpgradeCard(heroCard);
@@ -1259,16 +1260,14 @@ export default function LaunchpadHub({
                 onNavigate(heroCard.id);
               }
             }}
-            className={`group relative md:col-span-2 rounded-3xl p-5 border shadow-[0_15px_35px_-5px_rgba(79,70,229,0.12),0_8px_10px_-6px_rgba(0,0,0,0.04)] hover:shadow-[0_25px_50px_-12px_rgba(79,70,229,0.25)] hover:-translate-y-1.5 transition-all duration-300 cursor-pointer flex flex-col justify-between overflow-hidden ${
-              heroCard.isLocked
+            className={`group relative md:col-span-2 rounded-3xl p-5 border shadow-[0_15px_35px_-5px_rgba(79,70,229,0.12),0_8px_10px_-6px_rgba(0,0,0,0.04)] hover:shadow-[0_25px_50px_-12px_rgba(79,70,229,0.25)] transition-shadow duration-300 cursor-pointer flex flex-col justify-between overflow-hidden ${heroCard.isLocked
                 ? 'bg-gradient-to-br from-white via-slate-50 to-amber-50/40 border-amber-300/80 hover:border-amber-400'
                 : 'bg-gradient-to-br from-white via-slate-50 to-indigo-50/40 border-indigo-200/90'
-            }`}
+              }`}
           >
             {/* Bisel de luz superior reflectiva */}
-            <div className={`absolute inset-x-0 top-0 h-1 bg-gradient-to-r ${
-              heroCard.isLocked ? 'from-transparent via-amber-400 to-transparent' : 'from-transparent via-indigo-500 to-transparent'
-            } opacity-80`} />
+            <div className={`absolute inset-x-0 top-0 h-1 bg-gradient-to-r ${heroCard.isLocked ? 'from-transparent via-amber-400 to-transparent' : 'from-transparent via-indigo-500 to-transparent'
+              } opacity-80`} />
             <div className="absolute -inset-1 rounded-3xl bg-gradient-to-r from-indigo-500/20 to-purple-500/20 opacity-0 group-hover:opacity-100 blur-2xl transition-opacity duration-500 pointer-events-none" />
 
             <div>
@@ -1279,11 +1278,10 @@ export default function LaunchpadHub({
                   </div>
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
-                      <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-md border ${
-                        heroCard.isLocked 
-                          ? 'bg-amber-100 text-amber-900 border-amber-300' 
+                      <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-md border ${heroCard.isLocked
+                          ? 'bg-amber-100 text-amber-900 border-amber-300'
                           : 'bg-indigo-500/10 text-indigo-700 border-indigo-500/20'
-                      }`}>
+                        }`}>
                         {heroCard.isLocked ? '🔒 Módulo Pro' : isFortexa ? 'Módulo Principal SaaS' : heroCard.id === 'live_sales' ? 'TikTok Live Commerce' : 'Caja Principal POS'}
                       </span>
                       {!heroCard.isLocked && (
@@ -1305,8 +1303,8 @@ export default function LaunchpadHub({
                 </span>
               </div>
 
-              {/* Widget Interactivo */}
-              <div className={`my-1 ${heroCard.isLocked ? 'opacity-70 saturate-50 pointer-events-none' : ''}`}>
+              {/* Widget Interactivo con Reflejo OLED */}
+              <div className={`my-1 oled-visor-sheen rounded-2xl ${heroCard.isLocked ? 'opacity-70 saturate-50 pointer-events-none' : ''}`}>
                 {renderCardWidget(heroCard)}
               </div>
 
@@ -1323,22 +1321,25 @@ export default function LaunchpadHub({
 
               <button
                 type="button"
-                className={`inline-flex items-center gap-2 px-4 py-1.5 rounded-xl text-white font-bold text-xs shadow-md group-hover:translate-x-1 transition-all shrink-0 ${
-                  heroCard.isLocked 
-                    ? 'bg-amber-600 hover:bg-amber-700 shadow-amber-600/30' 
+                className={`inline-flex items-center gap-2 px-4 py-1.5 rounded-xl text-white font-bold text-xs shadow-md group-hover:translate-x-1 transition-all shrink-0 ${heroCard.isLocked
+                    ? 'bg-amber-600 hover:bg-amber-700 shadow-amber-600/30'
                     : 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-600/30'
-                }`}
+                  }`}
               >
                 <span>{heroCard.isLocked ? 'Conocer Módulo' : isFortexa ? 'Gestionar Suscripciones' : heroCard.id === 'live_sales' ? 'Abrir Pantalla Live' : 'Abrir Terminal POS'}</span>
                 {heroCard.isLocked ? <Lock className="w-3.5 h-3.5" /> : <ArrowRight className="w-3.5 h-3.5" />}
               </button>
             </div>
-          </div>
+          </motion.div>
         )}
 
         {/* TARJETA ALTA (Inventario & Bodega / Hardware) — Alineada con el mismo ritmo vertical */}
         {tallCard && (
-          <div
+          <motion.div
+            initial={false}
+            whileHover={{ y: -5 }}
+            whileTap={{ scale: 0.985 }}
+            transition={{ type: 'spring', stiffness: 320, damping: 24 }}
             onClick={() => {
               if (tallCard.isLocked) {
                 setSelectedUpgradeCard(tallCard);
@@ -1346,7 +1347,7 @@ export default function LaunchpadHub({
                 onNavigate(tallCard.id);
               }
             }}
-            className="group relative md:col-span-1 lg:col-span-1 bg-white rounded-3xl p-5 border border-slate-200/90 shadow-[0_10px_25px_-5px_rgba(0,0,0,0.05)] hover:shadow-2xl hover:border-amber-400 hover:-translate-y-1.5 transition-all duration-300 cursor-pointer flex flex-col justify-between overflow-hidden"
+            className="group relative md:col-span-1 lg:col-span-1 bg-white rounded-3xl p-5 border border-slate-200/90 shadow-[0_10px_25px_-5px_rgba(0,0,0,0.05)] hover:shadow-2xl hover:border-amber-400 transition-shadow duration-300 cursor-pointer flex flex-col justify-between overflow-hidden"
           >
             <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-transparent via-amber-400 to-transparent" />
             <div className="absolute -inset-1 rounded-3xl bg-amber-500/10 opacity-0 group-hover:opacity-100 blur-xl transition-opacity duration-300 pointer-events-none" />
@@ -1371,7 +1372,7 @@ export default function LaunchpadHub({
                 </span>
               </div>
 
-              <div className={`my-1 ${tallCard.isLocked ? 'opacity-70 saturate-50 pointer-events-none' : ''}`}>
+              <div className={`my-1 oled-visor-sheen rounded-2xl ${tallCard.isLocked ? 'opacity-70 saturate-50 pointer-events-none' : ''}`}>
                 {renderCardWidget(tallCard)}
               </div>
 
@@ -1390,15 +1391,19 @@ export default function LaunchpadHub({
                 )}
               </span>
             </div>
-          </div>
+          </motion.div>
         )}
 
         {/* TARJETAS MEDIANAS & COMPACTAS EN BENTO GRID — Misma estructura vertical alineada */}
         {otherBentoCards.map((card) => {
           const Icon = card.icon;
           return (
-            <div
+            <motion.div
               key={card.id}
+              initial={false}
+              whileHover={{ y: -5 }}
+              whileTap={{ scale: 0.985 }}
+              transition={{ type: 'spring', stiffness: 320, damping: 24 }}
               onClick={() => {
                 if (card.isLocked) {
                   setSelectedUpgradeCard(card);
@@ -1406,18 +1411,16 @@ export default function LaunchpadHub({
                   onNavigate(card.id);
                 }
               }}
-              className={`group relative bg-white rounded-3xl p-5 border shadow-[0_8px_20px_-5px_rgba(0,0,0,0.04)] hover:shadow-2xl hover:-translate-y-1.5 transition-all duration-300 cursor-pointer flex flex-col justify-between overflow-hidden ${
-                card.isLocked
+              className={`group relative bg-white rounded-3xl p-5 border shadow-[0_8px_20px_-5px_rgba(0,0,0,0.04)] hover:shadow-2xl transition-shadow duration-300 cursor-pointer flex flex-col justify-between overflow-hidden ${card.isLocked
                   ? 'border-amber-200/80 bg-gradient-to-b from-white via-slate-50/40 to-amber-50/25 hover:border-amber-400'
                   : 'border-slate-200/90 hover:border-indigo-400'
-              }`}
+                }`}
             >
-              <div className={`absolute inset-x-0 top-0 h-1 bg-gradient-to-r ${
-                card.isLocked 
-                  ? 'from-transparent via-amber-400 to-transparent' 
+              <div className={`absolute inset-x-0 top-0 h-1 bg-gradient-to-r ${card.isLocked
+                  ? 'from-transparent via-amber-400 to-transparent'
                   : 'from-transparent via-slate-200 to-transparent group-hover:via-indigo-400'
-              } transition-all`} />
-              
+                } transition-all`} />
+
               <div className={`absolute -inset-1 rounded-3xl bg-gradient-to-r ${card.glowColor} opacity-0 group-hover:opacity-100 blur-xl transition-opacity duration-300 pointer-events-none -z-10`} />
 
               <div>
@@ -1447,7 +1450,7 @@ export default function LaunchpadHub({
                   )}
                 </div>
 
-                <div className={`my-1 ${card.isLocked ? 'opacity-70 saturate-50 pointer-events-none' : ''}`}>
+                <div className={`my-1 oled-visor-sheen rounded-2xl ${card.isLocked ? 'opacity-70 saturate-50 pointer-events-none' : ''}`}>
                   {renderCardWidget(card)}
                 </div>
 
@@ -1458,9 +1461,8 @@ export default function LaunchpadHub({
 
               <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs min-h-[40px]">
                 <span className="text-[11px] font-bold text-slate-500 truncate max-w-[155px]">{card.metric}</span>
-                <span className={`inline-flex items-center gap-1 text-xs font-bold group-hover:translate-x-1 transition-all shrink-0 ${
-                  card.isLocked ? 'text-amber-800' : 'text-indigo-600'
-                }`}>
+                <span className={`inline-flex items-center gap-1 text-xs font-bold group-hover:translate-x-1 transition-all shrink-0 ${card.isLocked ? 'text-amber-800' : 'text-indigo-600'
+                  }`}>
                   {card.isLocked ? (
                     <>
                       <span>Conocer</span>
@@ -1474,7 +1476,7 @@ export default function LaunchpadHub({
                   )}
                 </span>
               </div>
-            </div>
+            </motion.div>
           );
         })}
       </div>
@@ -1507,7 +1509,7 @@ export default function LaunchpadHub({
 
         {/* Cuadrícula de 3 Tarjetas Operativas */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-          
+
           {/* TARJETA 1: ÚLTIMAS VENTAS Y FACTURAS */}
           <div className="group relative bg-white rounded-3xl p-5 border border-slate-200/90 shadow-[0_10px_25px_-5px_rgba(0,0,0,0.05)] hover:shadow-2xl hover:border-emerald-400 hover:-translate-y-1 transition-all duration-300 flex flex-col justify-between overflow-hidden">
             <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-transparent via-emerald-400 to-transparent" />
@@ -1606,13 +1608,12 @@ export default function LaunchpadHub({
                       <span className="text-xs font-black text-slate-900 block font-mono">
                         Q{rec.saldo.toLocaleString('es-GT', { minimumFractionDigits: 2 })}
                       </span>
-                      <span className={`inline-block px-1.5 py-0.2 rounded text-[9px] font-bold ${
-                        rec.urgencia === 'urgente'
+                      <span className={`inline-block px-1.5 py-0.2 rounded text-[9px] font-bold ${rec.urgencia === 'urgente'
                           ? 'bg-rose-50 text-rose-700 border border-rose-200'
                           : rec.urgencia === 'alerta'
-                          ? 'bg-amber-50 text-amber-700 border border-amber-200'
-                          : 'bg-blue-50 text-blue-700 border border-blue-200'
-                      }`}>
+                            ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                            : 'bg-blue-50 text-blue-700 border border-blue-200'
+                        }`}>
                         {rec.dias}
                       </span>
                     </div>
@@ -1706,11 +1707,11 @@ export default function LaunchpadHub({
       {selectedUpgradeCard && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="relative w-full max-w-lg bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-hidden animate-in zoom-in-95 duration-200">
-            
+
             {/* Encabezado con degradado y luz */}
             <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-purple-950 text-white p-6 relative overflow-hidden">
               <div className="absolute top-0 right-0 w-48 h-48 bg-amber-500/20 rounded-full blur-2xl pointer-events-none" />
-              
+
               <div className="relative z-10 flex items-start justify-between gap-4">
                 <div className="flex items-center gap-3">
                   <div className={`w-12 h-12 rounded-2xl bg-gradient-to-br ${selectedUpgradeCard.gradient} flex items-center justify-center text-white shadow-lg shrink-0`}>

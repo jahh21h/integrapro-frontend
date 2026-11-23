@@ -438,7 +438,7 @@ export default function LiveSalesView({ currentEmpresa }: LiveSalesViewProps) {
   };
 
   return (
-    <div className="space-y-6 pb-20 animate-in fade-in duration-300">
+    <div className="space-y-6 pb-20">
       
       {/* BANNER DE DEMOSTRACIÓN: CLIENTE LIVE EXPRESS */}
       {currentEmpresa?.id === 99 && (

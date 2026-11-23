@@ -39,6 +39,7 @@ import { Line, Bar, Doughnut } from 'react-chartjs-2';
 import { EmpresaSaaS } from '../types';
 import TimeFormatToggle from '../components/TimeFormatToggle';
 import { getTipoRegimenSAT, formatRegimenLabel } from '../utils/tax';
+import { dashboardApi, salesApi, inventoryApi, branchesApi } from '../api';
 
 ChartJS.register(
   CategoryScale,
@@ -421,7 +422,175 @@ export default function Dashboard({
     }
   };
 
-  const currentLedger = companyLedgers[activeEmpresaId] || companyLedgers[25] || companyLedgers[1];
+  // Sincronización EN TIEMPO REAL con el servidor MySQL (compartido con IntegraPro Mobile V2)
+  const [liveLedger, setLiveLedger] = useState<typeof companyLedgers[number] | null>(null);
+  const [liveSyncing, setLiveSyncing] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const fetchLiveDashboard = async () => {
+      setLiveSyncing(true);
+      try {
+        const empId = Number(activeEmpresaId) || 1;
+        const [dashRes, salesRes, credRes, invRes, braRes] = await Promise.allSettled([
+          dashboardApi.getKPIs(),
+          salesApi.getAll({ id_empresa: empId, per_page: 500 }),
+          salesApi.getCredits({ id_empresa: empId }),
+          inventoryApi.getAll({ id_empresa: empId, per_page: 250 }),
+          branchesApi.getAll(),
+        ]);
+
+        if (cancelled) return;
+
+        const filterTenant = (arr: any[]) =>
+          arr.filter((rec) => {
+            const raw = rec?.id_empresa ?? rec?.empresa_id ?? rec?.empresa?.id_empresa ?? rec?.empresa?.id;
+            if (raw === undefined || raw === null || raw === '') return true;
+            return Number(raw) === empId;
+          });
+
+        const monthlySales = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+        const monthlyOrders = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+        const todayIso = new Date().toISOString().slice(0, 10);
+        let ventasHoyCalc = 0;
+
+        if (salesRes.status === 'fulfilled') {
+          const rawS = salesRes.value?.data || salesRes.value || [];
+          const scopedS = filterTenant(Array.isArray(rawS) ? rawS : []);
+          scopedS.forEach((s: any) => {
+            const dateStr = String(s.fecha || s.created_at || '').slice(0, 10);
+            const tot = Number(s.total) || 0;
+            if (dateStr.startsWith(todayIso)) ventasHoyCalc += tot;
+            if (dateStr.length >= 7) {
+              const mIdx = parseInt(dateStr.slice(5, 7), 10) - 1;
+              if (mIdx >= 0 && mIdx <= 11) {
+                monthlySales[mIdx] += tot;
+                monthlyOrders[mIdx] += 1;
+              }
+            }
+          });
+        }
+
+        let efectivoCaja = ventasHoyCalc;
+        let stockCritico = 0;
+        if (dashRes.status === 'fulfilled' && dashRes.value) {
+          const r = dashRes.value?.resumen || dashRes.value?.data || dashRes.value;
+          if (r?.ventas_hoy !== undefined) {
+            efectivoCaja = Math.max(Number(r.ventas_hoy) || 0, ventasHoyCalc);
+          }
+          if (r?.productos_stock_bajo !== undefined) {
+            stockCritico = Number(r.productos_stock_bajo) || 0;
+          }
+        }
+
+        let totalStock = 0;
+        let totalCostVal = 0;
+        const lowStockList: typeof companyLedgers[number]['demandProducts'] = [];
+        if (invRes.status === 'fulfilled') {
+          const rawI = invRes.value?.data || invRes.value || [];
+          const scopedI = filterTenant(Array.isArray(rawI) ? rawI : []);
+          scopedI.forEach((p: any) => {
+            const st = Math.max(0, Number(p.stock ?? 0));
+            const minSt = Number(p.stock_minimo ?? 3);
+            const cost = Number(p.precio_compra) || Number(p.precio_venta) || 0;
+            totalStock += st;
+            totalCostVal += st * cost;
+            if (st <= minSt && lowStockList.length < 6) {
+              const rawImg = p.foto || p.foto_url || '';
+              lowStockList.push({
+                id: Number(p.id_producto || p.id),
+                nombre: String(p.nombre || 'Producto'),
+                sku: String(p.sku || `SKU-${p.id_producto || p.id}`),
+                foto: rawImg
+                  ? String(rawImg).startsWith('http')
+                    ? String(rawImg)
+                    : `https://app.integrapro.app/storage/${rawImg}`
+                  : '',
+                clientes: [String(p.categoria?.nombre || 'Bodega Central')],
+                cantidad_solicitada: Math.max(minSt, 5),
+                stock_actual: st,
+                deficit: Math.max(0, Math.max(minSt, 5) - st),
+              });
+            }
+          });
+          if (stockCritico === 0) {
+            stockCritico = scopedI.filter((p: any) => Number(p.stock ?? 0) <= Number(p.stock_minimo ?? 3)).length;
+          }
+        }
+
+        let branchName = 'Sucursal Principal - Tienda & Bodega Central';
+        if (braRes.status === 'fulfilled') {
+          const rawB = braRes.value?.data || braRes.value || [];
+          const scopedB = filterTenant(Array.isArray(rawB) ? rawB : []);
+          if (scopedB.length > 0 && scopedB[0]?.nombre) {
+            branchName = String(scopedB[0].nombre);
+          }
+        }
+
+        const liveReceivables: typeof companyLedgers[number]['receivables'] = [];
+        if (credRes.status === 'fulfilled') {
+          const rawC = credRes.value?.data || credRes.value || [];
+          const scopedC = filterTenant(Array.isArray(rawC) ? rawC : []);
+          scopedC.slice(0, 8).forEach((c: any) => {
+            const tot = Number(c.total) || 0;
+            const pag = Number(c.pagado ?? c.total_pagado) || 0;
+            const sal = c.saldo_pendiente !== undefined ? Number(c.saldo_pendiente) : Math.max(0, tot - pag);
+            if (sal <= 0) return;
+            const fecha = String(c.fecha || c.created_at || '').slice(0, 10);
+            const clienteNombre =
+              c.cliente?.nombre_completo ||
+              `${c.cliente?.nombre || ''} ${c.cliente?.apellido || ''}`.trim() ||
+              'Cliente';
+            liveReceivables.push({
+              id: c.codigo || `VTA-${c.id_venta ?? c.id}`,
+              cliente: clienteNombre,
+              fecha,
+              fecha_vencimiento: fecha,
+              dias_restantes: 'Pendiente',
+              total: tot,
+              saldo: sal,
+              urgencia: sal >= 500 ? 'urgente' : 'alerta',
+            });
+          });
+        }
+
+        setLiveLedger({
+          monthlySales2026: monthlySales,
+          monthlySales2025: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+          monthlyOrders2026: monthlyOrders,
+          efectivoCaja,
+          stockCritico,
+          sucursales: [{ nombre: branchName, stock: totalStock, valorCosto: Number(totalCostVal.toFixed(2)) }],
+          demandProducts: lowStockList,
+          receivables: liveReceivables,
+        });
+      } catch {
+        // Mantiene fallback en caso de error de red
+      } finally {
+        if (!cancelled) setLiveSyncing(false);
+      }
+    };
+
+    fetchLiveDashboard();
+    const timer = window.setInterval(fetchLiveDashboard, 30000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [activeEmpresaId]);
+
+  const currentLedger = liveLedger || {
+    monthlySales2026: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    monthlySales2025: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    monthlyOrders2026: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    efectivoCaja: 0,
+    stockCritico: 0,
+    sucursales: [{ nombre: 'Sucursal Principal', stock: 0, valorCosto: 0 }],
+    demandProducts: [],
+    receivables: [],
+  };
+  void liveSyncing;
 
   // DETERMINACIÓN DINÁMICA DE LOS MESES SEGÚN EL FILTRO TEMPORAL
   // Índices: 0: Ene, 1: Feb ... 10: Nov, 11: Dic

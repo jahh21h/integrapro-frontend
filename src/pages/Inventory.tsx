@@ -38,6 +38,7 @@ import { exportToExcelCsv } from '../utils/export';
 import { getTenantCatalog } from '../data/tenantProducts';
 import { scraperApi, inventoryApi } from '../api';
 import { filterRecordsByTenant, getStoredActiveEmpresaId } from '../utils/tenant';
+import { getLiveCache, setLiveCache } from '../utils/liveCache';
 
 function getProductPhotoUrl(foto?: string | null): string {
   if (!foto) return 'https://images.unsplash.com/photo-1542838132-92c53300491e?w=400&auto=format&fit=crop&q=80';
@@ -226,9 +227,10 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
     motivo: 'Reabastecimiento de stock bajo'
   });
 
-  // Catálogo Multi-Tenant estrictamente aislado por empresa activa
+  // Catálogo Multi-Tenant estrictamente aislado por empresa activa (con caché en vivo para cero saltos)
   const activeEmpresaId = Number(currentEmpresa?.id ?? getStoredActiveEmpresaId() ?? 0);
-  const initialCatalog = getTenantCatalog(activeEmpresaId);
+  const cachedCatalog = getLiveCache<{ products: InventoryItem[]; categories: string[] }>(activeEmpresaId, 'inventory_catalog');
+  const initialCatalog = cachedCatalog ?? getTenantCatalog(activeEmpresaId);
   const [products, setProducts] = useState<InventoryItem[]>(initialCatalog.products);
   const [categories, setCategories] = useState<string[]>(initialCatalog.categories);
   const [isLoadingLive, setIsLoadingLive] = useState(false);
@@ -271,12 +273,15 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
 
       if (tenantData.length > 0) {
         const mapped = tenantData.map(mapApiProductToInventoryItem);
-        setProducts(mapped);
-
         const discoveredCats = Array.from(
           new Set(mapped.map((it: InventoryItem) => it.categoria).filter(Boolean))
         ) as string[];
-        setCategories(['Todas', ...discoveredCats]);
+        const nextCats = ['Todas', ...discoveredCats];
+        setProducts(mapped);
+        setCategories(nextCats);
+        if (!trimmedQuery) {
+          setLiveCache(targetEmpresaId, 'inventory_catalog', { products: mapped, categories: nextCats });
+        }
       } else if (trimmedQuery) {
         // Si el backend bloqueó datos de otra empresa, filtrar el catálogo propio del tenant; si respondió vacío legítimo, mostrar vacío
         if (rejectedCount > 0) {
@@ -313,9 +318,10 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
     }
   };
 
-  // Reiniciar estado inmediatamente al cambiar de empresa activa (cero arrastre entre tenants)
+  // Reiniciar estado inmediatamente al cambiar de empresa activa (cero arrastre entre tenants y cero salto visual)
   useEffect(() => {
-    const cat = getTenantCatalog(activeEmpresaId);
+    const cached = getLiveCache<{ products: InventoryItem[]; categories: string[] }>(activeEmpresaId, 'inventory_catalog');
+    const cat = cached ?? getTenantCatalog(activeEmpresaId);
     setProducts(cat.products);
     setCategories(cat.categories);
     setSelectedCategory('Todas');

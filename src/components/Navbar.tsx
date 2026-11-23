@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { User, EmpresaSaaS, NavigationTab } from '../types';
 import { 
   Search, 
@@ -9,27 +9,14 @@ import {
   ChevronDown, 
   Clock, 
   Building2,
-  LayoutGrid,
-  ArrowLeft,
-  Menu,
-  X,
-  Boxes,
-  Zap,
-  ReceiptText,
-  UserCheck,
-  Truck,
-  Landmark,
-  Users,
-  Clock3,
-  BarChart3,
-  Settings,
-  Cpu,
   Video,
   CreditCard,
   AlertTriangle,
   CheckCheck,
   Sparkles,
-  Send
+  Send,
+  Sun,
+  Moon
 } from 'lucide-react';
 import { useTimeFormat } from '../context/TimeFormatContext';
 import { getRegimenBadge } from '../utils/tax';
@@ -56,9 +43,9 @@ interface NavbarProps {
   onSelectEmpresa?: (id: number) => void;
   activeTab?: NavigationTab;
   onTabChange?: (tab: NavigationTab) => void;
-  onToggleSidebar?: () => void;
-  sidebarOpen?: boolean;
   onEnterLiveMode?: () => void;
+  themeMode?: 'light' | 'dark';
+  onToggleTheme?: () => void;
 }
 
 export default function Navbar({ 
@@ -71,16 +58,13 @@ export default function Navbar({
   selectedEmpresa,
   selectedEmpresaId,
   onSelectEmpresa,
-  activeTab = 'hub',
   onTabChange,
-  onToggleSidebar,
-  sidebarOpen = false,
-  onEnterLiveMode
+  onEnterLiveMode,
+  themeMode = 'light',
+  onToggleTheme
 }: NavbarProps) {
   const [navTime, setNavTime] = useState(new Date());
-  const [appSwitcherOpen, setAppSwitcherOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
-  const switcherRef = useRef<HTMLDivElement>(null);
   const notifRef = useRef<HTMLDivElement>(null);
   const { timeFormat, toggleTimeFormat, formatTime } = useTimeFormat();
 
@@ -223,12 +207,9 @@ export default function Navbar({
     return () => clearInterval(timer);
   }, []);
 
-  // Cerrar popovers al hacer clic afuera
+  // Cerrar popover de notificaciones al hacer clic afuera
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
-      if (switcherRef.current && !switcherRef.current.contains(event.target as Node)) {
-        setAppSwitcherOpen(false);
-      }
       if (notifRef.current && !notifRef.current.contains(event.target as Node)) {
         setNotifOpen(false);
       }
@@ -237,142 +218,19 @@ export default function Navbar({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const isFortexa = (selectedEmpresaId ?? user.empresa_id) === 22;
-  const hasPosEnabled = !isFortexa && currentEmpObj?.modules?.pos !== false;
-  const hasLiveEnabled = !isFortexa && (currentEmpObj?.modules?.live_sales ?? currentEmpId === 1);
-
-  // Lista de aplicaciones para el App Switcher rápido (9 puntos)
-  const quickApps: { id: NavigationTab; label: string; icon: React.ElementType; color: string; badge?: string }[] = isFortexa ? [
-    { id: 'hub', label: 'Menú Principal', icon: LayoutGrid, color: 'text-indigo-600 bg-indigo-50' },
-    { id: 'fortexa_apps', label: 'Suscripciones & SaaS', icon: Cpu, color: 'text-purple-600 bg-purple-50', badge: 'SaaS' },
-    { id: 'ventas', label: 'Ventas FEL (B2B)', icon: ReceiptText, color: 'text-blue-600 bg-blue-50' },
-    { id: 'inventario', label: 'Hardware & Equipos', icon: Boxes, color: 'text-amber-600 bg-amber-50' },
-    { id: 'clientes', label: 'Clientes & Flotas', icon: Users, color: 'text-cyan-600 bg-cyan-50' },
-    { id: 'compras', label: 'Compras & Proveedores', icon: Truck, color: 'text-violet-600 bg-violet-50' },
-    { id: 'contabilidad', label: 'Contabilidad SAT', icon: Landmark, color: 'text-emerald-600 bg-emerald-50' },
-    { id: 'dashboard', label: 'Dashboard Métricas', icon: BarChart3, color: 'text-rose-600 bg-rose-50' },
-    { id: 'rrhh', label: 'Recursos Humanos', icon: UserCheck, color: 'text-teal-600 bg-teal-50' },
-    { id: 'asistencia', label: 'Reloj Checador', icon: Clock3, color: 'text-indigo-600 bg-indigo-50' },
-    { id: 'sucursales', label: 'Sucursales', icon: Store, color: 'text-blue-600 bg-blue-50' },
-    { id: 'configuracion', label: 'Configuración', icon: Settings, color: 'text-slate-600 bg-slate-100' },
-  ] : [
-    { id: 'hub', label: 'Menú Principal', icon: LayoutGrid, color: 'text-indigo-600 bg-indigo-50' },
-    ...(hasPosEnabled ? [{ id: 'pos' as NavigationTab, label: 'Punto de Venta (POS)', icon: Zap, color: 'text-emerald-600 bg-emerald-50', badge: 'Caja' }] : []),
-    ...(hasLiveEnabled ? [{ id: 'live_sales' as NavigationTab, label: 'TikTok Live', icon: Video, color: 'text-rose-600 bg-rose-50', badge: 'Live' }] : []),
-    { id: 'inventario', label: 'Inventario & Bodega', icon: Boxes, color: 'text-amber-600 bg-amber-50' },
-    { id: 'ventas', label: 'Ventas & Facturación', icon: ReceiptText, color: 'text-blue-600 bg-blue-50' },
-    { id: 'clientes', label: 'Clientes & Créditos', icon: Users, color: 'text-cyan-600 bg-cyan-50' },
-    { id: 'compras', label: 'Compras & Proveedores', icon: Truck, color: 'text-violet-600 bg-violet-50' },
-    { id: 'contabilidad', label: 'Contabilidad SAT', icon: Landmark, color: 'text-emerald-600 bg-emerald-50' },
-    { id: 'dashboard', label: 'Dashboard Métricas', icon: BarChart3, color: 'text-rose-600 bg-rose-50' },
-    { id: 'rrhh', label: 'Recursos Humanos', icon: UserCheck, color: 'text-teal-600 bg-teal-50' },
-    { id: 'asistencia', label: 'Reloj Checador', icon: Clock3, color: 'text-indigo-600 bg-indigo-50' },
-    { id: 'configuracion', label: 'Configuración', icon: Settings, color: 'text-slate-600 bg-slate-100' },
-  ];
-
   return (
-    <header className="h-16 bg-white border-b border-slate-200/80 sticky top-0 z-30 px-2.5 sm:px-6 flex items-center justify-between gap-2 sm:gap-3 shadow-xs">
-      {/* Izquierda: Botón de Regreso a Menú Principal / App Switcher / Brand */}
-      <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-        {/* Toggle para Drawer Lateral Opcional */}
-        {onToggleSidebar && (
-          <button
-            type="button"
-            onClick={onToggleSidebar}
-            className="p-2 text-slate-500 hover:text-indigo-600 hover:bg-slate-100 rounded-xl transition-colors"
-            title={sidebarOpen ? "Ocultar Menú Lateral" : "Abrir Menú Lateral"}
-          >
-            {sidebarOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-          </button>
-        )}
-
-        {/* Si NO está en el Hub: Botón Destacado "← Menú Principal" */}
-        {activeTab !== 'hub' ? (
-          <button
-            type="button"
-            onClick={() => onTabChange?.('hub')}
-            className="flex items-center gap-2 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm hover:shadow-md group"
-            title="Volver a la pantalla principal con las tarjetas"
-          >
-            <ArrowLeft className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform" />
-            <span className="hidden sm:inline">Menú Principal</span>
-            <span className="sm:hidden">Inicio</span>
-          </button>
-        ) : (
-          /* Si está en el Hub: Logo Monograma Elegante */
-          <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-600 to-indigo-800 flex items-center justify-center text-white font-black text-xs shadow-md shadow-indigo-600/20">
-              IP
-            </div>
-            <div className="hidden sm:block">
-              <span className="text-xs font-black text-slate-900 tracking-tight block">IntegraPro</span>
-              <span className="text-[10px] text-slate-400 font-semibold block -mt-0.5">Cloud ERP</span>
-            </div>
-          </div>
-        )}
-
-        {/* App Switcher de 9 Puntos (Lanzador Rápido Flotante) */}
-        <div className="relative" ref={switcherRef}>
-          <button
-            type="button"
-            onClick={() => setAppSwitcherOpen(!appSwitcherOpen)}
-            className={`p-2 rounded-xl transition-all ${
-              appSwitcherOpen 
-                ? 'bg-indigo-50 text-indigo-600 ring-2 ring-indigo-500/20' 
-                : 'text-slate-500 hover:text-indigo-600 hover:bg-slate-100'
-            }`}
-            title="Matriz de Aplicaciones Rápidas"
-          >
-            <LayoutGrid className="w-4 h-4" />
-          </button>
-
-          {/* Menú Flotante de Aplicaciones (9 puntos) */}
-          {appSwitcherOpen && (
-            <div className="absolute left-0 mt-2 w-72 sm:w-80 bg-white rounded-2xl shadow-2xl border border-slate-200 p-3 z-50 animate-in fade-in zoom-in-95 duration-150">
-              <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-100 px-1">
-                <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-                  <LayoutGrid className="w-3.5 h-3.5 text-indigo-600" />
-                  Módulos de IntegraPro
-                </span>
-                <span className="text-[10px] text-slate-400 font-semibold">Salto rápido</span>
-              </div>
-
-              <div className="grid grid-cols-2 gap-1.5 max-h-80 overflow-y-auto p-0.5">
-                {quickApps.filter(app => {
-                  if (app.id === 'hub') return true;
-                  const curEmp = empresas?.find(e => e.id === (selectedEmpresaId ?? user.empresa_id));
-                  if (curEmp?.modules) {
-                    return curEmp.modules[app.id] !== false;
-                  }
-                  return true;
-                }).map(app => {
-                  const Icon = app.icon;
-                  const isCurrent = activeTab === app.id;
-                  return (
-                    <button
-                      key={app.id}
-                      type="button"
-                      onClick={() => {
-                        onTabChange?.(app.id);
-                        setAppSwitcherOpen(false);
-                      }}
-                      className={`flex items-center gap-2.5 p-2 rounded-xl text-left text-xs font-semibold transition-all ${
-                        isCurrent 
-                          ? 'bg-indigo-50 text-indigo-700 border border-indigo-200 font-bold' 
-                          : 'hover:bg-slate-50 text-slate-700'
-                      }`}
-                    >
-                      <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${app.color}`}>
-                        <Icon className="w-4 h-4" />
-                      </div>
-                      <span className="truncate">{app.label}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-        </div>
+    <header className="h-16 shrink-0 web-navbar-glass border-b border-slate-200/80 z-30 px-2.5 sm:px-4 flex items-center justify-between gap-2">
+      {/* Izquierda: Brand minimalista IntegraPro (clic para volver al Hub) */}
+      <div className="flex items-center shrink-0">
+        <button
+          type="button"
+          onClick={() => onTabChange?.('hub')}
+          className="flex flex-col text-left rounded-xl px-1.5 py-0.5 hover:opacity-85 transition-opacity cursor-pointer"
+          title="Ir al Menú Principal (Módulos)"
+        >
+          <span className="text-sm font-black text-slate-900 tracking-tight leading-tight">IntegraPro</span>
+          <span className="text-[10px] text-indigo-600 font-bold leading-tight">Cloud ERP</span>
+        </button>
       </div>
 
       {/* Centro: Buscador / Paleta de Comandos Ctrl + K */}
@@ -449,6 +307,32 @@ export default function Navbar({
           <span className="truncate max-w-[120px]">{user.sucursal_nombre}</span>
           <ChevronDown className="w-3 h-3 text-indigo-400" />
         </div>
+
+        {/* Interruptor de Tema: Claro Neomórfico / Oscuro OLED Liquid Glass */}
+        {onToggleTheme && (
+          <button
+            type="button"
+            onClick={onToggleTheme}
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer shrink-0 ${
+              themeMode === 'dark'
+                ? 'bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border-emerald-400/35 shadow-[0_0_16px_rgba(16,185,129,0.2)]'
+                : 'bg-slate-900 hover:bg-slate-800 text-emerald-300 border-slate-700 shadow-xs'
+            }`}
+            title={themeMode === 'dark' ? 'Cambiar a Claro Neomórfico + Visores OLED' : 'Cambiar a Modo Oscuro OLED Liquid Glass'}
+          >
+            {themeMode === 'dark' ? (
+              <>
+                <Sun className="w-3.5 h-3.5 text-amber-300" />
+                <span className="hidden xl:inline text-[11px]">Claro</span>
+              </>
+            ) : (
+              <>
+                <Moon className="w-3.5 h-3.5 text-emerald-300" />
+                <span className="hidden xl:inline text-[11px]">OLED</span>
+              </>
+            )}
+          </button>
+        )}
 
         {/* Reloj en Vivo del Sistema con Toggle 12h / 24h */}
         <button

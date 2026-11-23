@@ -25,6 +25,7 @@ import { Cliente, EmpresaSaaS } from '../types';
 import { getTenantClients } from '../data/realClients';
 import { salesApi } from '../api';
 import { filterRecordsByTenant, getStoredActiveEmpresaId } from '../utils/tenant';
+import { getLiveCache, setLiveCache } from '../utils/liveCache';
 
 interface ClientsProps {
   currentEmpresa?: EmpresaSaaS;
@@ -81,9 +82,13 @@ export default function Clients({ currentEmpresa }: ClientsProps) {
 
   const effectiveEmpresaId = Number(currentEmpresa?.id ?? getStoredActiveEmpresaId() ?? 0);
 
-  // Clientes y Créditos aislados por empresa
-  const [clientes, setClientes] = useState<Cliente[]>(() => getTenantClients(effectiveEmpresaId));
-  const [creditSales, setCreditSales] = useState<CreditSaleItem[]>([]);
+  // Clientes y Créditos aislados por empresa (con caché en vivo para evitar saltos al navegar)
+  const [clientes, setClientes] = useState<Cliente[]>(() => {
+    return getLiveCache<Cliente[]>(effectiveEmpresaId, 'clients') ?? getTenantClients(effectiveEmpresaId);
+  });
+  const [creditSales, setCreditSales] = useState<CreditSaleItem[]>(() => {
+    return getLiveCache<CreditSaleItem[]>(effectiveEmpresaId, 'credits') ?? [];
+  });
   const [loadingCredits, setLoadingCredits] = useState(false);
 
   const showToast = (text: string, pdfSaleId?: number) => {
@@ -113,13 +118,18 @@ export default function Clients({ currentEmpresa }: ClientsProps) {
             saldo_actual: Number(c.saldo_actual) || 0,
             limite_credito: Number(c.limite_credito) || 5000
           }));
+          setLiveCache(effectiveEmpresaId, 'clients', mapped);
           setClientes(mapped);
           return;
         }
       }
-      setClientes(getTenantClients(effectiveEmpresaId));
+      if (!getLiveCache<Cliente[]>(effectiveEmpresaId, 'clients')) {
+        setClientes(getTenantClients(effectiveEmpresaId));
+      }
     } catch {
-      setClientes(getTenantClients(effectiveEmpresaId));
+      if (!getLiveCache<Cliente[]>(effectiveEmpresaId, 'clients')) {
+        setClientes(getTenantClients(effectiveEmpresaId));
+      }
     }
   }, [effectiveEmpresaId]);
 
@@ -169,21 +179,25 @@ export default function Clients({ currentEmpresa }: ClientsProps) {
             pagos: pagosArr
           };
         });
+        setLiveCache(effectiveEmpresaId, 'credits', mapped);
         setCreditSales(mapped);
       } else {
+        setLiveCache(effectiveEmpresaId, 'credits', []);
         setCreditSales([]);
       }
     } catch (err) {
       console.warn('Error cargando cuentas por cobrar:', err);
-      setCreditSales([]);
+      if (!getLiveCache<CreditSaleItem[]>(effectiveEmpresaId, 'credits')) {
+        setCreditSales([]);
+      }
     } finally {
       setLoadingCredits(false);
     }
   }, [effectiveEmpresaId]);
 
   useEffect(() => {
-    setClientes(getTenantClients(effectiveEmpresaId));
-    setCreditSales([]);
+    setClientes(getLiveCache<Cliente[]>(effectiveEmpresaId, 'clients') ?? getTenantClients(effectiveEmpresaId));
+    setCreditSales(getLiveCache<CreditSaleItem[]>(effectiveEmpresaId, 'credits') ?? []);
     setExpandedCreditId(null);
     fetchClientsLive();
     fetchCreditsLive();

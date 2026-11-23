@@ -1,11 +1,12 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import { User, NavigationTab, EmpresaSaaS } from './types';
+import FloatingGlassDock from './components/FloatingGlassDock';
 import { authApi, empresaApi } from './api';
 import { formatRegimenLabel } from './utils/tax';
 import { isPlatformAdminEmail, isOwnerOperableEmpresa } from './utils/tenant';
+import { clearLiveCache } from './utils/liveCache';
 import Login from './components/Login';
 import Navbar from './components/Navbar';
-import Sidebar from './components/Sidebar';
 import Dashboard from './pages/Dashboard';
 import PosTerminal from './pages/PosTerminal';
 import Inventory from './pages/Inventory';
@@ -28,7 +29,6 @@ import {
   ShoppingCart, 
   Search, 
   X, 
-  CheckCircle2, 
   Sparkles,
   Truck,
   Landmark,
@@ -36,8 +36,7 @@ import {
   Clock3,
   Building2,
   Cpu,
-  LayoutGrid,
-  ArrowLeft
+  LayoutGrid
 } from 'lucide-react';
 
 // Empresas base propias de la plataforma (NO incluye datos de clientes externos en el bundle público)
@@ -182,10 +181,29 @@ export default function App() {
     };
   });
   const [activeTab, setActiveTab] = useState<NavigationTab>('hub');
-  const [sidebarOpen, setSidebarOpen] = useState<boolean>(false);
+  const mainScrollRef = useRef<HTMLElement>(null);
+  const [themeMode, setThemeMode] = useState<'light' | 'dark'>(() => {
+    try {
+      return localStorage.getItem('integrapro_web_theme') === 'dark' ? 'dark' : 'light';
+    } catch {
+      return 'light';
+    }
+  });
+
+  useEffect(() => {
+    const root = document.documentElement;
+    if (themeMode === 'dark') {
+      root.classList.add('oled-dark', 'dark');
+    } else {
+      root.classList.remove('oled-dark', 'dark');
+    }
+    try {
+      localStorage.setItem('integrapro_web_theme', themeMode);
+    } catch {}
+  }, [themeMode]);
+
+  const toggleThemeMode = () => setThemeMode((prev) => (prev === 'dark' ? 'light' : 'dark'));
   const [commandPaletteOpen, setCommandPaletteOpen] = useState<boolean>(false);
-  const [hasUpdate, setHasUpdate] = useState<boolean>(true);
-  const [updateNotificationToast, setUpdateNotificationToast] = useState<string | null>(null);
   const [newVersionAvailable, setNewVersionAvailable] = useState<boolean>(false);
 
   // Detector de nueva versión: compara el hash del bundle en ejecución contra el
@@ -383,6 +401,13 @@ export default function App() {
     const idNum = saved ? Number(saved) : 1;
     return idNum === 2 ? 22 : idNum;
   });
+
+  // Reiniciar scroll del contenedor principal antes del pintado al cambiar de módulo
+  useLayoutEffect(() => {
+    if (mainScrollRef.current) {
+      mainScrollRef.current.scrollTop = 0;
+    }
+  }, [activeTab, selectedEmpresaId]);
 
   const [isLiveOnlyMode, setIsLiveOnlyMode] = useState<boolean>(() => {
     const savedActive = localStorage.getItem('integrapro_active_empresa_id');
@@ -808,15 +833,8 @@ export default function App() {
       localStorage.removeItem('integrapro_empresas_list');
       localStorage.removeItem('integrapro_last_activity');
     } catch {}
+    clearLiveCache();
     setIsAuthenticated(false);
-  };
-
-  const handleApplyUpdate = () => {
-    setUpdateNotificationToast('¡Sistema actualizado a v2.1 exitosamente sin interrumpir tu sesión!');
-    setHasUpdate(false);
-    setTimeout(() => {
-      setUpdateNotificationToast(null);
-    }, 4000);
   };
 
   if (!isAuthenticated) {
@@ -845,43 +863,9 @@ export default function App() {
           onLogout={handleLogout}
         />
       ) : (
-        <div className="min-h-screen flex bg-slate-100 text-slate-800 antialiased font-sans">
-        {/* Toast Flotante de Actualización */}
-        {updateNotificationToast && (
-          <div className="fixed bottom-6 right-6 z-50 bg-slate-900 text-white px-5 py-3.5 rounded-2xl shadow-2xl border border-slate-700 flex items-center gap-3 animate-bounce">
-            <CheckCircle2 className="w-5 h-5 text-emerald-400" />
-            <span className="text-xs font-semibold">{updateNotificationToast}</span>
-          </div>
-        )}
-
-        {/* Drawer Lateral Deslizante (Opcional, accesible desde el botón de la barra superior) */}
-        {sidebarOpen && (
-          <div className="fixed inset-0 z-50 flex">
-            {/* Backdrop con desenfoque suave */}
-            <div 
-              className="fixed inset-0 bg-slate-950/60 backdrop-blur-xs transition-opacity animate-in fade-in duration-200"
-              onClick={() => setSidebarOpen(false)}
-            />
-
-            {/* Panel Lateral Drawer */}
-            <div className="relative z-50 flex flex-col h-full shadow-2xl animate-in slide-in-from-left duration-200">
-              <Sidebar 
-                user={currentUser} 
-                activeTab={activeTab} 
-                onTabChange={(tab) => { setActiveTab(tab); setSidebarOpen(false); }} 
-                hasUpdate={hasUpdate}
-                onApplyUpdate={handleApplyUpdate}
-                currentEmpresaId={selectedEmpresaId}
-                currentEmpresa={selectedEmpresa}
-                onClose={() => setSidebarOpen(false)}
-                onLogout={handleLogout}
-              />
-            </div>
-          </div>
-        )}
-
-        {/* Área Central de Contenido (Aprovecha el 100% del ancho de pantalla sin estorbos laterales) */}
-        <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+        <div className="h-screen overflow-hidden flex web-shell-light web-oled-scope text-slate-800 antialiased font-sans transition-colors duration-300">
+        {/* Área Central de Contenido (Shell fijo 100vh: Navbar inmóvil + scroll exclusivo en <main> sin saltos) */}
+        <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
           <Navbar 
             user={currentUser} 
             selectedEmpresa={selectedEmpresa}
@@ -893,16 +877,16 @@ export default function App() {
             selectedEmpresaId={selectedEmpresaId}
             onSelectEmpresa={isSuperAdmin ? handleSelectEmpresa : undefined}
             activeTab={activeTab}
-            onTabChange={(tab) => { setActiveTab(tab); setSidebarOpen(false); }}
-            onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
-            sidebarOpen={sidebarOpen}
+            onTabChange={(tab) => setActiveTab(tab)}
             onEnterLiveMode={() => {
               setIsLiveOnlyMode(true);
               localStorage.setItem('integrapro_mode_live_only', 'true');
             }}
+            themeMode={themeMode}
+            onToggleTheme={toggleThemeMode}
           />
 
-        <main className="flex-1 overflow-y-auto p-2.5 sm:p-6 lg:p-8">
+        <main ref={mainScrollRef} className="flex-1 overflow-y-scroll p-2.5 sm:p-6 lg:p-8 pb-24 md:pb-8 md:pl-24" style={{ scrollbarGutter: 'stable' }}>
           <div className="max-w-7xl mx-auto w-full">
             {/* Banner de Recordatorio de Pago (5 días antes del vencimiento Mensual/Anual) o Prueba Gratis 14 Días */}
             {selectedEmpresa && selectedEmpresa.id !== 1 && selectedEmpresa.id !== 22 && selectedEmpresa.id !== 99 && (() => {
@@ -972,30 +956,14 @@ export default function App() {
                 </div>
               );
             })()}
-            {/* Si está dentro de un módulo específico, muestra el encabezado con botón de regreso */}
+            {/* Encabezado persistente de módulo (nunca parpadea ni se remonta al cambiar entre módulos) */}
             {activeTab !== 'hub' && (
-              <div className="mb-4 sm:mb-5 flex flex-wrap items-center justify-between gap-2.5 sm:gap-3 bg-white px-3 sm:px-4 py-2.5 sm:py-3 rounded-2xl border border-slate-200/90 shadow-xs animate-in fade-in duration-200">
+              <div className="mb-4 sm:mb-5 flex flex-wrap items-center justify-between gap-2.5 sm:gap-3 bg-white px-4 py-2.5 sm:py-3 rounded-2xl border border-slate-200/90 shadow-xs">
                 <div className="flex items-center gap-2.5">
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab('hub')}
-                    className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-slate-100 hover:bg-indigo-50 text-slate-700 hover:text-indigo-700 font-bold text-xs border border-slate-200 hover:border-indigo-200 transition-all shadow-2xs group cursor-pointer"
-                    title="Regresar a la pantalla de tarjetas principales"
-                  >
-                    <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform text-indigo-600" />
-                    <span>Volver al Menú Principal</span>
-                  </button>
-
-                  <span className="text-slate-300 font-light">/</span>
-
-                  <div className="flex items-center gap-2">
-                    <div className="w-6 h-6 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center">
-                      <LayoutGrid className="w-3.5 h-3.5" />
-                    </div>
-                    <span className="text-xs sm:text-sm font-extrabold text-slate-800">
-                      {getModuleName(activeTab, selectedEmpresaId)}
-                    </span>
-                  </div>
+                  <span className="w-2.5 h-2.5 rounded-full bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.55)] shrink-0" />
+                  <span className="text-xs sm:text-sm font-extrabold text-slate-800 tracking-tight">
+                    {getModuleName(activeTab, selectedEmpresaId)}
+                  </span>
                 </div>
 
                 <div className="hidden sm:flex items-center gap-2 text-xs text-slate-400 font-medium">
@@ -1008,13 +976,14 @@ export default function App() {
               </div>
             )}
 
-            {/* Vistas según pestaña activa (key={selectedEmpresaId} garantiza reinicio total del estado al cambiar de empresa) */}
+            {/* Vistas según pestaña activa: cambio instantáneo sin parpadeo en blanco ni saltos de layout */}
+            <div className="w-full">
             {activeTab === 'hub' && (
               <LaunchpadHub
                 key={selectedEmpresaId}
                 user={currentUser}
                 selectedEmpresa={selectedEmpresa}
-                onNavigate={(tab) => { setActiveTab(tab); setSidebarOpen(false); }}
+                onNavigate={(tab) => setActiveTab(tab)}
                 empresas={effectiveUserEmpresas}
                 onSelectEmpresa={isSuperAdmin ? handleSelectEmpresa : undefined}
                 onLogout={handleLogout}
@@ -1065,8 +1034,17 @@ export default function App() {
             {activeTab === 'token_scraper' && (
               <TokenExtensionScraper />
             )}
+            </div>
           </div>
         </main>
+
+        {/* Floating Glass Dock (mismo lenguaje visual OLED + Spring que Mobile V2) */}
+        <FloatingGlassDock
+          activeTab={activeTab}
+          onSelect={(tab) => setActiveTab(tab)}
+          selectedEmpresa={selectedEmpresa}
+          selectedEmpresaId={selectedEmpresaId}
+        />
       </div>
 
       {/* Modal Paleta de Comandos (Ctrl + K) */}
