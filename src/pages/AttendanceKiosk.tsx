@@ -17,7 +17,7 @@ import {
 } from 'lucide-react';
 import { useTimeFormat } from '../context/TimeFormatContext';
 import { validarUbicacionMarcaje, GeofenceValidationResult } from '../utils/geofencing';
-import { attendanceApi } from '../api';
+import { attendanceApi, rrhhApi } from '../api';
 
 interface EmpleadoKiosco {
   id: number;
@@ -74,48 +74,47 @@ export default function AttendanceKiosk() {
     }
   }, []);
 
-  // Lista de empleados registrados (Sin salarios ni datos confidenciales de RRHH)
-  const [empleados] = useState<EmpleadoKiosco[]>([
-    {
-      id: 1,
-      nombre: 'Juan Carlos Morales',
-      dpi: '2450 89124 0101',
-      puesto: 'Cajero Principal / POS',
-      sucursal: 'Sucursal Central',
-      avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80'
-    },
-    {
-      id: 2,
-      nombre: 'Sofía Andrea Castillo',
-      dpi: '1890 44102 0101',
-      puesto: 'Encargada de Bodega e Inventario',
-      sucursal: 'Sucursal Central',
-      avatar: 'https://images.unsplash.com/photo-1580489944761-15a19d654956?w=150&auto=format&fit=crop&q=80'
-    },
-    {
-      id: 3,
-      nombre: 'Roberto Gómez Pérez',
-      dpi: '3012 99420 0101',
-      puesto: 'Vendedor de Mostrador',
-      sucursal: 'Sucursal Norte',
-      avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80'
-    },
-    {
-      id: 4,
-      nombre: 'Elena María Reyes',
-      dpi: '2210 11540 0101',
-      puesto: 'Gerente de Sucursal',
-      sucursal: 'Sucursal Sur',
-      avatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80'
-    }
-  ]);
+  // Lista de empleados reales sincronizados con MySQL
+  const [empleados, setEmpleados] = useState<EmpleadoKiosco[]>([]);
 
-  // Marcajes del día en curso (Solo horas y estado de puntualidad)
-  const [marcajesHoy, setMarcajesHoy] = useState<MarcajeHoy[]>([
-    { id: 1, empleado: 'Juan Carlos Morales', puesto: 'Cajero Principal', sucursal: 'Central', fecha: '16/11/2026', horaEntrada: '07:55 AM', horaSalida: '---', estado: 'Puntual' },
-    { id: 2, empleado: 'Sofía Andrea Castillo', puesto: 'Encargada de Bodega', sucursal: 'Central', fecha: '16/11/2026', horaEntrada: '08:00 AM', horaSalida: '---', estado: 'Puntual' },
-    { id: 3, empleado: 'Roberto Gómez Pérez', puesto: 'Vendedor Mostrador', sucursal: 'Norte', fecha: '16/11/2026', horaEntrada: '08:14 AM', horaSalida: '---', estado: 'Tarde' },
-  ]);
+  // Marcajes reales del día sincronizados con MySQL
+  const [marcajesHoy, setMarcajesHoy] = useState<MarcajeHoy[]>([]);
+
+  useEffect(() => {
+    const todayIso = new Date().toISOString().slice(0, 10);
+    Promise.allSettled([rrhhApi.getEmpleados(), attendanceApi.getAsistencias(todayIso)]).then(
+      ([empRes, asisRes]) => {
+        if (empRes.status === 'fulfilled') {
+          const rawE = Array.isArray(empRes.value?.data) ? empRes.value.data : Array.isArray(empRes.value) ? empRes.value : [];
+          setEmpleados(
+            rawE.map((e: any) => ({
+              id: Number(e.id_empleado ?? e.id),
+              nombre: String(e.nombre_completo || e.nombre || 'Colaborador'),
+              dpi: formatDpiGuatemala(String(e.dpi || e.identificacion || '')),
+              puesto: String(e.puesto || 'Colaborador'),
+              sucursal: 'Sucursal Principal',
+              avatar: e.foto || '',
+            }))
+          );
+        }
+        if (asisRes.status === 'fulfilled') {
+          const rawA = Array.isArray(asisRes.value?.data) ? asisRes.value.data : Array.isArray(asisRes.value) ? asisRes.value : [];
+          setMarcajesHoy(
+            rawA.map((a: any) => ({
+              id: Number(a.id_asistencia ?? a.id),
+              empleado: String(a.nombre_empleado || a.empleado?.nombre_completo || 'Colaborador'),
+              puesto: String(a.puesto || a.empleado?.puesto || 'Colaborador'),
+              sucursal: 'Principal',
+              fecha: String(a.fecha || todayIso),
+              horaEntrada: a.hora_entrada ? String(a.hora_entrada).slice(0, 5) : '---',
+              horaSalida: a.hora_salida ? String(a.hora_salida).slice(0, 5) : '---',
+              estado: (a.estado === 'Tarde' ? 'Tarde' : 'Puntual') as 'Puntual' | 'Tarde' | 'Falta',
+            }))
+          );
+        }
+      }
+    );
+  }, []);
 
   // Reloj digital con actualización cada segundo
   useEffect(() => {

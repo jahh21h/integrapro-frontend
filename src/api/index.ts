@@ -330,8 +330,12 @@ export const aiInvoiceApi = {
 // 9. SUCURSALES
 // ==========================================
 export const branchesApi = {
-  getAll: async () => {
-    const res = await apiClient.get('/branches');
+  getAll: async (params?: { id_empresa?: number }) => {
+    const res = await apiClient.get('/branches', { params: withTenantParam(params) });
+    return res.data;
+  },
+  create: async (data: { nombre: string; telefono?: string; direccion?: string; activo?: boolean }) => {
+    const res = await apiClient.post('/branches', data);
     return res.data;
   }
 };
@@ -340,24 +344,26 @@ export const branchesApi = {
 // 10. CONTABILIDAD & SAT GUATEMALA
 // ==========================================
 export const accountingApi = {
-  getCuentas: async () => {
-    const res = await apiClient.get('/cuentas-contables');
+  getCuentas: async (params?: { id_empresa?: number }) => {
+    const res = await apiClient.get('/cuentas-contables', { params: withTenantParam(params) });
     return res.data;
   },
   createCuenta: async (data: any) => {
     const res = await apiClient.post('/cuentas-contables', data);
     return res.data;
   },
-  getPartidas: async (params?: { page?: number }) => {
-    const res = await apiClient.get('/partidas', { params });
+  getPartidas: async (params?: { page?: number; id_empresa?: number }) => {
+    const res = await apiClient.get('/partidas', { params: withTenantParam(params) });
     return res.data;
   },
   createPartida: async (data: any) => {
     const res = await apiClient.post('/partidas', data);
     return res.data;
   },
-  getLiquidacionSAT: async (mes?: number, anio?: number) => {
-    const res = await apiClient.get('/sat/liquidacion', { params: { mes, anio } });
+  getLiquidacionSAT: async (mes?: number, anio?: number, id_empresa?: number) => {
+    const res = await apiClient.get('/sat/liquidacion', {
+      params: withTenantParam({ ...(mes ? { mes } : {}), ...(anio ? { anio } : {}), ...(id_empresa ? { id_empresa } : {}) })
+    });
     return res.data;
   }
 };
@@ -366,8 +372,8 @@ export const accountingApi = {
 // 11. RECURSOS HUMANOS & NÓMINA (Leyes de Guatemala)
 // ==========================================
 export const rrhhApi = {
-  getEmpleados: async () => {
-    const res = await apiClient.get('/empleados');
+  getEmpleados: async (params?: { id_empresa?: number }) => {
+    const res = await apiClient.get('/empleados', { params: withTenantParam(params) });
     return res.data;
   },
   createEmpleado: async (data: any) => {
@@ -375,7 +381,7 @@ export const rrhhApi = {
     return res.data;
   },
   calcularNomina: async (mes?: number, anio?: number) => {
-    const res = await apiClient.get('/rrhh/nomina', { params: { mes, anio } });
+    const res = await apiClient.get('/rrhh/nomina', { params: withTenantParam({ mes, anio }) });
     return res.data;
   },
   calcularLiquidacion: async (data: { id_empleado: number; motivo: string; fecha_salida: string }) => {
@@ -388,8 +394,10 @@ export const rrhhApi = {
 // 12. KIOSCO DE ASISTENCIA BIOMÉTRICO / PIN
 // ==========================================
 export const attendanceApi = {
-  getAsistencias: async (fecha?: string) => {
-    const res = await apiClient.get('/asistencias', { params: { fecha } });
+  getAsistencias: async (fecha?: string, id_empresa?: number) => {
+    const res = await apiClient.get('/asistencias', {
+      params: withTenantParam({ ...(fecha ? { fecha } : {}), ...(id_empresa ? { id_empresa } : {}) })
+    });
     return res.data;
   },
   verifyKiosk: async (dpi: string) => {

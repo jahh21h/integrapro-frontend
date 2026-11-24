@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { 
   Landmark, 
   BookOpen, 
@@ -18,6 +18,7 @@ import {
 import { CuentaContable, Partida, DeclaracionFiscalSAT, RetencionSAT, EmpresaSaaS } from '../types';
 import { calculateMonthlyTaxSettlement, getTipoRegimenSAT } from '../utils/tax';
 import { exportToExcelCsv } from '../utils/export';
+import { accountingApi } from '../api';
 
 interface AccountingProps {
   currentEmpresa?: EmpresaSaaS;
@@ -39,156 +40,96 @@ export default function Accounting({ currentEmpresa }: AccountingProps = {}) {
   };
 
   const tipoRegimen = getTipoRegimenSAT(empresaActiva.regimen);
-  const liquidacionActual = calculateMonthlyTaxSettlement(106800.00, 37200.00, 850.00, empresaActiva.regimen);
 
   const [activeTab, setActiveTab] = useState<'catalogo' | 'partidas' | 'sat' | 'retenciones' | 'reportes'>('catalogo');
   const [searchTerm, setSearchTerm] = useState('');
   const [showNewPartidaModal, setShowNewPartidaModal] = useState(false);
   const [showNewCuentaModal, setShowNewCuentaModal] = useState(false);
   const [selectedPartida, setSelectedPartida] = useState<Partida | null>(null);
+  const [satLive, setSatLive] = useState<{
+    ventas_brutas: number;
+    compras_totales: number;
+    total_retenciones: number;
+    periodo_label?: string;
+  }>({ ventas_brutas: 0, compras_totales: 0, total_retenciones: 0 });
 
-  // Catálogo de Cuentas Contables conforme al modelo CuentaContable de Laravel
-  const [cuentas, setCuentas] = useState<CuentaContable[]>([
-    { id_cuenta: 1, codigo: '1.1.01', nombre: 'Caja General y Sucursales', tipo: 'activo', id_padre: null, nivel: 3, activa: true, saldo: 45890.00 },
-    { id_cuenta: 2, codigo: '1.1.02', nombre: 'Bancos del Sistema (Cuentas Monetarias)', tipo: 'activo', id_padre: null, nivel: 3, activa: true, saldo: 128450.50 },
-    { id_cuenta: 3, codigo: '1.1.05', nombre: 'Clientes / Cuentas por Cobrar Comerciales', tipo: 'activo', id_padre: null, nivel: 3, activa: true, saldo: 34200.00 },
-    { id_cuenta: 4, codigo: '1.1.08', nombre: 'Inventario de Mercaderías para la Venta', tipo: 'activo', id_padre: null, nivel: 3, activa: true, saldo: 84320.00 },
-    { id_cuenta: 5, codigo: '1.1.09', nombre: 'IVA por Cobrar (Crédito Fiscal 12%)', tipo: 'activo', id_padre: null, nivel: 3, activa: true, saldo: 3985.71 },
-    { id_cuenta: 6, codigo: '2.1.01', nombre: 'Proveedores Locales (Cuentas por Pagar)', tipo: 'pasivo', id_padre: null, nivel: 3, activa: true, saldo: 27650.00 },
-    { id_cuenta: 7, codigo: '2.1.02', nombre: 'IVA por Pagar (Débito Fiscal 12%)', tipo: 'pasivo', id_padre: null, nivel: 3, activa: true, saldo: 11442.86 },
-    { id_cuenta: 8, codigo: '2.1.04', nombre: 'Retenciones Tributarias por Enterar SAT', tipo: 'pasivo', id_padre: null, nivel: 3, activa: true, saldo: 1450.00 },
-    { id_cuenta: 9, codigo: '2.1.05', nombre: 'Cuotas Patronales y Laborales IGSS por Pagar', tipo: 'pasivo', id_padre: null, nivel: 3, activa: true, saldo: 2890.00 },
-    { id_cuenta: 10, codigo: '3.1.01', nombre: 'Capital Social Suscrito y Pagado', tipo: 'capital', id_padre: null, nivel: 2, activa: true, saldo: 150000.00 },
-    { id_cuenta: 11, codigo: '4.1.01', nombre: 'Ingresos por Ventas de Mercaderías', tipo: 'ingreso', id_padre: null, nivel: 3, activa: true, saldo: 95357.14 },
-    { id_cuenta: 12, codigo: '5.1.01', nombre: 'Costo de Ventas y Mercadería Adquirida', tipo: 'costo', id_padre: null, nivel: 3, activa: true, saldo: 54100.00 },
-    { id_cuenta: 13, codigo: '6.1.01', nombre: 'Sueldos y Salarios Administrativos', tipo: 'gasto', id_padre: null, nivel: 3, activa: true, saldo: 18500.00 },
-    { id_cuenta: 14, codigo: '6.1.02', nombre: 'Bonificación Incentivo Dcto. 78-89', tipo: 'gasto', id_padre: null, nivel: 3, activa: true, saldo: 1250.00 },
-  ]);
+  const liquidacionActual = calculateMonthlyTaxSettlement(
+    satLive.ventas_brutas,
+    satLive.compras_totales,
+    satLive.total_retenciones,
+    empresaActiva.regimen
+  );
 
-  // Libro Diario / Partidas sincronizado con modelo Partida y PartidaDetalle de Laravel
-  const [partidas, setPartidas] = useState<Partida[]>([
-    {
-      id_partida: 1,
-      numero: 145,
-      fecha: '2026-11-15',
-      concepto: 'Registro de ventas globales del día según corte Z del sistema POS',
-      referencia_tipo: 'Venta',
-      referencia_id: 894,
-      total_debe: 12500.00,
-      total_haber: 12500.00,
-      detalles: [
-        { id_cuenta: 1, cuenta_codigo: '1.1.01', cuenta_nombre: 'Caja General y Sucursales', debe: 12500.00, haber: 0.00, glosa: 'Ingreso en efectivo y tarjeta' },
-        { id_cuenta: 11, cuenta_codigo: '4.1.01', cuenta_nombre: 'Ingresos por Ventas de Mercaderías', debe: 0.00, haber: 11160.71, glosa: 'Ventas brutas sin IVA' },
-        { id_cuenta: 7, cuenta_codigo: '2.1.02', cuenta_nombre: 'IVA por Pagar (Débito Fiscal 12%)', debe: 0.00, haber: 1339.29, glosa: 'IVA fiscal devengado 12%' },
-      ]
-    },
-    {
-      id_partida: 2,
-      numero: 144,
-      fecha: '2026-11-14',
-      concepto: 'Compra de inventario al crédito a Distribuidora Central de Alimentos S.A.',
-      referencia_tipo: 'Compra',
-      referencia_id: 101,
-      total_debe: 18500.00,
-      total_haber: 18500.00,
-      detalles: [
-        { id_cuenta: 4, cuenta_codigo: '1.1.08', cuenta_nombre: 'Inventario de Mercaderías para la Venta', debe: 16517.86, haber: 0.00, glosa: 'Costo de mercadería ingresada' },
-        { id_cuenta: 5, cuenta_codigo: '1.1.09', cuenta_nombre: 'IVA por Cobrar (Crédito Fiscal 12%)', debe: 1982.14, haber: 0.00, glosa: 'IVA crédito fiscal 12%' },
-        { id_cuenta: 6, cuenta_codigo: '2.1.01', cuenta_nombre: 'Proveedores Locales (Cuentas por Pagar)', debe: 0.00, haber: 18500.00, glosa: 'Factura crédito por pagar' },
-      ]
-    },
-    {
-      id_partida: 3,
-      numero: 143,
-      fecha: '2026-11-10',
-      concepto: 'Pago de planilla de sueldos correspondiente a la primera quincena',
-      referencia_tipo: 'Nomina',
-      referencia_id: 52,
-      total_debe: 19750.00,
-      total_haber: 19750.00,
-      detalles: [
-        { id_cuenta: 13, cuenta_codigo: '6.1.01', cuenta_nombre: 'Sueldos y Salarios Administrativos', debe: 18500.00, haber: 0.00, glosa: 'Sueldo ordinario base' },
-        { id_cuenta: 14, cuenta_codigo: '6.1.02', cuenta_nombre: 'Bonificación Incentivo Dcto. 78-89', debe: 1250.00, haber: 0.00, glosa: 'Bonificación legal' },
-        { id_cuenta: 9, cuenta_codigo: '2.1.05', cuenta_nombre: 'Cuotas Patronales y Laborales IGSS por Pagar', debe: 0.00, haber: 893.55, glosa: 'Descuento laboral 4.83%' },
-        { id_cuenta: 2, cuenta_codigo: '1.1.02', cuenta_nombre: 'Bancos del Sistema (Cuentas Monetarias)', debe: 0.00, haber: 18856.45, glosa: 'Pago electrónico de nómina' },
-      ]
+  // Catálogo de Cuentas Contables sincronizado en vivo con MySQL
+  const [cuentas, setCuentas] = useState<CuentaContable[]>([]);
+  // Libro Diario / Partidas sincronizado en vivo con MySQL (partidas + ventas/compras)
+  const [partidas, setPartidas] = useState<Partida[]>([]);
+  // Declaraciones Fiscales SAT sincronizadas con MySQL
+  const [declaraciones, setDeclaraciones] = useState<DeclaracionFiscalSAT[]>([]);
+  // Retenciones SAT sincronizadas con MySQL
+  const [retenciones, setRetenciones] = useState<RetencionSAT[]>([]);
+
+  const loadAccountingLive = useCallback(async () => {
+    const empId = Number(empresaActiva.id) || 1;
+    const [cRes, pRes, sRes] = await Promise.allSettled([
+      accountingApi.getCuentas({ id_empresa: empId }),
+      accountingApi.getPartidas({ id_empresa: empId }),
+      accountingApi.getLiquidacionSAT(undefined, undefined, empId),
+    ]);
+
+    if (cRes.status === 'fulfilled') {
+      const rawC = Array.isArray(cRes.value?.data) ? cRes.value.data : Array.isArray(cRes.value) ? cRes.value : [];
+      setCuentas(
+        rawC.map((c: any) => ({
+          id_cuenta: Number(c.id_cuenta ?? c.id),
+          codigo: String(c.codigo || ''),
+          nombre: String(c.nombre || 'Cuenta'),
+          tipo: (c.tipo || 'activo') as CuentaContable['tipo'],
+          id_padre: c.id_padre ?? null,
+          nivel: Number(c.nivel ?? 3),
+          activa: c.activa !== false,
+          saldo: Number(c.saldo ?? c.saldo_actual ?? 0),
+        }))
+      );
     }
-  ]);
 
-  // Declaraciones Fiscales SAT (sincronizado con DeclaracionFiscal.php)
-  const [declaraciones] = useState<DeclaracionFiscalSAT[]>([
-    {
-      id_declaracion: 1,
-      mes: 10,
-      anio: 2026,
-      ventas_totales: 106800.00,
-      base_imponible_ventas: 95357.14,
-      iva_debito_fiscal: 11442.86,
-      compras_totales: 37200.00,
-      base_imponible_compras: 33214.29,
-      iva_credito_fiscal: 3985.71,
-      total_retenciones_iva: 850.00,
-      impuesto_a_pagar: 6607.15,
-      remanente_credito: 0.00,
-      estado: 'pagada',
-      fecha_pago: '2026-11-05',
-      numero_formulario_sat: 'SAT-2046-8812903'
-    },
-    {
-      id_declaracion: 2,
-      mes: 9,
-      anio: 2026,
-      ventas_totales: 98500.00,
-      base_imponible_ventas: 87946.43,
-      iva_debito_fiscal: 10553.57,
-      compras_totales: 42100.00,
-      base_imponible_compras: 37589.29,
-      iva_credito_fiscal: 4510.71,
-      total_retenciones_iva: 920.00,
-      impuesto_a_pagar: 5122.86,
-      remanente_credito: 0.00,
-      estado: 'pagada',
-      fecha_pago: '2026-10-06',
-      numero_formulario_sat: 'SAT-2046-7734109'
+    if (pRes.status === 'fulfilled') {
+      const rawP = Array.isArray(pRes.value?.data) ? pRes.value.data : Array.isArray(pRes.value) ? pRes.value : [];
+      setPartidas(
+        rawP.map((p: any) => ({
+          id_partida: Number(p.id_partida ?? p.id),
+          numero: Number(p.numero ?? p.id_partida ?? p.id),
+          fecha: String(p.fecha || '').slice(0, 10),
+          concepto: String(p.concepto || p.descripcion || 'Asiento contable'),
+          referencia_tipo: p.referencia_tipo || 'Manual',
+          referencia_id: p.referencia_id ? Number(p.referencia_id) : undefined,
+          total_debe: Number(p.total_debe ?? p.debe ?? 0),
+          total_haber: Number(p.total_haber ?? p.haber ?? 0),
+          detalles: Array.isArray(p.detalles) ? p.detalles : [],
+        }))
+      );
     }
-  ]);
 
-  // Retenciones SAT (sincronizado con Retencion.php)
-  const [retenciones] = useState<RetencionSAT[]>([
-    {
-      id_retencion: 1,
-      tipo: 'iva_recibida',
-      entidad_nombre: 'Banco Industrial S.A. (Agente de Retención)',
-      numero_documento: 'RET-IVA-89234',
-      fecha: '2026-11-14',
-      mes: 11,
-      anio: 2026,
-      monto: 340.50,
-      descripcion: 'Retención de IVA por cobros POS tarjeta crédito'
-    },
-    {
-      id_retencion: 2,
-      tipo: 'isr_opcional',
-      entidad_nombre: 'Importaciones y Bebidas del Caribe Ltda.',
-      numero_documento: 'SAT-1911-55214',
-      fecha: '2026-11-12',
-      mes: 11,
-      anio: 2026,
-      monto: 437.50,
-      descripcion: 'Constancia Retención ISR Factura Especial 5%'
-    },
-    {
-      id_retencion: 3,
-      tipo: 'isr_asalariado',
-      entidad_nombre: 'Carlos Mendoza (Gerente Comercial)',
-      numero_documento: 'NOMINA-52-ISR',
-      fecha: '2026-11-10',
-      mes: 11,
-      anio: 2026,
-      monto: 215.00,
-      descripcion: 'Retención ISR relación de dependencia mensual'
+    if (sRes.status === 'fulfilled' && sRes.value) {
+      const s = sRes.value?.data || sRes.value;
+      setSatLive({
+        ventas_brutas: Number(s.ventas_brutas ?? s.total_ventas ?? 0),
+        compras_totales: Number(s.compras_totales ?? 0),
+        total_retenciones: Number(s.total_retenciones ?? 0),
+        periodo_label: s.periodo_label,
+      });
+      if (Array.isArray(s.declaraciones)) {
+        setDeclaraciones(s.declaraciones);
+      }
+      if (Array.isArray(s.retenciones)) {
+        setRetenciones(s.retenciones);
+      }
     }
-  ]);
+  }, [empresaActiva.id]);
+
+  useEffect(() => {
+    loadAccountingLive();
+  }, [loadAccountingLive]);
 
   // Formulario nueva partida manual
   const [newPartida, setNewPartida] = useState({
@@ -233,59 +174,58 @@ export default function Accounting({ currentEmpresa }: AccountingProps = {}) {
   const totalHaberNuevo = newPartida.detalles.reduce((acc, d) => acc + (parseFloat(d.haber as any) || 0), 0);
   const estaCuadrada = Math.abs(totalDebeNuevo - totalHaberNuevo) < 0.01 && totalDebeNuevo > 0;
 
-  const handleSavePartida = (e: React.FormEvent) => {
+  const handleSavePartida = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!estaCuadrada) {
       alert('Error: La partida contable debe estar cuadrada. El Total Debe debe ser igual al Total Haber.');
       return;
     }
 
-    const partidaCreada: Partida = {
-      id_partida: Date.now(),
-      numero: partidas.length + 146,
+    const payload = {
       fecha: newPartida.fecha,
       concepto: newPartida.concepto || 'Asiento de ajuste contable manual',
-      total_debe: totalDebeNuevo,
-      total_haber: totalHaberNuevo,
-      detalles: newPartida.detalles.map(d => {
-        const cta = cuentas.find(c => c.id_cuenta === Number(d.id_cuenta));
-        return {
-          id_cuenta: Number(d.id_cuenta),
-          cuenta_codigo: cta?.codigo || '0.0.00',
-          cuenta_nombre: cta?.nombre || 'Cuenta',
-          debe: parseFloat(d.debe as any) || 0,
-          haber: parseFloat(d.haber as any) || 0,
-          glosa: d.glosa || newPartida.concepto
-        };
-      })
+      detalles: newPartida.detalles.map(d => ({
+        id_cuenta: Number(d.id_cuenta),
+        debe: parseFloat(d.debe as any) || 0,
+        haber: parseFloat(d.haber as any) || 0,
+        glosa: d.glosa || newPartida.concepto
+      }))
     };
 
-    setPartidas([partidaCreada, ...partidas]);
+    try {
+      await accountingApi.createPartida(payload);
+      await loadAccountingLive();
+    } catch (err: any) {
+      alert(err?.response?.data?.message || 'No se pudo guardar la partida en el servidor.');
+      return;
+    }
+
     setShowNewPartidaModal(false);
     setNewPartida({
       fecha: new Date().toISOString().split('T')[0],
       concepto: '',
       detalles: [
-        { id_cuenta: 1, debe: 0, haber: 0, glosa: '' },
-        { id_cuenta: 11, debe: 0, haber: 0, glosa: '' }
+        { id_cuenta: cuentas[0]?.id_cuenta || 1, debe: 0, haber: 0, glosa: '' },
+        { id_cuenta: cuentas[1]?.id_cuenta || 2, debe: 0, haber: 0, glosa: '' }
       ]
     });
   };
 
-  const handleSaveCuenta = (e: React.FormEvent) => {
+  const handleSaveCuenta = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newCuenta.codigo || !newCuenta.nombre) return;
-    const creada: CuentaContable = {
-      id_cuenta: Date.now(),
-      codigo: newCuenta.codigo,
-      nombre: newCuenta.nombre,
-      tipo: newCuenta.tipo,
-      id_padre: null,
-      nivel: newCuenta.nivel,
-      activa: true,
-      saldo: 0.00
-    };
-    setCuentas([...cuentas, creada].sort((a, b) => a.codigo.localeCompare(b.codigo)));
+    try {
+      await accountingApi.createCuenta({
+        codigo: newCuenta.codigo,
+        nombre: newCuenta.nombre,
+        tipo: newCuenta.tipo,
+        nivel: newCuenta.nivel
+      });
+      await loadAccountingLive();
+    } catch (err: any) {
+      alert(err?.response?.data?.message || 'No se pudo crear la cuenta contable.');
+      return;
+    }
     setShowNewCuentaModal(false);
     setNewCuenta({
       codigo: '',

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
   Store, 
   MapPin, 
@@ -15,6 +15,7 @@ import { useTimeFormat } from '../context/TimeFormatContext';
 import TimeFormatToggle from '../components/TimeFormatToggle';
 import SpecificTimePicker from '../components/SpecificTimePicker';
 import { EmpresaSaaS } from '../types';
+import { branchesApi } from '../api';
 
 interface SucursalItem {
   id: number;
@@ -37,78 +38,43 @@ interface BranchesProps {
 }
 
 export default function Branches({ currentEmpresa }: BranchesProps = {}) {
-  const { formatSchedule, formatTime } = useTimeFormat();
+  const { formatSchedule } = useTimeFormat();
   const [showNewBranchModal, setShowNewBranchModal] = useState(false);
   const [notificationToast, setNotificationToast] = useState<string | null>(null);
 
-  const [sucursales, setSucursales] = useState<SucursalItem[]>(() => {
-    if (currentEmpresa?.id === 25) {
-      return [
-        {
-          id: 101,
-          nombre: 'Sucursal Demo Principal',
-          codigo: 'SUC-DEMO-01',
-          direccion: '10 Avenida 1-46 Zona 2, Ciudad de Guatemala',
-          telefono: '+502 3569-2079',
-          encargado: 'Administrador Demo',
-          empleadosCount: 2,
-          productosStockCount: 350,
-          estado: 'Operando',
-          horario: 'Lunes a Sábado: 8:00 AM - 6:00 PM',
-          latitud: 14.6400,
-          longitud: -90.5100,
-          radio_permitido: 50
-        }
-      ];
+  const [sucursales, setSucursales] = useState<SucursalItem[]>([]);
+
+  const loadBranches = useCallback(async () => {
+    try {
+      const empId = Number(currentEmpresa?.id) || 1;
+      const res = await branchesApi.getAll({ id_empresa: empId });
+      const raw = Array.isArray(res?.data) ? res.data : Array.isArray(res) ? res : [];
+      setSucursales(
+        raw.map((b: any, idx: number) => ({
+          id: Number(b.id_sucursal ?? b.id ?? idx + 1),
+          nombre: String(b.nombre || `Sucursal #${idx + 1}`),
+          codigo: String(b.codigo || `SUC-${String(b.id_sucursal ?? b.id ?? idx + 1).padStart(3, '0')}`),
+          direccion: String(b.direccion || 'Dirección no especificada'),
+          telefono: String(b.telefono || 'Sin teléfono'),
+          encargado: String(b.encargado || currentEmpresa?.nombre || 'Administración'),
+          empleadosCount: Number(b.empleados_count ?? 0),
+          productosStockCount: Number(b.productos_stock_count ?? 0),
+          estado: b.activo === false || b.activa === false ? 'Cerrada' : 'Operando',
+          horario: String(b.horario || 'Lunes a Sábado: 8:00 AM - 6:00 PM'),
+          latitud: b.latitud ? Number(b.latitud) : 14.5986,
+          longitud: b.longitud ? Number(b.longitud) : -90.5187,
+          radio_permitido: Number(b.radio_permitido ?? 50),
+        }))
+      );
+    } catch (err) {
+      console.error('Error cargando sucursales reales:', err);
+      setSucursales([]);
     }
-    return [
-      {
-        id: 1,
-        nombre: 'Sucursal Central - Ciudad',
-        codigo: 'SUC-001',
-        direccion: '7a Avenida 12-45 Zona 9, Ciudad de Guatemala',
-        telefono: '+502 2334-9000',
-        encargado: 'Juan Carlos Morales',
-        empleadosCount: 12,
-        productosStockCount: 1240,
-        estado: 'Operando',
-        horario: 'Lunes a Sábado: 7:00 AM - 8:00 PM',
-        latitud: 14.5986,
-        longitud: -90.5187,
-        radio_permitido: 50
-      },
-      {
-        id: 2,
-        nombre: 'Sucursal Norte - Carretera al Atlántico',
-        codigo: 'SUC-002',
-        direccion: 'Km 14.5 Carretera al Atlántico, Zona 18',
-        telefono: '+502 2256-4100',
-        encargado: 'Roberto Gómez Pérez',
-        empleadosCount: 6,
-        productosStockCount: 680,
-        estado: 'Operando',
-        horario: 'Lunes a Domingo: 8:00 AM - 7:00 PM',
-        latitud: 14.6542,
-        longitud: -90.4612,
-        radio_permitido: 50
-      },
-      {
-        id: 3,
-        nombre: 'Sucursal Sur - Villa Nueva',
-        codigo: 'SUC-003',
-        direccion: 'Calzada Concepción 5-10, Villa Nueva',
-        telefono: '+502 6630-1820',
-        encargado: 'Elena María Reyes',
-        empleadosCount: 8,
-        productosStockCount: 820,
-        estado: 'Operando',
-        horario: 'Lunes a Sábado: 8:00 AM - 6:00 PM',
-        latitud: 14.5263,
-        longitud: -90.5891,
-        radio_permitido: 50
-      }
-    ];
-  });
+  }, [currentEmpresa?.id, currentEmpresa?.nombre]);
+
+  useEffect(() => {
+    loadBranches();
+  }, [loadBranches]);
 
   const [newBranch, setNewBranch] = useState({
     nombre: '',
@@ -129,27 +95,22 @@ export default function Branches({ currentEmpresa }: BranchesProps = {}) {
     setTimeout(() => setNotificationToast(null), 3500);
   };
 
-  const handleCreateBranch = (e: React.FormEvent) => {
+  const handleCreateBranch = async (e: React.FormEvent) => {
     e.preventDefault();
-    const horarioGenerado = `${newBranch.dias}: ${formatTime(newBranch.horaApertura)} - ${formatTime(newBranch.horaCierre)}`;
-    const nueva: SucursalItem = {
-      id: sucursales.length + 1,
-      nombre: newBranch.nombre,
-      codigo: newBranch.codigo || `SUC-${(sucursales.length + 1).toString().padStart(3, '0')}`,
-      direccion: newBranch.direccion,
-      telefono: newBranch.telefono,
-      encargado: newBranch.encargado,
-      empleadosCount: 0,
-      productosStockCount: 0,
-      estado: 'Operando',
-      horario: horarioGenerado,
-      latitud: parseFloat(newBranch.latitud) || 14.5986,
-      longitud: parseFloat(newBranch.longitud) || -90.5187,
-      radio_permitido: Number(newBranch.radio_permitido) || 50
-    };
-    setSucursales([...sucursales, nueva]);
-    setShowNewBranchModal(false);
-    showToast(`Sucursal "${nueva.nombre}" dada de alta exitosamente con radio de geocerca de ${nueva.radio_permitido}m.`);
+    try {
+      await branchesApi.create({
+        nombre: newBranch.nombre,
+        direccion: newBranch.direccion,
+        telefono: newBranch.telefono,
+        activo: true,
+      });
+      await loadBranches();
+      setShowNewBranchModal(false);
+      showToast(`Sucursal "${newBranch.nombre}" guardada y sincronizada en el servidor.`);
+    } catch (err: any) {
+      showToast(err?.response?.data?.message || 'Error al crear la sucursal en el servidor.');
+      return;
+    }
     setNewBranch({
       nombre: '',
       codigo: '',

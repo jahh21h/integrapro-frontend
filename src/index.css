@@ -263,60 +263,148 @@ html.oled-dark .web-navbar-glass {
 /* Superficies y tarjetas adaptadas limpiamente a OLED Glass */
 html.oled-dark .web-oled-scope .bg-white,
 html.oled-dark .web-oled-scope [class*="bg-white/"] {
-  background-color: rgba(15, 23, 42, 0.80) !important;
+  background-color: rgba(15, 23, 42, 0.82) !important;
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
 }
 html.oled-dark .web-oled-scope .bg-slate-50,
 html.oled-dark .web-oled-scope [class*="bg-slate-50/"],
 html.oled-dark .web-oled-scope .bg-slate-100,
-html.oled-dark .web-oled-scope [class*="bg-slate-100/"] {
-  background-color: rgba(15, 23, 42, 0.64) !important;
+html.oled-dark .web-oled-scope [class*="bg-slate-100/"],
+html.oled-dark .web-oled-scope .bg-slate-200,
+html.oled-dark .web-oled-scope [class*="bg-slate-200/"],
+html.oled-dark .web-oled-scope .bg-gray-50,
+html.oled-dark .web-oled-scope .bg-gray-100 {
+  background-color: rgba(15, 23, 42, 0.68) !important;
 }
-html.oled-dark .web-oled-scope .from-white {
-  --tw-gradient-from: rgba(15, 23, 42, 0.90) var(--tw-gradient-from-position) !important;
+
+/* Todos los degradados claros (from-*, via-*, to-*) convertidos a Dark OLED Glass legible */
+html.oled-dark .web-oled-scope [class*="from-white"],
+html.oled-dark .web-oled-scope [class*="from-slate-50"],
+html.oled-dark .web-oled-scope [class*="from-slate-100"],
+html.oled-dark .web-oled-scope [class*="from-gray-50"],
+html.oled-dark .web-oled-scope [class*="from-gray-100"] {
+  --tw-gradient-from: rgba(15, 23, 42, 0.92) var(--tw-gradient-from-position) !important;
 }
-html.oled-dark .web-oled-scope .via-slate-50 {
-  --tw-gradient-via: rgba(17, 25, 45, 0.85) var(--tw-gradient-via-position) !important;
+html.oled-dark .web-oled-scope [class*="from-emerald-50"],
+html.oled-dark .web-oled-scope [class*="from-emerald-100"],
+html.oled-dark .web-oled-scope [class*="from-green-50"],
+html.oled-dark .web-oled-scope [class*="from-teal-50"] {
+  --tw-gradient-from: rgba(6, 78, 59, 0.45) var(--tw-gradient-from-position) !important;
 }
-html.oled-dark .web-oled-scope .to-indigo-50\/40,
-html.oled-dark .web-oled-scope .to-amber-50\/40,
-html.oled-dark .web-oled-scope .to-amber-50\/25 {
-  --tw-gradient-to: rgba(30, 41, 59, 0.80) var(--tw-gradient-to-position) !important;
+html.oled-dark .web-oled-scope [class*="from-amber-50"],
+html.oled-dark .web-oled-scope [class*="from-amber-100"],
+html.oled-dark .web-oled-scope [class*="from-yellow-50"],
+html.oled-dark .web-oled-scope [class*="from-orange-50"] {
+  --tw-gradient-from: rgba(120, 53, 15, 0.44) var(--tw-gradient-from-position) !important;
+}
+html.oled-dark .web-oled-scope [class*="from-indigo-50"],
+html.oled-dark .web-oled-scope [class*="from-indigo-100"],
+html.oled-dark .web-oled-scope [class*="from-blue-50"],
+html.oled-dark .web-oled-scope [class*="from-sky-50"],
+html.oled-dark .web-oled-scope [class*="from-cyan-50"] {
+  --tw-gradient-from: rgba(30, 58, 138, 0.44) var(--tw-gradient-from-position) !important;
+}
+html.oled-dark .web-oled-scope [class*="from-purple-50"],
+html.oled-dark .web-oled-scope [class*="from-violet-50"],
+html.oled-dark .web-oled-scope [class*="from-pink-50"] {
+  --tw-gradient-from: rgba(88, 28, 135, 0.42) var(--tw-gradient-from-position) !important;
+}
+html.oled-dark .web-oled-scope [class*="from-rose-50"],
+html.oled-dark .web-oled-scope [class*="from-red-50"] {
+  --tw-gradient-from: rgba(136, 19, 55, 0.44) var(--tw-gradient-from-position) !important;
+}
+
+html.oled-dark .web-oled-scope [class*="via-white"],
+html.oled-dark .web-oled-scope [class*="via-slate-50"],
+html.oled-dark .web-oled-scope [class*="via-slate-100"],
+html.oled-dark .web-oled-scope [class*="via-slate-200"],
+html.oled-dark .web-oled-scope [class*="via-indigo-50"],
+html.oled-dark .web-oled-scope [class*="via-blue-50"],
+html.oled-dark .web-oled-scope [class*="via-teal-50"],
+html.oled-dark .web-oled-scope [class*="via-amber-50"],
+html.oled-dark .web-oled-scope [class*="via-purple-50"],
+html.oled-dark .web-oled-scope [class*="via-pink-50"],
+html.oled-dark .web-oled-scope [class*="via-rose-50"] {
+  --tw-gradient-via: rgba(15, 23, 42, 0.88) var(--tw-gradient-via-position) !important;
+}
+
+html.oled-dark .web-oled-scope [class*="to-white"],
+html.oled-dark .web-oled-scope [class*="to-slate-50"],
+html.oled-dark .web-oled-scope [class*="to-slate-100"],
+html.oled-dark .web-oled-scope [class*="to-gray-50"],
+html.oled-dark .web-oled-scope [class*="to-gray-100"] {
+  --tw-gradient-to: rgba(9, 14, 28, 0.94) var(--tw-gradient-to-position) !important;
+}
+html.oled-dark .web-oled-scope [class*="to-emerald-50"],
+html.oled-dark .web-oled-scope [class*="to-green-50"],
+html.oled-dark .web-oled-scope [class*="to-teal-50"] {
+  --tw-gradient-to: rgba(6, 78, 59, 0.34) var(--tw-gradient-to-position) !important;
+}
+html.oled-dark .web-oled-scope [class*="to-amber-50"],
+html.oled-dark .web-oled-scope [class*="to-yellow-50"],
+html.oled-dark .web-oled-scope [class*="to-orange-50"] {
+  --tw-gradient-to: rgba(120, 53, 15, 0.34) var(--tw-gradient-to-position) !important;
+}
+html.oled-dark .web-oled-scope [class*="to-indigo-50"],
+html.oled-dark .web-oled-scope [class*="to-blue-50"],
+html.oled-dark .web-oled-scope [class*="to-sky-50"],
+html.oled-dark .web-oled-scope [class*="to-cyan-50"] {
+  --tw-gradient-to: rgba(30, 58, 138, 0.34) var(--tw-gradient-to-position) !important;
+}
+html.oled-dark .web-oled-scope [class*="to-purple-50"],
+html.oled-dark .web-oled-scope [class*="to-violet-50"],
+html.oled-dark .web-oled-scope [class*="to-pink-50"] {
+  --tw-gradient-to: rgba(88, 28, 135, 0.34) var(--tw-gradient-to-position) !important;
+}
+html.oled-dark .web-oled-scope [class*="to-rose-50"],
+html.oled-dark .web-oled-scope [class*="to-red-50"] {
+  --tw-gradient-to: rgba(136, 19, 55, 0.34) var(--tw-gradient-to-position) !important;
 }
 
 /* Badges, pills y tintes claros convertidos a vidrio OLED translúcido legible */
 html.oled-dark .web-oled-scope .bg-indigo-50,
 html.oled-dark .web-oled-scope [class*="bg-indigo-50/"],
 html.oled-dark .web-oled-scope .bg-indigo-100 {
-  background-color: rgba(99, 102, 241, 0.18) !important;
-  border-color: rgba(129, 140, 248, 0.30) !important;
+  background-color: rgba(99, 102, 241, 0.20) !important;
+  border-color: rgba(129, 140, 248, 0.34) !important;
 }
 html.oled-dark .web-oled-scope .bg-emerald-50,
 html.oled-dark .web-oled-scope [class*="bg-emerald-50/"],
 html.oled-dark .web-oled-scope .bg-emerald-100,
-html.oled-dark .web-oled-scope [class*="bg-emerald-100/"] {
-  background-color: rgba(16, 185, 129, 0.16) !important;
-  border-color: rgba(52, 211, 153, 0.30) !important;
+html.oled-dark .web-oled-scope [class*="bg-emerald-100/"],
+html.oled-dark .web-oled-scope .bg-green-50,
+html.oled-dark .web-oled-scope .bg-green-100 {
+  background-color: rgba(16, 185, 129, 0.18) !important;
+  border-color: rgba(52, 211, 153, 0.34) !important;
 }
 html.oled-dark .web-oled-scope .bg-rose-50,
 html.oled-dark .web-oled-scope [class*="bg-rose-50/"],
-html.oled-dark .web-oled-scope .bg-rose-100 {
-  background-color: rgba(244, 63, 94, 0.18) !important;
-  border-color: rgba(251, 113, 133, 0.32) !important;
+html.oled-dark .web-oled-scope .bg-rose-100,
+html.oled-dark .web-oled-scope .bg-red-50,
+html.oled-dark .web-oled-scope .bg-red-100 {
+  background-color: rgba(244, 63, 94, 0.20) !important;
+  border-color: rgba(251, 113, 133, 0.34) !important;
 }
 html.oled-dark .web-oled-scope .bg-amber-50,
 html.oled-dark .web-oled-scope [class*="bg-amber-50/"],
-html.oled-dark .web-oled-scope .bg-amber-100 {
-  background-color: rgba(245, 158, 11, 0.18) !important;
-  border-color: rgba(251, 191, 36, 0.32) !important;
+html.oled-dark .web-oled-scope .bg-amber-100,
+html.oled-dark .web-oled-scope .bg-yellow-50,
+html.oled-dark .web-oled-scope .bg-yellow-100,
+html.oled-dark .web-oled-scope .bg-orange-50,
+html.oled-dark .web-oled-scope .bg-orange-100 {
+  background-color: rgba(245, 158, 11, 0.20) !important;
+  border-color: rgba(251, 191, 36, 0.34) !important;
 }
 html.oled-dark .web-oled-scope .bg-purple-50,
 html.oled-dark .web-oled-scope [class*="bg-purple-50/"],
 html.oled-dark .web-oled-scope .bg-purple-100,
-html.oled-dark .web-oled-scope .bg-violet-50 {
-  background-color: rgba(168, 85, 247, 0.18) !important;
-  border-color: rgba(192, 132, 252, 0.30) !important;
+html.oled-dark .web-oled-scope .bg-violet-50,
+html.oled-dark .web-oled-scope .bg-violet-100,
+html.oled-dark .web-oled-scope .bg-pink-50,
+html.oled-dark .web-oled-scope .bg-pink-100 {
+  background-color: rgba(168, 85, 247, 0.20) !important;
+  border-color: rgba(192, 132, 252, 0.34) !important;
 }
 html.oled-dark .web-oled-scope .bg-blue-50,
 html.oled-dark .web-oled-scope [class*="bg-blue-50/"],
@@ -325,9 +413,11 @@ html.oled-dark .web-oled-scope [class*="bg-blue-100/"],
 html.oled-dark .web-oled-scope .bg-sky-50,
 html.oled-dark .web-oled-scope .bg-sky-100,
 html.oled-dark .web-oled-scope .bg-cyan-50,
-html.oled-dark .web-oled-scope .bg-teal-50 {
-  background-color: rgba(56, 189, 248, 0.16) !important;
-  border-color: rgba(56, 189, 248, 0.28) !important;
+html.oled-dark .web-oled-scope .bg-cyan-100,
+html.oled-dark .web-oled-scope .bg-teal-50,
+html.oled-dark .web-oled-scope .bg-teal-100 {
+  background-color: rgba(56, 189, 248, 0.18) !important;
+  border-color: rgba(56, 189, 248, 0.32) !important;
 }
 
 /* Hover de filas de tabla y botones en Modo Oscuro OLED (sin velo blanco que opaque el texto) */
@@ -371,63 +461,128 @@ html.oled-dark .web-oled-scope .hover\:bg-sky-100:hover {
 }
 
 /* Bordes y divisores de tabla en Oscuro OLED */
+html.oled-dark .web-oled-scope .border-slate-300,
 html.oled-dark .web-oled-scope .border-slate-200,
-html.oled-dark .web-oled-scope .border-slate-200\/90,
-html.oled-dark .web-oled-scope .border-slate-200\/80,
-html.oled-dark .web-oled-scope .border-slate-200\/70,
-html.oled-dark .web-oled-scope .border-slate-200\/60,
+html.oled-dark .web-oled-scope [class*="border-slate-200/"],
 html.oled-dark .web-oled-scope .border-slate-100,
-html.oled-dark .web-oled-scope .border-indigo-200\/90,
+html.oled-dark .web-oled-scope .border-slate-50,
+html.oled-dark .web-oled-scope .border-indigo-200,
+html.oled-dark .web-oled-scope [class*="border-indigo-200/"],
 html.oled-dark .web-oled-scope .border-indigo-100 {
-  border-color: rgba(255, 255, 255, 0.11) !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+}
+html.oled-dark .web-oled-scope .border-emerald-200,
+html.oled-dark .web-oled-scope .border-emerald-100 {
+  border-color: rgba(52, 211, 153, 0.28) !important;
+}
+html.oled-dark .web-oled-scope .border-amber-200,
+html.oled-dark .web-oled-scope .border-amber-100 {
+  border-color: rgba(251, 191, 36, 0.30) !important;
+}
+html.oled-dark .web-oled-scope .border-rose-200,
+html.oled-dark .web-oled-scope .border-rose-100 {
+  border-color: rgba(251, 113, 133, 0.30) !important;
+}
+html.oled-dark .web-oled-scope .border-blue-200,
+html.oled-dark .web-oled-scope .border-sky-200,
+html.oled-dark .web-oled-scope .border-cyan-200,
+html.oled-dark .web-oled-scope .border-teal-200 {
+  border-color: rgba(56, 189, 248, 0.28) !important;
+}
+html.oled-dark .web-oled-scope .border-purple-200,
+html.oled-dark .web-oled-scope .border-violet-200,
+html.oled-dark .web-oled-scope .border-pink-200 {
+  border-color: rgba(192, 132, 252, 0.28) !important;
 }
 html.oled-dark .web-oled-scope .divide-slate-100 > :not([hidden]) ~ :not([hidden]),
 html.oled-dark .web-oled-scope .divide-slate-200 > :not([hidden]) ~ :not([hidden]) {
   border-color: rgba(255, 255, 255, 0.08) !important;
 }
 
-/* Textos de alto contraste en Oscuro OLED */
+/* Textos de alto contraste en Oscuro OLED (garantiza legibilidad WCAG en toda la app) */
+html.oled-dark .web-oled-scope .text-black,
+html.oled-dark .web-oled-scope .text-slate-950,
 html.oled-dark .web-oled-scope .text-slate-900,
-html.oled-dark .web-oled-scope .text-slate-800 {
+html.oled-dark .web-oled-scope .text-slate-800,
+html.oled-dark .web-oled-scope .text-gray-900,
+html.oled-dark .web-oled-scope .text-gray-800 {
   color: #f8fafc !important;
 }
 html.oled-dark .web-oled-scope .text-slate-700,
-html.oled-dark .web-oled-scope .text-slate-600 {
+html.oled-dark .web-oled-scope .text-slate-600,
+html.oled-dark .web-oled-scope .text-gray-700,
+html.oled-dark .web-oled-scope .text-gray-600 {
+  color: #e2e8f0 !important;
+}
+html.oled-dark .web-oled-scope .text-slate-500,
+html.oled-dark .web-oled-scope .text-gray-500 {
   color: #cbd5e1 !important;
 }
-html.oled-dark .web-oled-scope .text-slate-500 {
+html.oled-dark .web-oled-scope .text-slate-400,
+html.oled-dark .web-oled-scope .text-gray-400 {
   color: #94a3b8 !important;
 }
 html.oled-dark .web-oled-scope .text-indigo-900,
 html.oled-dark .web-oled-scope .text-indigo-800,
-html.oled-dark .web-oled-scope .text-indigo-700 {
+html.oled-dark .web-oled-scope .text-indigo-700,
+html.oled-dark .web-oled-scope .text-indigo-600 {
   color: #a5b4fc !important;
 }
 html.oled-dark .web-oled-scope .text-emerald-900,
 html.oled-dark .web-oled-scope .text-emerald-800,
-html.oled-dark .web-oled-scope .text-emerald-700 {
+html.oled-dark .web-oled-scope .text-emerald-700,
+html.oled-dark .web-oled-scope .text-emerald-600,
+html.oled-dark .web-oled-scope .text-green-800,
+html.oled-dark .web-oled-scope .text-green-700,
+html.oled-dark .web-oled-scope .text-green-600 {
   color: #6ee7b7 !important;
 }
 html.oled-dark .web-oled-scope .text-rose-900,
 html.oled-dark .web-oled-scope .text-rose-800,
-html.oled-dark .web-oled-scope .text-rose-700 {
+html.oled-dark .web-oled-scope .text-rose-700,
+html.oled-dark .web-oled-scope .text-rose-600,
+html.oled-dark .web-oled-scope .text-red-800,
+html.oled-dark .web-oled-scope .text-red-700,
+html.oled-dark .web-oled-scope .text-red-600 {
   color: #fda4af !important;
 }
 html.oled-dark .web-oled-scope .text-amber-950,
 html.oled-dark .web-oled-scope .text-amber-900,
 html.oled-dark .web-oled-scope .text-amber-800,
-html.oled-dark .web-oled-scope .text-amber-700 {
+html.oled-dark .web-oled-scope .text-amber-700,
+html.oled-dark .web-oled-scope .text-amber-600,
+html.oled-dark .web-oled-scope .text-orange-700,
+html.oled-dark .web-oled-scope .text-orange-600,
+html.oled-dark .web-oled-scope .text-yellow-700 {
   color: #fcd34d !important;
 }
 html.oled-dark .web-oled-scope .text-purple-900,
 html.oled-dark .web-oled-scope .text-purple-800,
-html.oled-dark .web-oled-scope .text-purple-700 {
+html.oled-dark .web-oled-scope .text-purple-700,
+html.oled-dark .web-oled-scope .text-purple-600,
+html.oled-dark .web-oled-scope .text-violet-700,
+html.oled-dark .web-oled-scope .text-violet-600 {
   color: #d8b4fe !important;
+}
+html.oled-dark .web-oled-scope .text-pink-700,
+html.oled-dark .web-oled-scope .text-pink-600 {
+  color: #f9a8d4 !important;
 }
 html.oled-dark .web-oled-scope .text-blue-900,
 html.oled-dark .web-oled-scope .text-blue-800,
-html.oled-dark .web-oled-scope .text-blue-700 {
+html.oled-dark .web-oled-scope .text-blue-700,
+html.oled-dark .web-oled-scope .text-blue-600,
+html.oled-dark .web-oled-scope .text-sky-800,
+html.oled-dark .web-oled-scope .text-sky-700,
+html.oled-dark .web-oled-scope .text-sky-600 {
   color: #93c5fd !important;
+}
+html.oled-dark .web-oled-scope .text-cyan-800,
+html.oled-dark .web-oled-scope .text-cyan-700,
+html.oled-dark .web-oled-scope .text-cyan-600,
+html.oled-dark .web-oled-scope .text-teal-700,
+html.oled-dark .web-oled-scope .text-teal-600 {
+  color: #67e8f9 !important;
 }
 
 /* Inputs y Selects legibles en Oscuro OLED */
