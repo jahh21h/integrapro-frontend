@@ -98,7 +98,7 @@ export default function Clients({ currentEmpresa }: ClientsProps) {
 
   const fetchClientsLive = useCallback(async () => {
     try {
-      const res = await salesApi.getClients({ id_empresa: effectiveEmpresaId, per_page: 250 });
+      const res = await salesApi.getClients({ id_empresa: effectiveEmpresaId, per_page: 1000 });
       const rawList = res?.data || res;
       if (Array.isArray(rawList)) {
         const { items: tenantClients } = filterRecordsByTenant(rawList, effectiveEmpresaId);
