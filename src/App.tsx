@@ -24,6 +24,7 @@ import LaunchpadHub from './components/LaunchpadHub';
 import LiveExpressShell from './components/LiveExpressShell';
 import TokenExtensionScraper from './components/TokenExtensionScraper';
 import { LiveSalesProvider } from './context/LiveSalesContext';
+import { useLanguage } from './context/LanguageContext';
 import { 
   Package, 
   ShoppingCart, 
@@ -133,6 +134,7 @@ const DEFAULT_EMPRESAS_LIST: EmpresaSaaS[] = [
 ];
 
 export default function App() {
+  const { L, isEn } = useLanguage();
   // Seguridad: Iniciar desautenticado por defecto para obligar siempre a pasar por el Login
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
     try {
@@ -240,13 +242,13 @@ export default function App() {
 
   const newVersionBanner = newVersionAvailable ? (
     <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-[70] bg-slate-900 text-white pl-4 pr-2 py-2 rounded-2xl shadow-2xl border border-indigo-500/50 flex items-center gap-3">
-      <span className="text-xs font-bold">🚀 Nueva versión disponible</span>
+      <span className="text-xs font-bold">{L('🚀 Nueva versión disponible', '🚀 New version available')}</span>
       <button
         type="button"
         onClick={() => window.location.reload()}
         className="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-xs font-extrabold transition-colors cursor-pointer"
       >
-        Actualizar ahora
+        {L('Actualizar ahora', 'Update now')}
       </button>
     </div>
   ) : null;
@@ -255,37 +257,43 @@ export default function App() {
     const isFortexa = empresaId === 22;
     switch (tab) {
       case 'hub':
-        return 'Menú Principal (Tarjetas)';
+        return L('Menú Principal (Tarjetas)', 'Main Menu (Cards)');
       case 'pos':
-        return 'Punto de Venta (POS Rápido)';
+        return L('Punto de Venta (POS Rápido)', 'Point of Sale (Quick POS)');
       case 'inventario':
-        return isFortexa ? 'Hardware & Equipos Tecnológicos' : 'Inventario & Bodega';
+        return isFortexa
+          ? L('Hardware & Equipos Tecnológicos', 'Hardware & Tech Equipment')
+          : L('Inventario & Bodega', 'Inventory & Warehouse');
       case 'ventas':
-        return isFortexa ? 'Ventas & Facturación (FEL B2B)' : 'Ventas & Facturación (FEL SAT)';
+        return isFortexa
+          ? L('Ventas & Facturación (FEL B2B)', 'Sales & E-Invoicing (B2B)')
+          : L('Ventas & Facturación (FEL SAT)', 'Sales & E-Invoicing (Tax Compliance)');
       case 'fortexa_apps':
-        return 'Suscripciones & Apps Fortexa (RutaFuel, Quantum & SaaS)';
+        return L('Suscripciones & Apps Fortexa (RutaFuel, Quantum & SaaS)', 'Fortexa Subscriptions & Apps (RutaFuel, Quantum & SaaS)');
       case 'clientes':
-        return isFortexa ? 'Clientes Corporativos & Flotas B2B' : 'Cartera de Clientes & Créditos';
+        return isFortexa
+          ? L('Clientes Corporativos & Flotas B2B', 'Corporate Clients & B2B Fleets')
+          : L('Cartera de Clientes & Créditos', 'Clients & Credit Accounts');
       case 'compras':
-        return 'Compras & Proveedores';
+        return L('Compras & Proveedores', 'Purchases & Suppliers');
       case 'contabilidad':
-        return 'Contabilidad & Cumplimiento SAT (Libro Diario)';
+        return L('Contabilidad & Cumplimiento SAT (Libro Diario)', 'Accounting & Tax Compliance (General Journal)');
       case 'dashboard':
-        return 'Métricas & Dashboard Ejecutivo';
+        return L('Métricas & Dashboard Ejecutivo', 'Metrics & Executive Dashboard');
       case 'rrhh':
-        return 'Recursos Humanos & Planillas';
+        return L('Recursos Humanos & Planillas', 'Human Resources & Payroll');
       case 'asistencia':
-        return 'Reloj Checador (Kiosco Asistencia)';
+        return L('Reloj Checador (Kiosco Asistencia)', 'Time Clock (Attendance Kiosk)');
       case 'sucursales':
-        return 'Red de Sucursales & Cajas';
+        return L('Red de Sucursales & Cajas', 'Branch Network & Registers');
       case 'configuracion':
-        return 'Configuración Global de Empresa & SAT';
+        return L('Configuración Global de Empresa & SAT', 'Global Company & Tax Settings');
       case 'token_scraper':
-        return 'Token & API para Extensión Scraper Chrome';
+        return L('Token & API para Extensión Scraper Chrome', 'Chrome Scraper Extension API & Token');
       case 'live_sales':
-        return 'TikTok Live & Canastas Abiertas (Social Commerce)';
+        return L('TikTok Live & Canastas Abiertas (Social Commerce)', 'TikTok Live & Open Baskets (Social Commerce)');
       default:
-        return 'Módulo';
+        return L('Módulo', 'Module');
     }
   };
 
@@ -840,7 +848,17 @@ export default function App() {
   if (!isAuthenticated) {
     return (
       <>
-        <Login onLogin={handleLogin} inactivityNotice={sessionExpiredNotice} />
+        <Login
+          onLogin={handleLogin}
+          inactivityNotice={
+            sessionExpiredNotice
+              ? L(
+                  'Tu sesión se cerró automáticamente por inactividad durante 5 minutos.',
+                  'Your session was automatically signed out after 5 minutes of inactivity.'
+                )
+              : null
+          }
+        />
         {newVersionBanner}
       </>
     );
@@ -899,15 +917,17 @@ export default function App() {
               const isTrial = selectedEmpresa.subscription_status === 'trial';
               if (!isTrial && diffDays > 5) return null;
 
-              const cur = selectedEmpresa.billing?.currency || (selectedEmpresa.pais === 'GT' ? 'GTQ' : 'USD');
+              const cur = isEn ? 'USD' : (selectedEmpresa.billing?.currency || (selectedEmpresa.pais === 'GT' ? 'GTQ' : 'USD'));
               const sym = cur === 'GTQ' ? 'Q' : '$';
               const amt = selectedEmpresa.billing?.amount ?? 0;
-              const cyc = selectedEmpresa.billing?.cycle === 'annual' ? 'Anual' : 'Mensual';
+              const cyc = selectedEmpresa.billing?.cycle === 'annual' ? L('Anual', 'Annual') : L('Mensual', 'Monthly');
               const isUrgent = diffDays <= 5;
               const isOverdue = diffDays < 0;
 
               const openWhatsApp = () => {
-                const msg = `Hola Fortexa Technologies, soy de *${selectedEmpresa.nombre}* (ID #${selectedEmpresa.id}). Deseo ${isTrial ? 'activar mi plan' : 'renovar mi suscripción'} ${cyc}${amt > 0 ? ` (${sym} ${Number(amt).toFixed(2)} ${cur})` : ''}.`;
+                const msg = isEn
+                  ? `Hello Fortexa Technologies, I am from *${selectedEmpresa.nombre}* (ID #${selectedEmpresa.id}). I would like to ${isTrial ? 'activate my plan' : 'renew my subscription'} (${cyc})${amt > 0 ? ` (${sym}${Number(amt).toFixed(2)} ${cur})` : ''}.`
+                  : `Hola Fortexa Technologies, soy de *${selectedEmpresa.nombre}* (ID #${selectedEmpresa.id}). Deseo ${isTrial ? 'activar mi plan' : 'renovar mi suscripción'} ${cyc}${amt > 0 ? ` (${sym} ${Number(amt).toFixed(2)} ${cur})` : ''}.`;
                 window.open(`https://api.whatsapp.com/send?phone=50235692070&text=${encodeURIComponent(msg)}`, '_blank');
               };
 
@@ -926,16 +946,25 @@ export default function App() {
                     <p className="font-semibold leading-snug">
                       {isTrial ? (
                         <>
-                          <strong>Prueba gratuita de 14 días:</strong> te quedan <strong>{Math.max(diffDays, 0)} día(s)</strong> (vence el <span className="font-mono font-bold">{cleanDate}</span>).
-                          {amt > 0 && <> Plan {cyc}: <strong>{sym} {Number(amt).toFixed(2)} {cur}</strong>.</>}
+                          <strong>{L('Prueba gratuita de 14 días:', '14-Day Free Trial:')}</strong>{' '}
+                          {L('te quedan', 'you have')} <strong>{Math.max(diffDays, 0)} {L('día(s)', 'day(s)')}</strong>{' '}
+                          ({L('vence el', 'ends on')} <span className="font-mono font-bold">{cleanDate}</span>).
+                          {amt > 0 && <> {L('Plan', 'Plan')} {cyc}: <strong>{sym} {Number(amt).toFixed(2)} {cur}</strong>.</>}
                         </>
                       ) : isOverdue ? (
                         <>
-                          <strong>Recordatorio urgente:</strong> tu suscripción {cyc}{amt > 0 ? ` (${sym} ${Number(amt).toFixed(2)} ${cur})` : ''} venció el <span className="font-mono font-bold">{cleanDate}</span>. Reporta tu pago para evitar suspensión.
+                          <strong>{L('Recordatorio urgente:', 'Urgent reminder:')}</strong>{' '}
+                          {L('tu suscripción', 'your subscription')} {cyc}
+                          {amt > 0 ? ` (${sym} ${Number(amt).toFixed(2)} ${cur})` : ''}{' '}
+                          {L('venció el', 'expired on')} <span className="font-mono font-bold">{cleanDate}</span>.{' '}
+                          {L('Reporta tu pago para evitar suspensión.', 'Report your payment to avoid suspension.')}
                         </>
                       ) : (
                         <>
-                          <strong>Recordatorio de pago:</strong> tu suscripción {cyc}{amt > 0 ? ` de ${sym} ${Number(amt).toFixed(2)} ${cur}` : ''} vence {diffDays === 0 ? 'HOY' : `en ${diffDays} día(s)`} (<span className="font-mono font-bold">{cleanDate}</span>).
+                          <strong>{L('Recordatorio de pago:', 'Payment reminder:')}</strong>{' '}
+                          {L('tu suscripción', 'your subscription')} {cyc}
+                          {amt > 0 ? ` ${L('de', 'of')} ${sym} ${Number(amt).toFixed(2)} ${cur}` : ''}{' '}
+                          {L('vence', 'is due')} {diffDays === 0 ? L('HOY', 'TODAY') : L(`en ${diffDays} día(s)`, `in ${diffDays} day(s)`)} (<span className="font-mono font-bold">{cleanDate}</span>).
                         </>
                       )}
                     </p>
@@ -951,7 +980,7 @@ export default function App() {
                         : 'bg-indigo-600 hover:bg-indigo-700 text-white'
                     }`}
                   >
-                    {isTrial ? 'Activar Plan por WhatsApp' : 'Reportar Pago (WhatsApp)'}
+                    {isTrial ? L('Activar Plan por WhatsApp', 'Activate Plan via WhatsApp') : L('Reportar Pago (WhatsApp)', 'Report Payment (WhatsApp)')}
                   </button>
                 </div>
               );
@@ -971,7 +1000,7 @@ export default function App() {
                     <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
                     {selectedEmpresa?.nombre}
                   </span>
-                  <span className="text-[11px] text-slate-400 font-mono">100% Ancho Libre</span>
+                  <span className="text-[11px] text-slate-400 font-mono">{L('100% Ancho Libre', '100% Full Width')}</span>
                 </div>
               </div>
             )}
@@ -1055,7 +1084,7 @@ export default function App() {
               <Search className="w-4 h-4 text-slate-400" />
               <input 
                 type="text" 
-                placeholder="Escribe un comando o busca algo (ej. 'POS', 'Stock', 'Aceite')..." 
+                placeholder={L("Escribe un comando o busca algo (ej. 'POS', 'Stock', 'Aceite')...", "Type a command or search (e.g. 'POS', 'Stock', 'Invoice')...")} 
                 autoFocus
                 className="w-full text-xs text-slate-800 placeholder-slate-400 focus:outline-none"
               />
@@ -1068,14 +1097,14 @@ export default function App() {
               </button>
             </div>
             <div className="p-2 max-h-72 overflow-y-auto text-xs">
-              <p className="px-3 py-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Acciones Rápidas</p>
+              <p className="px-3 py-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider">{L('Acciones Rápidas', 'Quick Actions')}</p>
               <button 
                 type="button"
                 onClick={() => { setActiveTab('hub'); setCommandPaletteOpen(false); }}
                 className="w-full px-3 py-2 text-left rounded-xl hover:bg-slate-100 flex items-center justify-between text-slate-700 font-medium"
               >
-                <span className="flex items-center gap-2"><LayoutGrid className="w-4 h-4 text-indigo-600" /> Ir al Menú Principal (Tarjetas)</span>
-                <span className="text-[10px] text-slate-400">Inicio</span>
+                <span className="flex items-center gap-2"><LayoutGrid className="w-4 h-4 text-indigo-600" /> {L('Ir al Menú Principal (Tarjetas)', 'Go to Main Menu (Cards)')}</span>
+                <span className="text-[10px] text-slate-400">{L('Inicio', 'Home')}</span>
               </button>
               {selectedEmpresaId !== 22 ? (
                 selectedEmpresa?.modules?.pos !== false && (
@@ -1084,8 +1113,8 @@ export default function App() {
                     onClick={() => { setActiveTab('pos'); setCommandPaletteOpen(false); }}
                     className="w-full px-3 py-2 text-left rounded-xl hover:bg-slate-100 flex items-center justify-between text-slate-700 font-medium"
                   >
-                    <span className="flex items-center gap-2"><ShoppingCart className="w-4 h-4 text-indigo-600" /> Ir a Punto de Venta (POS)</span>
-                    <span className="text-[10px] text-slate-400">Atajo</span>
+                    <span className="flex items-center gap-2"><ShoppingCart className="w-4 h-4 text-indigo-600" /> {L('Ir a Punto de Venta (POS)', 'Go to Point of Sale (POS)')}</span>
+                    <span className="text-[10px] text-slate-400">{L('Atajo', 'Shortcut')}</span>
                   </button>
                 )
               ) : (
@@ -1094,8 +1123,8 @@ export default function App() {
                   onClick={() => { setActiveTab('fortexa_apps'); setCommandPaletteOpen(false); }}
                   className="w-full px-3 py-2 text-left rounded-xl hover:bg-slate-100 flex items-center justify-between text-slate-700 font-medium"
                 >
-                  <span className="flex items-center gap-2"><Cpu className="w-4 h-4 text-purple-600" /> Suscripciones & Apps Fortexa</span>
-                  <span className="text-[10px] text-slate-400">Atajo</span>
+                  <span className="flex items-center gap-2"><Cpu className="w-4 h-4 text-purple-600" /> {L('Suscripciones & Apps Fortexa', 'Fortexa Subscriptions & Apps')}</span>
+                  <span className="text-[10px] text-slate-400">{L('Atajo', 'Shortcut')}</span>
                 </button>
               )}
               <button 
@@ -1103,69 +1132,69 @@ export default function App() {
                 onClick={() => { setActiveTab('inventario'); setCommandPaletteOpen(false); }}
                 className="w-full px-3 py-2 text-left rounded-xl hover:bg-slate-100 flex items-center justify-between text-slate-700 font-medium"
               >
-                <span className="flex items-center gap-2"><Package className="w-4 h-4 text-emerald-600" /> Consultar Stock de Inventario</span>
-                <span className="text-[10px] text-slate-400">Atajo</span>
+                <span className="flex items-center gap-2"><Package className="w-4 h-4 text-emerald-600" /> {L('Consultar Stock de Inventario', 'Check Inventory Stock')}</span>
+                <span className="text-[10px] text-slate-400">{L('Atajo', 'Shortcut')}</span>
               </button>
               <button 
                 type="button"
                 onClick={() => { setActiveTab('compras'); setCommandPaletteOpen(false); }}
                 className="w-full px-3 py-2 text-left rounded-xl hover:bg-slate-100 flex items-center justify-between text-slate-700 font-medium"
               >
-                <span className="flex items-center gap-2"><Truck className="w-4 h-4 text-violet-600" /> Facturas de Compra & Proveedores</span>
-                <span className="text-[10px] text-slate-400">Atajo</span>
+                <span className="flex items-center gap-2"><Truck className="w-4 h-4 text-violet-600" /> {L('Facturas de Compra & Proveedores', 'Purchase Invoices & Suppliers')}</span>
+                <span className="text-[10px] text-slate-400">{L('Atajo', 'Shortcut')}</span>
               </button>
               <button 
                 type="button"
                 onClick={() => { setActiveTab('contabilidad'); setCommandPaletteOpen(false); }}
                 className="w-full px-3 py-2 text-left rounded-xl hover:bg-slate-100 flex items-center justify-between text-slate-700 font-medium"
               >
-                <span className="flex items-center gap-2"><Landmark className="w-4 h-4 text-emerald-600" /> Libro Diario & Fiscalidad SAT</span>
-                <span className="text-[10px] text-slate-400">Atajo</span>
+                <span className="flex items-center gap-2"><Landmark className="w-4 h-4 text-emerald-600" /> {L('Libro Diario & Fiscalidad SAT', 'General Journal & Tax Compliance')}</span>
+                <span className="text-[10px] text-slate-400">{L('Atajo', 'Shortcut')}</span>
               </button>
               <button 
                 type="button"
                 onClick={() => { setActiveTab('clientes'); setCommandPaletteOpen(false); }}
                 className="w-full px-3 py-2 text-left rounded-xl hover:bg-slate-100 flex items-center justify-between text-slate-700 font-medium"
               >
-                <span className="flex items-center gap-2"><Users className="w-4 h-4 text-teal-600" /> Cartera de Clientes & Créditos</span>
-                <span className="text-[10px] text-slate-400">Atajo</span>
+                <span className="flex items-center gap-2"><Users className="w-4 h-4 text-teal-600" /> {L('Cartera de Clientes & Créditos', 'Clients & Credit Accounts')}</span>
+                <span className="text-[10px] text-slate-400">{L('Atajo', 'Shortcut')}</span>
               </button>
               <button 
                 type="button"
                 onClick={() => { setActiveTab('dashboard'); setCommandPaletteOpen(false); }}
                 className="w-full px-3 py-2 text-left rounded-xl hover:bg-slate-100 flex items-center justify-between text-slate-700 font-medium"
               >
-                <span className="flex items-center gap-2"><Sparkles className="w-4 h-4 text-amber-500" /> Ver Métricas del Dashboard</span>
-                <span className="text-[10px] text-slate-400">Atajo</span>
+                <span className="flex items-center gap-2"><Sparkles className="w-4 h-4 text-amber-500" /> {L('Ver Métricas del Dashboard', 'View Dashboard Metrics')}</span>
+                <span className="text-[10px] text-slate-400">{L('Atajo', 'Shortcut')}</span>
               </button>
               <button 
                 type="button"
                 onClick={() => { setActiveTab('asistencia'); setCommandPaletteOpen(false); }}
                 className="w-full px-3 py-2 text-left rounded-xl hover:bg-slate-100 flex items-center justify-between text-slate-700 font-medium"
               >
-                <span className="flex items-center gap-2"><Clock3 className="w-4 h-4 text-purple-600" /> Reloj Checador (Kiosco Asistencia)</span>
-                <span className="text-[10px] text-slate-400">Atajo</span>
+                <span className="flex items-center gap-2"><Clock3 className="w-4 h-4 text-purple-600" /> {L('Reloj Checador (Kiosco Asistencia)', 'Time Clock (Attendance Kiosk)')}</span>
+                <span className="text-[10px] text-slate-400">{L('Atajo', 'Shortcut')}</span>
               </button>
               <button 
                 type="button"
                 onClick={() => { setActiveTab('configuracion'); setCommandPaletteOpen(false); }}
                 className="w-full px-3 py-2 text-left rounded-xl hover:bg-slate-100 flex items-center justify-between text-slate-700 font-medium"
               >
-                <span className="flex items-center gap-2"><Building2 className="w-4 h-4 text-indigo-600" /> Configuración de Empresa (SAT & FEL)</span>
-                <span className="text-[10px] text-slate-400">Atajo</span>
+                <span className="flex items-center gap-2"><Building2 className="w-4 h-4 text-indigo-600" /> {L('Configuración de Empresa (SAT & FEL)', 'Company Settings (Tax & E-Invoice)')}</span>
+                <span className="text-[10px] text-slate-400">{L('Atajo', 'Shortcut')}</span>
               </button>
               <button 
                 type="button"
                 onClick={() => { setActiveTab('token_scraper'); setCommandPaletteOpen(false); }}
                 className="w-full px-3 py-2 text-left rounded-xl hover:bg-slate-100 flex items-center justify-between text-slate-700 font-medium"
               >
-                <span className="flex items-center gap-2"><Sparkles className="w-4 h-4 text-amber-500" /> 🔑 Token para Extensión Scraper Chrome</span>
+                <span className="flex items-center gap-2"><Sparkles className="w-4 h-4 text-amber-500" /> {L('🔑 Token para Extensión Scraper Chrome', '🔑 Chrome Scraper Extension Token')}</span>
                 <span className="text-[10px] text-slate-400">API</span>
               </button>
             </div>
             <div className="p-2.5 bg-slate-50 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-400">
-              <span>Navega con flechas y presiona Enter</span>
-              <kbd className="px-1.5 py-0.5 bg-white border border-slate-200 rounded text-[10px]">ESC para cerrar</kbd>
+              <span>{L('Navega con flechas y presiona Enter', 'Navigate with arrow keys and press Enter')}</span>
+              <kbd className="px-1.5 py-0.5 bg-white border border-slate-200 rounded text-[10px]">{L('ESC para cerrar', 'ESC to close')}</kbd>
             </div>
           </div>
         </div>

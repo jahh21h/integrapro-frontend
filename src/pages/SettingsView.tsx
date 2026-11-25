@@ -34,9 +34,11 @@ import {
   ShieldCheck,
   Video,
   ShoppingBag,
-  Landmark
+  Landmark,
+  Globe
 } from 'lucide-react';
 import { useTimeFormat } from '../context/TimeFormatContext';
+import { useLanguage } from '../context/LanguageContext';
 import SpecificTimePicker from '../components/SpecificTimePicker';
 import TokenExtensionScraper from '../components/TokenExtensionScraper';
 import { ConexionExterna, EmpresaSaaS } from '../types';
@@ -75,6 +77,54 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
   const [activeTab, setActiveTab] = useState<'empresa' | 'moneda' | 'fel' | 'pasarelas' | 'modulos' | 'multiempresa' | 'roles' | 'api' | 'conexiones' | 'token_scraper'>('empresa');
   const [notificationToast, setNotificationToast] = useState<string | null>(null);
   const { timeFormat, setTimeFormat } = useTimeFormat();
+  const { lang, setLang, L, currencySymbol, locale, taxIdLabel, trStatus, trRegime, trTaxId } = useLanguage();
+
+  const trRole = (role: string) => {
+    switch (role) {
+      case 'Super Admin':
+        return L('Super Admin', 'Super Admin');
+      case 'Gerente de Sucursal':
+        return L('Gerente de Sucursal', 'Branch Manager');
+      case 'Cajero / Operador POS':
+        return L('Cajero / Operador POS', 'Cashier / POS Operator');
+      case 'Auditor Contable':
+        return L('Auditor Contable', 'Accounting Auditor');
+      default:
+        return role;
+    }
+  };
+
+  const trBranch = (branch: string) => {
+    switch (branch) {
+      case 'Sucursal Central - Ciudad':
+        return L('Sucursal Central - Ciudad', 'Central Branch - Downtown');
+      case 'Sucursal Norte - Carretera al Atlántico':
+        return L('Sucursal Norte - Carretera al Atlántico', 'North Branch - Atlantic Highway');
+      case 'Sucursal Sur - Villa Nueva':
+        return L('Sucursal Sur - Villa Nueva', 'South Branch - Villa Nueva');
+      case 'Todas las Sucursales':
+        return L('Todas las Sucursales', 'All Branches');
+      default:
+        return branch;
+    }
+  };
+
+  const trLastAccess = (val: string) => {
+    switch (val) {
+      case 'Hace 5 min':
+        return L('Hace 5 min', '5 min ago');
+      case 'Hace 38 min':
+        return L('Hace 38 min', '38 min ago');
+      case 'Hoy a las 08:15':
+        return L('Hoy a las 08:15', 'Today at 08:15');
+      case 'Ayer':
+        return L('Ayer', 'Yesterday');
+      case 'Pendiente de inicio':
+        return L('Pendiente de inicio', 'Pending first login');
+      default:
+        return val;
+    }
+  };
 
   const getRegimenKey = (regimenStr: string = '') => {
     const clean = (regimenStr || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
@@ -175,9 +225,9 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
           boutique: boutiqueConfig
         }
       });
-      showToast('✅ ¡Datos de tu tienda y cuentas bancarias actualizadas con éxito!');
+      showToast(L('✅ ¡Datos de tu tienda y cuentas bancarias actualizadas con éxito!', '✅ Store details and bank accounts updated successfully!'));
     } catch {
-      showToast('⚠️ ERROR: los datos NO se guardaron en el servidor. Intenta de nuevo.');
+      showToast(L('⚠️ ERROR: los datos NO se guardaron en el servidor. Intenta de nuevo.', '⚠️ ERROR: Data was NOT saved on the server. Please try again.'));
     }
 
     if (onUpdateEmpresa) {
@@ -193,7 +243,7 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
     giro_negocio: 'retail' as 'retail' | 'ferreteria' | 'aceitera' | 'farmacia' | 'minisuper' | 'panaderia',
     nit: currentEmpresa?.nit || '10429182-3',
     pais: currentEmpresa?.pais || 'GT',
-    idioma: 'es',
+    idioma: lang,
     regimen_tributario_gt: getRegimenKey(currentEmpresa?.regimen),
     regimen_tributario_manual: '',
     telefono: currentEmpresa?.telefono || '+502 2334-9000',
@@ -432,7 +482,7 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
         dpi: userForm.dpi || undefined,
         permisos: userForm.permisos
       } : u));
-      showToast(`Usuario ${userForm.name} actualizado exitosamente.`);
+      showToast(L(`Usuario ${userForm.name} actualizado exitosamente.`, `User ${userForm.name} updated successfully.`));
     } else {
       const newUser: UsuarioItem = {
         id: Date.now(),
@@ -447,7 +497,7 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
         permisos: userForm.permisos
       };
       setUsuarios(prev => [newUser, ...prev]);
-      showToast(`Nuevo usuario ${userForm.name} registrado en Laravel UserResource.`);
+      showToast(L(`Nuevo usuario ${userForm.name} registrado en el sistema.`, `New user ${userForm.name} registered in the system.`));
     }
 
     setShowNewUserModal(false);
@@ -468,7 +518,7 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
     setUsuarios(prev => prev.map(u => {
       if (u.id === id) {
         const nextState = u.estado === 'Activo' ? 'Inactivo' : 'Activo';
-        showToast(`Usuario ${u.name} marcado como ${nextState}`);
+        showToast(L(`Usuario ${u.name} marcado como ${trStatus(nextState)}`, `User ${u.name} marked as ${trStatus(nextState)}`));
         return { ...u, estado: nextState };
       }
       return u;
@@ -479,11 +529,11 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
   const [isHealthChecking, setIsHealthChecking] = useState(false);
   const [healthData, setHealthData] = useState({
     db: { status: 'online', latency: '9ms', tables: 31, size: '32.4 MB', engine: 'SQLite / PDO (database.sqlite)' },
-    storage: { status: 'online', check: 'OK (health_check.txt)', disk: 'storage/app/public', permissions: 'Lectura / Escritura (0775)' },
-    fel: { status: 'online', latency: '74ms', provider: 'Infile SAT Oficial (NIT 12521337)', endpoint: 'https://fel.infile.com.gt/api/v1/dte' },
-    queue: { status: 'online', pending: 0, failed: 0, workers: '1 Activo (Scraper Shein & DTEs)' },
-    memory: { usage: '48.2 MB / 256 MB', load: '12%', uptime: '14 días, 8 horas' },
-    lastCheck: 'Hace un momento'
+    storage: { status: 'online', check: 'OK (health_check.txt)', disk: 'storage/app/public', permissions: '0775' },
+    fel: { status: 'online', latency: '74ms', provider: 'Infile', endpoint: 'https://fel.infile.com.gt/api/v1/dte' },
+    queue: { status: 'online', pending: 0, failed: 0, workers: '1' },
+    memory: { usage: '48.2 MB / 256 MB', load: '12%', uptimeDays: 14, uptimeHours: 8 },
+    lastCheck: ''
   });
 
   const handleRunHealthCheck = () => {
@@ -494,9 +544,9 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
         ...prev,
         db: { ...prev.db, latency: `${Math.floor(Math.random() * 5) + 7}ms` },
         fel: { ...prev.fel, latency: `${Math.floor(Math.random() * 20) + 65}ms` },
-        lastCheck: new Date().toLocaleTimeString('es-GT', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+        lastCheck: new Date().toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', second: '2-digit' })
       }));
-      showToast('✅ Diagnóstico de Sistema ejecutado con éxito: Todos los subsistemas están 100% operativos.');
+      showToast(L('✅ Diagnóstico de Sistema ejecutado con éxito: Todos los subsistemas están 100% operativos.', '✅ System diagnostics completed: All subsystems are 100% operational.'));
     }, 1200);
   };
 
@@ -511,9 +561,7 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
       const list = Array.isArray(data) ? data : (data?.data ?? []);
       setConexiones(list.map((c: any) => ({
         ...c,
-        ultima_sincronizacion: c.ultima_sincronizacion
-          ? new Date(c.ultima_sincronizacion).toLocaleString('es-GT')
-          : null
+        ultima_sincronizacion: c.ultima_sincronizacion || null
       })));
     } catch (err) {
       console.warn('Error cargando conexiones externas:', err);
@@ -543,10 +591,10 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
     setTestingConnId(conn.id);
     try {
       const res = await externalConnectionsApi.testConnection(conn.id);
-      showToast(`✅ ${res?.message || `Conexión exitosa con ${conn.nombre}`}`);
+      showToast(`✅ ${res?.message || L(`Conexión exitosa con ${conn.nombre}`, `Successfully connected to ${conn.nombre}`)}`);
     } catch (err: any) {
       const msg = err?.response?.data?.message;
-      showToast(`❌ ${msg || `No se pudo conectar con ${conn.nombre}`}`);
+      showToast(`❌ ${msg || L(`No se pudo conectar con ${conn.nombre}`, `Could not connect to ${conn.nombre}`)}`);
     } finally {
       setTestingConnId(null);
     }
@@ -556,10 +604,10 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
     setSyncingConnId(conn.id);
     try {
       const res = await externalConnectionsApi.sync(conn.id);
-      showToast(`🔄 ${res?.message || 'Sincronización completada.'}`);
+      showToast(`🔄 ${res?.message || L('Sincronización completada.', 'Synchronization completed.')}`);
     } catch (err: any) {
       const msg = err?.response?.data?.message;
-      showToast(`⚠️ ${msg || 'La sincronización no está disponible.'}`);
+      showToast(`⚠️ ${msg || L('La sincronización no está disponible.', 'Synchronization is not available.')}`);
     } finally {
       setSyncingConnId(null);
     }
@@ -568,7 +616,7 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
   const handleSaveConnection = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newConnForm.nombre || !newConnForm.host || !newConnForm.database || !newConnForm.username) {
-      showToast('⚠️ Por favor completa todos los campos requeridos');
+      showToast(L('⚠️ Por favor completa todos los campos requeridos', '⚠️ Please fill in all required fields'));
       return;
     }
     try {
@@ -593,11 +641,11 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
         username: '',
         password: ''
       });
-      showToast(res?.message || `✅ Conexión ${created.nombre} registrada exitosamente.`);
+      showToast(res?.message || L(`✅ Conexión ${created.nombre} registrada exitosamente.`, `✅ Connection ${created.nombre} registered successfully.`));
     } catch (err: any) {
       const msg = err?.response?.data?.message || err?.response?.data?.errors
         ? JSON.stringify(err?.response?.data?.errors)
-        : 'No se pudo registrar la conexión.';
+        : L('No se pudo registrar la conexión.', 'Could not register the connection.');
       showToast(`⚠️ ${msg}`);
     }
   };
@@ -605,16 +653,16 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
   const handleDeleteConnection = async (id: number) => {
     const conn = conexiones.find(c => c.id === id);
     if (!conn) return;
-    if (!window.confirm(`¿Eliminar la conexión "${conn.nombre}" (${conn.host}:${conn.port})? Esta acción no se puede deshacer.`)) {
+    if (!window.confirm(L(`¿Eliminar la conexión "${conn.nombre}" (${conn.host}:${conn.port})? Esta acción no se puede deshacer.`, `Delete connection "${conn.nombre}" (${conn.host}:${conn.port})? This action cannot be undone.`))) {
       return;
     }
     try {
       const res = await externalConnectionsApi.delete(id);
       setConexiones(prev => prev.filter(c => c.id !== id));
-      showToast(res?.message || `🗑️ Conexión "${conn.nombre}" eliminada.`);
+      showToast(res?.message || L(`🗑️ Conexión "${conn.nombre}" eliminada.`, `🗑️ Connection "${conn.nombre}" deleted.`));
     } catch (err: any) {
       const msg = err?.response?.data?.message;
-      showToast(msg || `No se pudo eliminar la conexión "${conn.nombre}". Intenta de nuevo.`);
+      showToast(msg || L(`No se pudo eliminar la conexión "${conn.nombre}". Intenta de nuevo.`, `Could not delete connection "${conn.nombre}". Please try again.`));
     }
   };
 
@@ -690,10 +738,10 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
           }
         }
       });
-      showToast(`✅ ¡Cambios guardados en vivo en el Droplet! Régimen: ${regimenStr}`);
+      showToast(L(`✅ ¡Cambios guardados en vivo en el servidor! Régimen: ${trRegime(regimenStr)}`, `✅ Changes saved live to the server! Tax Regime: ${trRegime(regimenStr)}`));
     } catch (err: any) {
       console.error('Error guardando en droplet:', err);
-      showToast(`⚠️ ERROR: NO se guardó en el servidor (${err?.response?.data?.message || err.message})`);
+      showToast(L(`⚠️ ERROR: NO se guardó en el servidor (${err?.response?.data?.message || err.message})`, `⚠️ ERROR: Changes were NOT saved on the server (${err?.response?.data?.message || err.message})`));
     }
 
     if (onUpdateEmpresa) {
@@ -724,17 +772,27 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
     } else if (onUpdateEmpresa) {
       onUpdateEmpresa(emp);
     }
-    showToast(`🏢 Cambiado a empresa: ${emp.nombre}`);
+    showToast(L(`🏢 Cambiado a empresa: ${emp.nombre}`, `🏢 Switched to company: ${emp.nombre}`));
   };
 
   const handleDeleteCompany = () => {
     if (deleteConfirmationText.trim() !== companyForm.nombre.trim()) {
-      showToast('⚠️ El nombre de confirmación no coincide exactamente.');
+      showToast(L('⚠️ El nombre de confirmación no coincide exactamente.', '⚠️ The confirmation name does not match exactly.'));
       return;
     }
     setShowDeleteModal(false);
     setDeleteConfirmationText('');
-    showToast('Empresa eliminada del sistema (Acción de Super Admin simulada).');
+    showToast(L('Empresa eliminada del sistema (Acción de Super Admin simulada).', 'Company removed from the system (Simulated Super Admin action).'));
+  };
+
+  const handleSelectSystemLang = (next: 'es' | 'en') => {
+    setLang(next);
+    setCompanyForm(prev => ({ ...prev, idioma: next }));
+    showToast(
+      next === 'en'
+        ? '🌐 System language switched to English (USD • Tax ID • International)'
+        : '🌐 Idioma del sistema cambiado a Español (GTQ • NIT • SAT)'
+    );
   };
 
   return (
@@ -752,20 +810,20 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-slate-200">
         <div>
           <h1 className="text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2.5">
-            {viewMode === 'boutique' ? 'Datos & Perfil de Mi Tienda' : 'Configuración de Empresa'}
+            {viewMode === 'boutique' ? L('Datos & Perfil de Mi Tienda', 'My Store Profile & Settings') : L('Configuración de Empresa', 'Company Settings')}
             <span className={`text-xs font-bold px-2.5 py-0.5 rounded-full flex items-center gap-1 ${
               viewMode === 'boutique' 
                 ? 'bg-purple-50 text-purple-700 border border-purple-200' 
                 : 'bg-indigo-50 text-indigo-700 border border-indigo-200'
             }`}>
               {viewMode === 'boutique' ? <Store className="w-3.5 h-3.5 text-purple-600" /> : <Building2 className="w-3.5 h-3.5" />}
-              {viewMode === 'boutique' ? 'Modo Boutique Live' : `Empresa ID: ${activeEmpresaId}`}
+              {viewMode === 'boutique' ? L('Modo Boutique Live', 'Live Boutique Mode') : L(`Empresa ID: ${activeEmpresaId}`, `Company ID: ${activeEmpresaId}`)}
             </span>
           </h1>
           <p className="text-xs text-slate-500 font-medium">
             {viewMode === 'boutique' 
-              ? 'Personaliza la identidad de tu boutique, cuentas bancarias de cobro en vivo y tarifas de paquetería' 
-              : 'Gestión de identidad fiscal SAT, moneda, pasarelas de pago con tarjeta y facturación electrónica FEL'}
+              ? L('Personaliza la identidad de tu boutique, cuentas bancarias de cobro en vivo y tarifas de paquetería', 'Customize your boutique identity, bank accounts for live checkout, and courier shipping rates') 
+              : L('Gestión de identidad fiscal SAT, moneda, pasarelas de pago con tarjeta y facturación electrónica FEL', 'Manage tax identity, currency, card payment gateways, and electronic invoicing (E-Invoice)')}
           </p>
         </div>
 
@@ -779,17 +837,17 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
                 ? 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200'
                 : 'bg-purple-50 hover:bg-purple-100 text-purple-700 border-purple-200'
             }`}
-            title={viewMode === 'boutique' ? 'Ver configuración técnica completa (FEL, pasarelas, base de datos)' : 'Volver al perfil simplificado de boutique'}
+            title={viewMode === 'boutique' ? L('Ver configuración técnica completa (FEL, pasarelas, base de datos)', 'View full technical settings (E-Invoice, payment gateways, database)') : L('Volver al perfil simplificado de boutique', 'Return to simplified boutique profile')}
           >
             {viewMode === 'boutique' ? (
               <>
                 <Settings className="w-3.5 h-3.5 text-slate-500" />
-                <span className="hidden sm:inline">Vista Técnica ERP</span>
+                <span className="hidden sm:inline">{L('Vista Técnica ERP', 'ERP Technical View')}</span>
               </>
             ) : (
               <>
                 <Store className="w-3.5 h-3.5 text-purple-600" />
-                <span className="hidden sm:inline">Modo Boutique Express</span>
+                <span className="hidden sm:inline">{L('Modo Boutique Express', 'Boutique Express Mode')}</span>
               </>
             )}
           </button>
@@ -804,7 +862,57 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
             }`}
           >
             <Save className="w-4 h-4" />
-            <span>{viewMode === 'boutique' ? 'Guardar Datos de Tienda' : 'Guardar Cambios'}</span>
+            <span>{viewMode === 'boutique' ? L('Guardar Datos de Tienda', 'Save Store Settings') : L('Guardar Cambios', 'Save Changes')}</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Selector Prominente de Idioma del Sistema / System Language */}
+      <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-5 sm:p-6 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+        <div className="flex items-start sm:items-center gap-3.5">
+          <div className="w-11 h-11 rounded-2xl bg-indigo-50 text-indigo-600 border border-indigo-100 flex items-center justify-center shrink-0">
+            <Globe className="w-5 h-5" />
+          </div>
+          <div>
+            <h2 className="text-sm font-black text-slate-900 tracking-tight">
+              {L('Idioma del Sistema / System Language', 'System Language / Idioma del Sistema')}
+            </h2>
+            <p className="text-xs text-slate-500 font-medium mt-0.5">
+              {L(
+                'Adapta el idioma, la moneda (Q / $), las etiquetas fiscales (NIT / Tax ID) y el formato regional en toda la aplicación.',
+                'Instantly adapts language, currency ($ / Q), tax labels (Tax ID / NIT), and regional formatting across the entire app.'
+              )}
+            </p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 shrink-0">
+          <button
+            type="button"
+            onClick={() => handleSelectSystemLang('es')}
+            className={`px-4 py-2.5 rounded-2xl text-xs font-extrabold transition-all flex items-center justify-center gap-2 border cursor-pointer ${
+              lang === 'es'
+                ? 'bg-slate-900 text-white border-slate-900 shadow-md shadow-slate-900/15'
+                : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'
+            }`}
+          >
+            <span className="text-sm leading-none">🇬🇹</span>
+            <span>Español (GTQ • NIT • SAT)</span>
+            {lang === 'es' && <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => handleSelectSystemLang('en')}
+            className={`px-4 py-2.5 rounded-2xl text-xs font-extrabold transition-all flex items-center justify-center gap-2 border cursor-pointer ${
+              lang === 'en'
+                ? 'bg-indigo-600 text-white border-indigo-600 shadow-md shadow-indigo-600/20'
+                : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'
+            }`}
+          >
+            <span className="text-sm leading-none">🇺🇸</span>
+            <span>English (USD • Tax ID • International)</span>
+            {lang === 'en' && <CheckCircle2 className="w-4 h-4 text-emerald-300 shrink-0" />}
           </button>
         </div>
       </div>
@@ -817,31 +925,31 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
             <div className="space-y-1 text-center md:text-left">
               <span className="text-[10px] font-extrabold uppercase tracking-widest text-pink-300 flex items-center justify-center md:justify-start gap-1.5">
                 <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-                Plan TikTok Live Express • Fortexa SaaS
+                {L('Plan TikTok Live Express • Fortexa SaaS', 'TikTok Live Express Plan • Fortexa SaaS')}
               </span>
               <h2 className="text-lg font-black tracking-tight">{boutiqueConfig.nombre}</h2>
               <p className="text-xs text-slate-300">
-                Entorno optimizado para ventas en vivo, canastas compartidas y cobros directos por WhatsApp.
+                {L('Entorno optimizado para ventas en vivo, canastas compartidas y cobros directos por WhatsApp.', 'Environment optimized for live sales, shared carts, and direct WhatsApp checkout.')}
               </p>
             </div>
 
             <div className="grid grid-cols-3 gap-3 w-full md:w-auto">
               <div className="bg-white/10 backdrop-blur-md px-4 py-3 rounded-2xl border border-white/10 text-center">
-                <span className="text-[10px] font-bold text-slate-300 uppercase tracking-wider block">Modalidad</span>
+                <span className="text-[10px] font-bold text-slate-300 uppercase tracking-wider block">{L('Modalidad', 'Mode')}</span>
                 <span className="text-xs font-black text-rose-300 flex items-center justify-center gap-1">
                   <Video className="w-3.5 h-3.5" /> Social Live
                 </span>
               </div>
 
               <div className="bg-white/10 backdrop-blur-md px-4 py-3 rounded-2xl border border-white/10 text-center">
-                <span className="text-[10px] font-bold text-slate-300 uppercase tracking-wider block">Cobros</span>
+                <span className="text-[10px] font-bold text-slate-300 uppercase tracking-wider block">{L('Cobros', 'Payments')}</span>
                 <span className="text-xs font-black text-emerald-400 flex items-center justify-center gap-1">
-                  <CheckCircle2 className="w-3.5 h-3.5" /> Bancos + Envíos
+                  <CheckCircle2 className="w-3.5 h-3.5" /> {L('Bancos + Envíos', 'Banks + Shipping')}
                 </span>
               </div>
 
               <div className="bg-white/10 backdrop-blur-md px-4 py-3 rounded-2xl border border-white/10 text-center">
-                <span className="text-[10px] font-bold text-slate-300 uppercase tracking-wider block">Servidor</span>
+                <span className="text-[10px] font-bold text-slate-300 uppercase tracking-wider block">{L('Servidor', 'Server')}</span>
                 <span className="text-xs font-black text-indigo-200">
                   Fortexa Cloud
                 </span>
@@ -857,12 +965,12 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
                   <Store className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-black text-slate-900">1. Identidad de Tu Boutique & Marca</h3>
-                  <p className="text-xs text-slate-500">Datos públicos que verán tus clientas en los tickets de WhatsApp y canastas</p>
+                  <h3 className="text-sm font-black text-slate-900">{L('1. Identidad de Tu Boutique & Marca', '1. Boutique Identity & Brand')}</h3>
+                  <p className="text-xs text-slate-500">{L('Datos públicos que verán tus clientas en los tickets de WhatsApp y canastas', 'Public store details displayed to your customers on WhatsApp receipts and carts')}</p>
                 </div>
               </div>
               <span className="text-[10px] font-extrabold uppercase px-2.5 py-1 rounded-full bg-purple-50 text-purple-700 border border-purple-200">
-                Personalización
+                {L('Personalización', 'Branding')}
               </span>
             </div>
 
@@ -871,13 +979,13 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
               <div className="space-y-1.5">
                 <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
                   <Store className="w-3.5 h-3.5 text-purple-600" />
-                  Nombre de la Boutique / Tienda:
+                  {L('Nombre de la Boutique / Tienda:', 'Boutique / Store Name:')}
                 </label>
                 <input 
                   type="text"
                   value={boutiqueConfig.nombre}
                   onChange={(e) => setBoutiqueConfig({ ...boutiqueConfig, nombre: e.target.value })}
-                  placeholder="Ej. Boutique Chic Live"
+                  placeholder={L('Ej. Boutique Chic Live', 'e.g., Boutique Chic Live')}
                   className="w-full text-xs font-semibold p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500"
                 />
               </div>
@@ -886,13 +994,13 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
               <div className="space-y-1.5">
                 <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
                   <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-                  Slogan o Frase para el Live:
+                  {L('Slogan o Frase para el Live:', 'Live Stream Slogan or Tagline:')}
                 </label>
                 <input 
                   type="text"
                   value={boutiqueConfig.slogan}
                   onChange={(e) => setBoutiqueConfig({ ...boutiqueConfig, slogan: e.target.value })}
-                  placeholder="Ej. Moda Exclusiva & Remates en Vivo"
+                  placeholder={L('Ej. Moda Exclusiva & Remates en Vivo', 'e.g., Exclusive Fashion & Live Flash Deals')}
                   className="w-full text-xs font-semibold p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500"
                 />
               </div>
@@ -901,13 +1009,13 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
               <div className="space-y-1.5">
                 <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
                   <Phone className="w-3.5 h-3.5 text-emerald-600" />
-                  WhatsApp Oficial de Cobros & Envíos:
+                  {L('WhatsApp Oficial de Cobros & Envíos:', 'Official WhatsApp for Payments & Shipping:')}
                 </label>
                 <input 
                   type="text"
                   value={boutiqueConfig.whatsapp}
                   onChange={(e) => setBoutiqueConfig({ ...boutiqueConfig, whatsapp: e.target.value })}
-                  placeholder="Ej. 4589-1234 o +502 4589-1234"
+                  placeholder={L('Ej. 4589-1234 o +502 4589-1234', 'e.g., +1 555-0192 or 4589-1234')}
                   className="w-full text-xs font-semibold p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 font-mono"
                 />
               </div>
@@ -916,13 +1024,13 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
               <div className="space-y-1.5">
                 <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
                   <Mail className="w-3.5 h-3.5 text-blue-600" />
-                  Correo Electrónico de Notificaciones:
+                  {L('Correo Electrónico de Notificaciones:', 'Notification Email Address:')}
                 </label>
                 <input 
                   type="email"
                   value={boutiqueConfig.email}
                   onChange={(e) => setBoutiqueConfig({ ...boutiqueConfig, email: e.target.value })}
-                  placeholder="Ej. contacto@tiktokboutique.gt"
+                  placeholder={L('Ej. contacto@tiktokboutique.gt', 'e.g., orders@boutique.com')}
                   className="w-full text-xs font-semibold p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500"
                 />
               </div>
@@ -931,7 +1039,7 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
               <div className="space-y-1.5 md:col-span-2">
                 <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
                   <ShoppingBag className="w-3.5 h-3.5 text-pink-600" />
-                  URL del Logotipo / Foto de Perfil:
+                  {L('URL del Logotipo / Foto de Perfil:', 'Logo / Profile Photo URL:')}
                 </label>
                 <div className="flex items-center gap-3">
                   <div className="w-12 h-12 rounded-2xl bg-slate-100 border border-slate-200 overflow-hidden shrink-0 flex items-center justify-center">
@@ -961,12 +1069,12 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
                   <Landmark className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-black text-slate-900">2. Cuentas Bancarias para Depósitos & Transferencias</h3>
-                  <p className="text-xs text-slate-500">Estas cuentas se inyectan en los resúmenes automáticos que envías por WhatsApp a tus clientas</p>
+                  <h3 className="text-sm font-black text-slate-900">{L('2. Cuentas Bancarias para Depósitos & Transferencias', '2. Bank Accounts for Deposits & Transfers')}</h3>
+                  <p className="text-xs text-slate-500">{L('Estas cuentas se inyectan en los resúmenes automáticos que envías por WhatsApp a tus clientas', 'These accounts are automatically included in WhatsApp checkout summaries sent to customers')}</p>
                 </div>
               </div>
               <span className="text-[10px] font-extrabold uppercase px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-                Cobro en Vivo
+                {L('Cobro en Vivo', 'Live Checkout')}
               </span>
             </div>
 
@@ -974,9 +1082,12 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
             <div className="p-3 bg-indigo-50/70 border border-indigo-200 rounded-2xl text-xs flex items-start gap-2.5 text-indigo-900">
               <Sparkles className="w-4 h-4 text-indigo-600 shrink-0 mt-0.5" />
               <div>
-                <span className="font-bold block">Sincronización Automática con WhatsApp</span>
+                <span className="font-bold block">{L('Sincronización Automática con WhatsApp', 'Automatic WhatsApp Sync')}</span>
                 <p className="text-[11px] text-indigo-700 leading-relaxed mt-0.5">
-                  Cuando cierres una canasta en el Live y des clic en <strong>"Enviar Resumen por WhatsApp"</strong>, el mensaje incluirá automáticamente las cuentas que ingreses abajo para que la clienta te envíe su boleta.
+                  {L(
+                    'Cuando cierres una canasta en el Live y des clic en "Enviar Resumen por WhatsApp", el mensaje incluirá automáticamente las cuentas que ingreses abajo para que la clienta te envíe su boleta.',
+                    'When you close a live cart and click "Send Summary via WhatsApp", the message will automatically include the bank accounts below so customers can send their payment receipt.'
+                  )}
                 </p>
               </div>
             </div>
@@ -989,12 +1100,12 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
                     🏦 Banco Industrial (BI)
                   </span>
                   <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-blue-100 text-blue-800">
-                    Monetaria / Ahorro
+                    {L('Monetaria / Ahorro', 'Checking / Savings')}
                   </span>
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-slate-500">Número de Cuenta:</label>
+                  <label className="text-[10px] font-bold text-slate-500">{L('Número de Cuenta:', 'Account Number:')}</label>
                   <input 
                     type="text"
                     value={boutiqueConfig.bi_cuenta}
@@ -1005,12 +1116,12 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-slate-500">Nombre del Titular:</label>
+                  <label className="text-[10px] font-bold text-slate-500">{L('Nombre del Titular:', 'Account Holder Name:')}</label>
                   <input 
                     type="text"
                     value={boutiqueConfig.bi_titular}
                     onChange={(e) => setBoutiqueConfig({ ...boutiqueConfig, bi_titular: e.target.value })}
-                    placeholder="Nombre en la cuenta"
+                    placeholder={L('Nombre en la cuenta', 'Account holder name')}
                     className="w-full text-xs font-semibold p-2 bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
@@ -1023,12 +1134,12 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
                     🏦 BANRURAL
                   </span>
                   <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800">
-                    Caja Rural
+                    {L('Caja Rural', 'Branch Network')}
                   </span>
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-slate-500">Número de Cuenta:</label>
+                  <label className="text-[10px] font-bold text-slate-500">{L('Número de Cuenta:', 'Account Number:')}</label>
                   <input 
                     type="text"
                     value={boutiqueConfig.banrural_cuenta}
@@ -1039,12 +1150,12 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-slate-500">Nombre del Titular:</label>
+                  <label className="text-[10px] font-bold text-slate-500">{L('Nombre del Titular:', 'Account Holder Name:')}</label>
                   <input 
                     type="text"
                     value={boutiqueConfig.banrural_titular}
                     onChange={(e) => setBoutiqueConfig({ ...boutiqueConfig, banrural_titular: e.target.value })}
-                    placeholder="Nombre en la cuenta"
+                    placeholder={L('Nombre en la cuenta', 'Account holder name')}
                     className="w-full text-xs font-semibold p-2 bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
                   />
                 </div>
@@ -1057,12 +1168,12 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
                     🏦 BAC Credomatic
                   </span>
                   <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-rose-100 text-rose-800">
-                    Banca en Línea
+                    {L('Banca en Línea', 'Online Banking')}
                   </span>
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-slate-500">Número de Cuenta:</label>
+                  <label className="text-[10px] font-bold text-slate-500">{L('Número de Cuenta:', 'Account Number:')}</label>
                   <input 
                     type="text"
                     value={boutiqueConfig.bac_cuenta}
@@ -1073,12 +1184,12 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-slate-500">Nombre del Titular:</label>
+                  <label className="text-[10px] font-bold text-slate-500">{L('Nombre del Titular:', 'Account Holder Name:')}</label>
                   <input 
                     type="text"
                     value={boutiqueConfig.bac_titular}
                     onChange={(e) => setBoutiqueConfig({ ...boutiqueConfig, bac_titular: e.target.value })}
-                    placeholder="Nombre en la cuenta"
+                    placeholder={L('Nombre en la cuenta', 'Account holder name')}
                     className="w-full text-xs font-semibold p-2 bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-rose-500"
                   />
                 </div>
@@ -1092,8 +1203,8 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
                   <CreditCard className="w-4 h-4" />
                 </div>
                 <div>
-                  <span className="text-xs font-black text-slate-900 block">Aceptar Pagos Contra Entrega (Efectivo al recibir)</span>
-                  <p className="text-[11px] text-slate-500">Permite a tus clientas pagar en efectivo cuando el mensajero o camión de Forza/Guatex les entregue el paquete.</p>
+                  <span className="text-xs font-black text-slate-900 block">{L('Aceptar Pagos Contra Entrega (Efectivo al recibir)', 'Accept Cash on Delivery (COD)')}</span>
+                  <p className="text-[11px] text-slate-500">{L('Permite a tus clientas pagar en efectivo cuando el mensajero o camión de Forza/Guatex les entregue el paquete.', 'Allows customers to pay in cash when the courier or delivery driver hands over their package.')}</p>
                 </div>
               </div>
               <label className="relative inline-flex items-center cursor-pointer">
@@ -1116,12 +1227,12 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
                   <Truck className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-black text-slate-900">3. Logística, Recolección & Tarifas de Envíos</h3>
-                  <p className="text-xs text-slate-500">Dónde recogerá la paquetería tus paquetes y las tarifas estándar que se aplicarán</p>
+                  <h3 className="text-sm font-black text-slate-900">{L('3. Logística, Recolección & Tarifas de Envíos', '3. Logistics, Pickup & Shipping Rates')}</h3>
+                  <p className="text-xs text-slate-500">{L('Dónde recogerá la paquetería tus paquetes y las tarifas estándar que se aplicarán', 'Where couriers will pick up your packages and the standard rates applied')}</p>
                 </div>
               </div>
               <span className="text-[10px] font-extrabold uppercase px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
-                Envíos Nacionales
+                {L('Envíos Nacionales', 'Nationwide Shipping')}
               </span>
             </div>
 
@@ -1130,13 +1241,13 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
               <div className="space-y-1.5 md:col-span-3">
                 <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
                   <MapPin className="w-3.5 h-3.5 text-blue-600" />
-                  Dirección Exacta de Recolección (Para Guatex / Forza / Cargo Expreso):
+                  {L('Dirección Exacta de Recolección (Para Guatex / Forza / Cargo Expreso):', 'Exact Pickup Address (For Couriers / Carriers):')}
                 </label>
                 <input 
                   type="text"
                   value={boutiqueConfig.direccion}
                   onChange={(e) => setBoutiqueConfig({ ...boutiqueConfig, direccion: e.target.value })}
-                  placeholder="Ej. Calzada Roosevelt 14-25 Zona 11, Local 3, Mixco, Guatemala"
+                  placeholder={L('Ej. Calzada Roosevelt 14-25 Zona 11, Local 3, Mixco, Guatemala', 'e.g., 1425 Main Ave, Suite 3, Downtown')}
                   className="w-full text-xs font-semibold p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                 />
               </div>
@@ -1144,10 +1255,10 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
               {/* Tarifa Ciudad */}
               <div className="space-y-1.5">
                 <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
-                  Tarifa Estándar - Ciudad Capital:
+                  {L('Tarifa Estándar - Ciudad Capital:', 'Standard Rate - Metro / City:')}
                 </label>
                 <div className="relative">
-                  <span className="absolute left-3 top-2.5 text-xs font-bold text-slate-400">Q</span>
+                  <span className="absolute left-3 top-2.5 text-xs font-bold text-slate-400">{currencySymbol}</span>
                   <input 
                     type="number"
                     step="1"
@@ -1161,10 +1272,10 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
               {/* Tarifa Departamentos */}
               <div className="space-y-1.5">
                 <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
-                  Tarifa Estándar - Departamentos:
+                  {L('Tarifa Estándar - Departamentos:', 'Standard Rate - Out-of-City / Regional:')}
                 </label>
                 <div className="relative">
-                  <span className="absolute left-3 top-2.5 text-xs font-bold text-slate-400">Q</span>
+                  <span className="absolute left-3 top-2.5 text-xs font-bold text-slate-400">{currencySymbol}</span>
                   <input 
                     type="number"
                     step="1"
@@ -1178,7 +1289,7 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
               {/* Courier Predeterminado */}
               <div className="space-y-1.5">
                 <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
-                  Paquetería Predeterminada:
+                  {L('Paquetería Predeterminada:', 'Default Courier / Carrier:')}
                 </label>
                 <select 
                   value={boutiqueConfig.courier_predeterminado}
@@ -1188,7 +1299,7 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
                   <option value="Guatex">Guatex Express</option>
                   <option value="Forza Delivery">Forza Delivery Express</option>
                   <option value="Cargo Expreso">Cargo Expreso</option>
-                  <option value="Mensajero Local">Mensajero Local / Motorista</option>
+                  <option value="Mensajero Local">{L('Mensajero Local / Motorista', 'Local Courier / Rider')}</option>
                 </select>
               </div>
 
@@ -1196,13 +1307,13 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
               <div className="space-y-1.5 md:col-span-3">
                 <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
                   <Clock className="w-3.5 h-3.5 text-slate-400" />
-                  Horario Habitual de Recolección / Notas de Empaque:
+                  {L('Horario Habitual de Recolección / Notas de Empaque:', 'Regular Pickup Schedule / Packing Notes:')}
                 </label>
                 <input 
                   type="text"
                   value={boutiqueConfig.horario_recoleccion}
                   onChange={(e) => setBoutiqueConfig({ ...boutiqueConfig, horario_recoleccion: e.target.value })}
-                  placeholder="Ej. Paquetes listos de Lunes a Sábado a las 14:00 hrs"
+                  placeholder={L('Ej. Paquetes listos de Lunes a Sábado a las 14:00 hrs', 'e.g., Packages ready Monday to Saturday at 2:00 PM')}
                   className="w-full text-xs font-semibold p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
@@ -1218,35 +1329,41 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
                 </div>
                 <div>
                   <h4 className="text-sm font-black tracking-tight flex items-center gap-2">
-                    Infraestructura & Seguridad Administrada por Fortexa Technologies
+                    {L('Infraestructura & Seguridad Administrada por Fortexa Technologies', 'Infrastructure & Security Managed by Fortexa Technologies')}
                     <span className="text-[9px] font-mono font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                      24/7 EN LÍNEA
+                      {L('24/7 EN LÍNEA', '24/7 ONLINE')}
                     </span>
                   </h4>
                   <p className="text-xs text-slate-300">
-                    Bases de datos protegidas, copias de seguridad continuas y velocidad para transmisiones en vivo sin configuraciones de servidor difíciles.
+                    {L('Bases de datos protegidas, copias de seguridad continuas y velocidad para transmisiones en vivo sin configuraciones de servidor difíciles.', 'Protected databases, continuous backups, and high-speed infrastructure for live streams with zero server headaches.')}
                   </p>
                 </div>
               </div>
 
               <span className="text-xs font-mono font-bold text-indigo-300 px-3 py-1.5 rounded-xl bg-white/5 border border-white/10 shrink-0 self-start sm:self-auto">
-                Cerebro SaaS: Fortexa Technologies
+                {L('Cerebro SaaS: Fortexa Technologies', 'SaaS Core: Fortexa Technologies')}
               </span>
             </div>
 
             <div className="pt-3 border-t border-white/10 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
               <p className="text-slate-400 text-[11px] leading-relaxed max-w-xl">
-                ¿En el futuro necesitas emitir <strong>Facturas Electrónicas SAT (FEL)</strong>, tener una terminal física de tarjeta con Visacuotas, o agregar contabilidad completa?
+                {L(
+                  '¿En el futuro necesitas emitir Facturas Electrónicas SAT (FEL), tener una terminal física de tarjeta con Visacuotas, o agregar contabilidad completa?',
+                  'Need to issue Electronic Invoices (E-Invoice), connect a physical card terminal with installments, or enable full accounting in the future?'
+                )}
               </p>
 
               <a 
-                href="https://api.whatsapp.com/send?phone=50223349000&text=Hola%20Fortexa%20Technologies,%20tengo%20el%20plan%20TikTok%20Live%20Express%20y%20me%20gustar%C3%ADa%20conocer%20los%20m%C3%B3dulos%20Pro%20(FEL%20SAT%20y%20POS%20F%C3%ADsico)."
+                href={L(
+                  'https://api.whatsapp.com/send?phone=50223349000&text=Hola%20Fortexa%20Technologies,%20tengo%20el%20plan%20TikTok%20Live%20Express%20y%20me%20gustar%C3%ADa%20conocer%20los%20m%C3%B3dulos%20Pro%20(FEL%20SAT%20y%20POS%20F%C3%ADsico).',
+                  'https://api.whatsapp.com/send?phone=50223349000&text=Hello%20Fortexa%20Technologies,%20I%20am%20on%20the%20TikTok%20Live%20Express%20plan%20and%20would%20like%20to%20learn%20about%20Pro%20modules%20(E-Invoice%20and%20Physical%20POS).'
+                )}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-400 hover:to-purple-500 active:scale-95 text-white font-bold text-xs rounded-xl transition-all shadow-md shadow-indigo-600/30 cursor-pointer shrink-0 self-start sm:self-auto"
               >
                 <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-                <span>Solicitar Upgrade Pro a Fortexa</span>
+                <span>{L('Solicitar Upgrade Pro a Fortexa', 'Request Pro Upgrade from Fortexa')}</span>
               </a>
             </div>
           </div>
@@ -1259,7 +1376,7 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
               className="px-6 py-3 bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 hover:opacity-95 active:scale-95 text-white rounded-2xl text-xs font-black shadow-lg shadow-purple-600/30 transition-all flex items-center gap-2 cursor-pointer"
             >
               <Save className="w-4 h-4" />
-              <span>Guardar Datos de Mi Tienda</span>
+              <span>{L('Guardar Datos de Mi Tienda', 'Save My Store Settings')}</span>
             </button>
           </div>
         </div>
@@ -1271,33 +1388,37 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
             <div className="space-y-1 text-center md:text-left">
               <span className="text-[10px] font-extrabold uppercase tracking-widest text-indigo-300 flex items-center justify-center md:justify-start gap-1.5">
                 <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-            Estatus de la Suscripción IntegraPro SaaS
+            {L('Estatus de la Suscripción IntegraPro SaaS', 'IntegraPro SaaS Subscription Status')}
           </span>
           <h2 className="text-lg font-black tracking-tight">{companyForm.nombre}</h2>
           <p className="text-xs text-slate-300">
-            Licencia empresarial multimoneda con certificación FEL ante la SAT Guatemala ilimitada.
+            {L('Licencia empresarial multimoneda con certificación FEL ante la SAT Guatemala ilimitada.', 'Multi-currency enterprise license with unlimited Electronic Invoice (E-Invoice) certification.')}
           </p>
         </div>
 
         <div className="grid grid-cols-3 gap-3 w-full md:w-auto">
           <div className="bg-white/10 backdrop-blur-md px-4 py-3 rounded-2xl border border-white/10 text-center">
-            <span className="text-[10px] font-bold text-slate-300 uppercase tracking-wider block">Plan Actual</span>
+            <span className="text-[10px] font-bold text-slate-300 uppercase tracking-wider block">{L('Plan Actual', 'Current Plan')}</span>
             <span className="text-xs font-black text-amber-300">
-              {companyForm.plan_type === 'basic' ? 'Plan Inicio' : companyForm.plan_type === 'standard' ? 'Plan Crecimiento' : 'Plan Corporativo'}
+              {companyForm.plan_type === 'basic'
+                ? L('Plan Inicio', 'Starter Plan')
+                : companyForm.plan_type === 'standard'
+                ? L('Plan Crecimiento', 'Growth Plan')
+                : L('Plan Corporativo', 'Enterprise Plan')}
             </span>
           </div>
 
           <div className="bg-white/10 backdrop-blur-md px-4 py-3 rounded-2xl border border-white/10 text-center">
-            <span className="text-[10px] font-bold text-slate-300 uppercase tracking-wider block">Estado</span>
+            <span className="text-[10px] font-bold text-slate-300 uppercase tracking-wider block">{L('Estado', 'Status')}</span>
             <span className="text-xs font-black text-emerald-400 flex items-center justify-center gap-1">
-              <CheckCircle2 className="w-3.5 h-3.5" /> Activo
+              <CheckCircle2 className="w-3.5 h-3.5" /> {trStatus('Activo')}
             </span>
           </div>
 
           <div className="bg-white/10 backdrop-blur-md px-4 py-3 rounded-2xl border border-white/10 text-center">
-            <span className="text-[10px] font-bold text-slate-300 uppercase tracking-wider block">Vigencia</span>
+            <span className="text-[10px] font-bold text-slate-300 uppercase tracking-wider block">{L('Vigencia', 'Validity')}</span>
             <span className="text-xs font-black text-indigo-200">
-              Vence en {companyForm.trial_days_remaining} días
+              {L(`Vence en ${companyForm.trial_days_remaining} días`, `Renews in ${companyForm.trial_days_remaining} days`)}
             </span>
           </div>
         </div>
@@ -1315,7 +1436,7 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
           }`}
         >
           <Building2 className="w-3.5 h-3.5 text-indigo-400" />
-          <span>Información de Empresa</span>
+          <span>{L('Información de Empresa', 'Company Info')}</span>
         </button>
 
         <button
@@ -1328,7 +1449,7 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
           }`}
         >
           <Coins className="w-3.5 h-3.5 text-amber-400" />
-          <span>Moneda & Tipo de Cambio</span>
+          <span>{L('Moneda & Tipo de Cambio', 'Currency & Exchange Rate')}</span>
         </button>
 
         <button
@@ -1341,7 +1462,7 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
           }`}
         >
           <FileText className="w-3.5 h-3.5 text-cyan-400" />
-          <span>Facturación FEL (Infile SAT)</span>
+          <span>{L('Facturación FEL (Infile SAT)', 'E-Invoicing (Tax Compliance)')}</span>
         </button>
 
         <button
@@ -1354,7 +1475,7 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
           }`}
         >
           <CreditCard className="w-3.5 h-3.5 text-emerald-400" />
-          <span>Pasarelas (Neonet / BAC)</span>
+          <span>{L('Pasarelas (Neonet / BAC)', 'Payment Gateways (Neonet / BAC)')}</span>
         </button>
 
         <button
@@ -1367,7 +1488,7 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
           }`}
         >
           <Layers className="w-3.5 h-3.5 text-purple-400" />
-          <span>Módulos Activos</span>
+          <span>{L('Módulos Activos', 'Active Modules')}</span>
         </button>
 
         {isPlatformAdmin && (
@@ -1381,7 +1502,7 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
             }`}
           >
             <Store className="w-3.5 h-3.5 text-rose-400" />
-            <span>Directorio Multi-Empresa</span>
+            <span>{L('Directorio Multi-Empresa', 'Multi-Company Directory')}</span>
           </button>
         )}
 
@@ -1395,7 +1516,7 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
           }`}
         >
           <Users className="w-3.5 h-3.5 text-teal-400" />
-          <span>Usuarios & Roles</span>
+          <span>{L('Usuarios & Roles', 'Users & Roles')}</span>
         </button>
 
         <button
@@ -1408,7 +1529,7 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
           }`}
         >
           <Activity className="w-3.5 h-3.5 text-sky-400" />
-          <span>Salud del Sistema & API</span>
+          <span>{L('Salud del Sistema & API', 'System Health & API')}</span>
         </button>
 
         <button
@@ -1421,7 +1542,7 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
           }`}
         >
           <Database className="w-3.5 h-3.5 text-blue-400" />
-          <span>Conexiones Externas</span>
+          <span>{L('Conexiones Externas', 'External Connections')}</span>
         </button>
 
         <button
@@ -1434,7 +1555,7 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
           }`}
         >
           <Key className="w-3.5 h-3.5 text-amber-400" />
-          <span>Token Scraper Chrome</span>
+          <span>{L('Token Scraper Chrome', 'Chrome Scraper Token')}</span>
         </button>
       </div>
 
@@ -1443,20 +1564,20 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
         <form onSubmit={handleSaveConfig} className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 sm:p-8 space-y-6">
           <div className="border-b border-slate-100 pb-4 flex items-center justify-between">
             <div>
-              <h2 className="text-base font-black text-slate-900">Datos Comerciales & Régimen Fiscal SAT</h2>
+              <h2 className="text-base font-black text-slate-900">{L('Datos Comerciales & Régimen Fiscal SAT', 'Business Details & Tax Compliance Regime')}</h2>
               <p className="text-xs text-slate-400">
-                Información que se refleja automáticamente en cotizaciones, facturas electrónicas DTE y tickets POS.
+                {L('Información que se refleja automáticamente en cotizaciones, facturas electrónicas DTE y tickets POS.', 'Information automatically reflected on quotes, electronic invoices (E-Invoice), and POS receipts.')}
               </p>
             </div>
             <span className="text-[11px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-3 py-1 rounded-full">
-              Sincronizado con Filament
+              {L('Sincronizado con el Servidor', 'Synced with Cloud')}
             </span>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             <div>
               <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                Nombre Comercial <span className="text-rose-500">*</span>
+                {L('Nombre Comercial', 'Trade Name')} <span className="text-rose-500">*</span>
               </label>
               <input
                 type="text"
@@ -1469,7 +1590,7 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
 
             <div>
               <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                Razón Social
+                {L('Razón Social', 'Legal Entity Name')}
               </label>
               <input
                 type="text"
@@ -1482,29 +1603,29 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
             {/* Giro de Negocio (Idéntico a Laravel) */}
             <div>
               <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5 flex items-center justify-between">
-                <span>Giro de Negocio</span>
-                <span className="text-[10px] text-slate-400 font-normal">Define campos en productos</span>
+                <span>{L('Giro de Negocio', 'Industry / Business Type')}</span>
+                <span className="text-[10px] text-slate-400 font-normal">{L('Define campos en productos', 'Configures product fields')}</span>
               </label>
               <select
                 value={companyForm.giro_negocio}
                 onChange={(e) => setCompanyForm({ ...companyForm, giro_negocio: e.target.value as any })}
                 className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:bg-white focus:border-indigo-600 focus:outline-none transition-all shadow-inner cursor-pointer"
               >
-                <option value="retail">Retail General (Ropa, Zapatos, Variedades)</option>
-                <option value="ferreteria">Ferretería / Materiales de Construcción</option>
-                <option value="aceitera">Aceitera / Centro de Servicio</option>
-                <option value="farmacia">Farmacia / Droguería</option>
-                <option value="minisuper">Minisuper / Tienda de Conveniencia</option>
-                <option value="panaderia">Panadería / Pastelería</option>
+                <option value="retail">{L('Retail General (Ropa, Zapatos, Variedades)', 'General Retail (Apparel, Shoes, Variety)')}</option>
+                <option value="ferreteria">{L('Ferretería / Materiales de Construcción', 'Hardware Store / Building Materials')}</option>
+                <option value="aceitera">{L('Aceitera / Centro de Servicio', 'Auto Lubrication / Service Center')}</option>
+                <option value="farmacia">{L('Farmacia / Droguería', 'Pharmacy / Drugstore')}</option>
+                <option value="minisuper">{L('Minisuper / Tienda de Conveniencia', 'Mini-Market / Convenience Store')}</option>
+                <option value="panaderia">{L('Panadería / Pastelería', 'Bakery / Pastry Shop')}</option>
               </select>
               <p className="text-[11px] text-slate-400 mt-1">
-                Ajusta las categorías, unidades de medida y atributos por defecto del inventario.
+                {L('Ajusta las categorías, unidades de medida y atributos por defecto del inventario.', 'Adjusts default inventory categories, units of measure, and product attributes.')}
               </p>
             </div>
 
             <div>
               <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                Número de NIT <span className="text-rose-500">*</span>
+                {L('Número de NIT', `${taxIdLabel} Number`)} <span className="text-rose-500">*</span>
               </label>
               <input
                 type="text"
@@ -1517,7 +1638,7 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
 
             <div>
               <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                País <span className="text-rose-500">*</span>
+                {L('País', 'Country')} <span className="text-rose-500">*</span>
               </label>
               <select
                 value={companyForm.pais}
@@ -1525,8 +1646,8 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
                 className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:bg-white focus:border-indigo-600 focus:outline-none transition-all shadow-inner cursor-pointer"
               >
                 <option value="GT">🇬🇹 Guatemala</option>
-                <option value="MX">🇲🇽 México</option>
-                <option value="US">🇺🇸 Estados Unidos</option>
+                <option value="MX">🇲🇽 {L('México', 'Mexico')}</option>
+                <option value="US">🇺🇸 {L('Estados Unidos', 'United States')}</option>
                 <option value="SV">🇸🇻 El Salvador</option>
                 <option value="HN">🇭🇳 Honduras</option>
                 <option value="CR">🇨🇷 Costa Rica</option>
@@ -1535,15 +1656,15 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
 
             <div>
               <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                Idioma del Sistema
+                {L('Idioma del Sistema', 'System Language')}
               </label>
               <select
-                value={companyForm.idioma}
-                onChange={(e) => setCompanyForm({ ...companyForm, idioma: e.target.value })}
+                value={lang}
+                onChange={(e) => handleSelectSystemLang(e.target.value as 'es' | 'en')}
                 className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:bg-white focus:border-indigo-600 focus:outline-none transition-all shadow-inner cursor-pointer"
               >
-                <option value="es">Español (Guatemala / Latam)</option>
-                <option value="en">English (United States)</option>
+                <option value="es">Español (GTQ • NIT • SAT)</option>
+                <option value="en">English (USD • Tax ID • International)</option>
               </select>
             </div>
 
@@ -1551,20 +1672,20 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
               <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5 flex items-center justify-between">
                 <span className="flex items-center gap-1.5">
                   <Clock className="w-3.5 h-3.5 text-indigo-600" />
-                  Formato de Hora del Sistema
+                  {L('Formato de Hora del Sistema', 'System Time Format')}
                 </span>
-                <span className="text-[10px] text-indigo-600 font-bold">12h y 24h</span>
+                <span className="text-[10px] text-indigo-600 font-bold">{L('12h y 24h', '12h & 24h')}</span>
               </label>
               <select
                 value={timeFormat}
                 onChange={(e) => setTimeFormat(e.target.value as '12h' | '24h')}
                 className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:bg-white focus:border-indigo-600 focus:outline-none transition-all shadow-inner cursor-pointer"
               >
-                <option value="12h">Formato 12 Horas (AM / PM — ej: 08:30 AM / 05:45 PM)</option>
-                <option value="24h">Formato 24 Horas (Militar / Estándar — ej: 08:30 / 17:45)</option>
+                <option value="12h">{L('Formato 12 Horas (AM / PM — ej: 08:30 AM / 05:45 PM)', '12-Hour Format (AM / PM — e.g., 08:30 AM / 05:45 PM)')}</option>
+                <option value="24h">{L('Formato 24 Horas (Militar / Estándar — ej: 08:30 / 17:45)', '24-Hour Format (Military / Standard — e.g., 08:30 / 17:45)')}</option>
               </select>
               <p className="text-[11px] text-slate-400 mt-1">
-                Aplica en vivo a Kiosco de Marcaje, Reloj Checador, Turnos de RRHH, Encabezados y Tickets POS.
+                {L('Aplica en vivo a Kiosco de Marcaje, Reloj Checador, Turnos de RRHH, Encabezados y Tickets POS.', 'Applies live to Time Clock Kiosk, Attendance, HR Shifts, Headers, and POS Receipts.')}
               </p>
             </div>
 
@@ -1572,22 +1693,22 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
             <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-3">
               <span className="text-xs font-bold text-slate-700 uppercase tracking-wider block flex items-center gap-1.5">
                 <Clock className="w-3.5 h-3.5 text-indigo-600" />
-                Horario Comercial Predeterminado (Apertura & Cierre)
+                {L('Horario Comercial Predeterminado (Apertura & Cierre)', 'Default Business Hours (Open & Close)')}
               </span>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <SpecificTimePicker
-                  label="Hora de Apertura General"
+                  label={L('Hora de Apertura General', 'General Opening Time')}
                   value={companyForm.hora_apertura}
                   onChange={(val) => setCompanyForm({ ...companyForm, hora_apertura: val })}
-                  helperText="Apertura diaria oficial"
+                  helperText={L('Apertura diaria oficial', 'Official daily opening')}
                 />
 
                 <SpecificTimePicker
-                  label="Hora de Cierre General"
+                  label={L('Hora de Cierre General', 'General Closing Time')}
                   value={companyForm.hora_cierre}
                   onChange={(val) => setCompanyForm({ ...companyForm, hora_cierre: val })}
-                  helperText="Cierre comercial oficial"
+                  helperText={L('Cierre comercial oficial', 'Official daily closing')}
                 />
               </div>
             </div>
@@ -1597,12 +1718,12 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold text-slate-700 uppercase tracking-wider block flex items-center gap-1.5">
                   <MapPin className="w-3.5 h-3.5 text-indigo-600" />
-                  Geocerca & Validación de Presencia Física (Reloj Checador)
+                  {L('Geocerca & Validación de Presencia Física (Reloj Checador)', 'Geofencing & Physical Presence Verification (Time Clock)')}
                 </span>
                 <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
                   companyForm.geocerca_activa ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-600'
                 }`}>
-                  {companyForm.geocerca_activa ? 'Activa' : 'Inactiva'}
+                  {companyForm.geocerca_activa ? trStatus('Activo') : trStatus('Inactivo')}
                 </span>
               </div>
 
@@ -1614,14 +1735,17 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
                     onChange={(e) => setCompanyForm({ ...companyForm, geocerca_activa: e.target.checked })}
                     className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
                   />
-                  <span>Exigir presencia física obligatoria en sucursal para marcar asistencia</span>
+                  <span>{L('Exigir presencia física obligatoria en sucursal para marcar asistencia', 'Require mandatory on-site branch presence to clock in/out')}</span>
                 </label>
                 <p className="text-[11px] text-slate-500 pl-6">
-                  Si un colaborador intenta marcar entrada o salida desde su casa o fuera de la empresa, el sistema bloqueará el registro automáticamente hasta que ingrese al radio de su lugar de trabajo.
+                  {L(
+                    'Si un colaborador intenta marcar entrada o salida desde su casa o fuera de la empresa, el sistema bloqueará el registro automáticamente hasta que ingrese al radio de su lugar de trabajo.',
+                    'If an employee attempts to clock in or out from home or outside the branch, the system automatically blocks the entry until they enter the workplace radius.'
+                  )}
                 </p>
 
                 <div className="pl-6 pt-2 flex items-center gap-4">
-                  <span className="text-[11px] font-bold text-slate-700">Radio de Cobertura Permitido:</span>
+                  <span className="text-[11px] font-bold text-slate-700">{L('Radio de Cobertura Permitido:', 'Allowed Coverage Radius:')}</span>
                   <div className="flex items-center gap-1.5">
                     {[30, 50, 100].map((meters) => (
                       <button
@@ -1634,7 +1758,7 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
                             : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-100'
                         }`}
                       >
-                        {meters} metros {meters === 50 ? '(Recomendado)' : ''}
+                        {meters} {L('metros', 'meters')} {meters === 50 ? L('(Recomendado)', '(Recommended)') : ''}
                       </button>
                     ))}
                   </div>
@@ -1647,7 +1771,7 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
               <div>
                 <div className="flex items-center justify-between mb-1.5">
                   <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
-                    Régimen Tributario SAT (Guatemala)
+                    {L('Régimen Tributario SAT (Guatemala)', 'Tax Compliance Regime')}
                   </label>
                   <span className={`text-[10px] font-black px-2 py-0.5 rounded-full border ${
                     companyForm.regimen_tributario_gt === 'general'
@@ -1657,10 +1781,10 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
                       : 'bg-amber-50 text-amber-800 border-amber-200'
                   }`}>
                     {companyForm.regimen_tributario_gt === 'general'
-                      ? 'IVA 12% + ISR'
+                      ? L('IVA 12% + ISR', '12% VAT + Income Tax')
                       : companyForm.regimen_tributario_gt === 'pequeno_contribuyente'
-                      ? '5% Monotributo SAT'
-                      : '0% IVA (Informal / Sin Retención)'}
+                      ? L('5% Monotributo SAT', '5% Flat Small Business Tax')
+                      : L('0% IVA (Informal / Sin Retención)', '0% VAT (Tax-Exempt / No Withholding)')}
                   </span>
                 </div>
                 <select
@@ -1668,24 +1792,33 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
                   onChange={(e) => setCompanyForm({ ...companyForm, regimen_tributario_gt: e.target.value })}
                   className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:bg-white focus:border-indigo-600 focus:outline-none transition-all shadow-inner cursor-pointer"
                 >
-                  <option value="general">Régimen General (IVA 12% + ISR)</option>
-                  <option value="pequeno_contribuyente">Pequeño Contribuyente (5% Facturación Simplificada)</option>
-                  <option value="informal">Informal (No Factura Electrónica / 0% IVA)</option>
+                  <option value="general">{L('Régimen General (IVA 12% + ISR)', 'Standard Tax Regime (12% VAT + Income Tax)')}</option>
+                  <option value="pequeno_contribuyente">{L('Pequeño Contribuyente (5% Facturación Simplificada)', 'Small Business Regime (5% Simplified Flat Rate)')}</option>
+                  <option value="informal">{L('Informal (No Factura Electrónica / 0% IVA)', 'Tax-Exempt / Informal (No E-Invoice / 0% VAT)')}</option>
                 </select>
                 <p className="text-[11px] text-slate-500 mt-1.5 leading-relaxed">
                   {companyForm.regimen_tributario_gt === 'general' && (
                     <span className="text-emerald-700 font-medium">
-                      ✓ En POS, Ventas y Libro Diario se desglosa el 12% de IVA Débito Fiscal sobre la base neta (Base = Total / 1.12).
+                      {L(
+                        '✓ En POS, Ventas y Libro Diario se desglosa el 12% de IVA Débito Fiscal sobre la base neta (Base = Total / 1.12).',
+                        '✓ In POS, Sales, and Journal Entries, 12% VAT output tax is itemized over the net base (Base = Total / 1.12).'
+                      )}
                     </span>
                   )}
                   {companyForm.regimen_tributario_gt === 'pequeno_contribuyente' && (
                     <span className="text-purple-700 font-medium">
-                      ✓ El IVA es 0% para el cliente (no genera crédito fiscal). La empresa tributa una tasa plana del 5% SAT.
+                      {L(
+                        '✓ El IVA es 0% para el cliente (no genera crédito fiscal). La empresa tributa una tasa plana del 5% SAT.',
+                        '✓ VAT is 0% for the customer (no tax credit generated). The company pays a flat 5% tax rate.'
+                      )}
                     </span>
                   )}
                   {companyForm.regimen_tributario_gt === 'informal' && (
                     <span className="text-amber-800 font-medium">
-                      ✓ El sistema opera sin IVA (0%). Las ventas se emiten como comprobantes/tickets directos sin certificación DTE ni retenciones.
+                      {L(
+                        '✓ El sistema opera sin IVA (0%). Las ventas se emiten como comprobantes/tickets directos sin certificación DTE ni retenciones.',
+                        '✓ System operates without VAT (0%). Sales are issued as direct receipts/tickets without E-Invoice certification or tax withholding.'
+                      )}
                     </span>
                   )}
                 </p>
@@ -1693,11 +1826,11 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
             ) : (
               <div>
                 <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                  Régimen Tributario Manual
+                  {L('Régimen Tributario Manual', 'Custom Tax Regime')}
                 </label>
                 <input
                   type="text"
-                  placeholder="Ej. Régimen Simplificado / Tax Exempt"
+                  placeholder={L('Ej. Régimen Simplificado / Tax Exempt', 'e.g., Simplified Regime / Tax-Exempt / LLC')}
                   value={companyForm.regimen_tributario_manual}
                   onChange={(e) => setCompanyForm({ ...companyForm, regimen_tributario_manual: e.target.value })}
                   className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:bg-white focus:border-indigo-600 focus:outline-none transition-all shadow-inner"
@@ -1707,7 +1840,7 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
 
             <div>
               <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                Teléfono Comercial
+                {L('Teléfono Comercial', 'Business Phone')}
               </label>
               <input
                 type="tel"
@@ -1719,7 +1852,7 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
 
             <div>
               <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                Correo Electrónico de Facturación
+                {L('Correo Electrónico de Facturación', 'Billing Email Address')}
               </label>
               <input
                 type="email"
@@ -1731,7 +1864,7 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
 
             <div className="md:col-span-2">
               <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                Dirección Fiscal Completa
+                {L('Dirección Fiscal Completa', 'Full Fiscal / Registered Address')}
               </label>
               <textarea
                 rows={2}
@@ -1748,7 +1881,7 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
               className="px-6 py-2.5 bg-slate-900 hover:bg-slate-800 active:scale-95 text-white rounded-xl text-xs font-black transition-all flex items-center gap-2 shadow-md cursor-pointer"
             >
               <Save className="w-4 h-4" />
-              <span>Guardar Información de Empresa</span>
+              <span>{L('Guardar Información de Empresa', 'Save Company Information')}</span>
             </button>
           </div>
         </form>
@@ -1758,35 +1891,35 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
       {activeTab === 'moneda' && (
         <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 sm:p-8 space-y-6">
           <div className="border-b border-slate-100 pb-4">
-            <h2 className="text-base font-black text-slate-900">Configuración de Moneda y Tipo de Cambio</h2>
+            <h2 className="text-base font-black text-slate-900">{L('Configuración de Moneda y Tipo de Cambio', 'Currency & Exchange Rate Configuration')}</h2>
             <p className="text-xs text-slate-400">
-              Define la divisa de operación principal y las monedas secundarias aceptadas en terminales POS y compras.
+              {L('Define la divisa de operación principal y las monedas secundarias aceptadas en terminales POS y compras.', 'Define your primary operating currency and accepted secondary currencies for POS terminals and purchases.')}
             </p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             <div>
               <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                Moneda Principal del Sistema
+                {L('Moneda Principal del Sistema', 'Primary System Currency')}
               </label>
               <select
                 value={companyForm.moneda_principal}
                 onChange={(e) => setCompanyForm({ ...companyForm, moneda_principal: e.target.value })}
                 className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:bg-white focus:border-indigo-600 focus:outline-none transition-all shadow-inner cursor-pointer"
               >
-                <option value="GTQ">Quetzal Guatemalteco (GTQ - Q)</option>
-                <option value="USD">Dólar Estadounidense (USD - $)</option>
-                <option value="MXN">Peso Mexicano (MXN - $)</option>
+                <option value="GTQ">{L('Quetzal Guatemalteco (GTQ - Q)', 'Guatemalan Quetzal (GTQ)')}</option>
+                <option value="USD">{L('Dólar Estadounidense (USD - $)', 'US Dollar (USD - $)')}</option>
+                <option value="MXN">{L('Peso Mexicano (MXN - $)', 'Mexican Peso (MXN - $)')}</option>
                 <option value="EUR">Euro (EUR - €)</option>
               </select>
               <p className="text-[11px] text-slate-400 mt-1">
-                Moneda oficial de los libros contables e informes de auditoría fiscal ante SAT.
+                {L('Moneda oficial de los libros contables e informes de auditoría fiscal ante SAT.', 'Official currency used for accounting ledgers and tax audit reports.')}
               </p>
             </div>
 
             <div>
               <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                Monedas Secundarias Aceptadas
+                {L('Monedas Secundarias Aceptadas', 'Accepted Secondary Currencies')}
               </label>
               <div className="flex items-center gap-3 p-3 bg-slate-50 border border-slate-200 rounded-xl">
                 <label className="flex items-center gap-2 text-xs font-bold text-slate-700 cursor-pointer">
@@ -1802,19 +1935,19 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
                     }}
                     className="w-4 h-4 text-indigo-600 rounded"
                   />
-                  <span>Dólar Estadounidense (USD - $)</span>
+                  <span>{L('Dólar Estadounidense (USD - $)', 'US Dollar (USD - $)')}</span>
                 </label>
               </div>
             </div>
 
             <div>
               <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5 flex items-center justify-between">
-                <span>Tasa de Cambio Manual / Fija</span>
-                <span className="text-[10px] text-indigo-600 font-bold">Base: Banco de Guatemala</span>
+                <span>{L('Tasa de Cambio Manual / Fija', 'Manual / Fixed Exchange Rate')}</span>
+                <span className="text-[10px] text-indigo-600 font-bold">{L('Base: Banco de Guatemala', 'Base: Central Bank Reference')}</span>
               </label>
               <div className="relative">
                 <span className="absolute left-3.5 top-1/2 -translate-y-1/2 font-mono font-bold text-slate-500 text-xs">
-                  Q
+                  {currencySymbol}
                 </span>
                 <input
                   type="number"
@@ -1825,7 +1958,7 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
                 />
               </div>
               <p className="text-[11px] text-slate-400 mt-1">
-                Tasa fija utilizada en el módulo de compras para calcular costos de productos importados con el scraper.
+                {L('Tasa fija utilizada en el módulo de compras para calcular costos de productos importados con el scraper.', 'Fixed rate used in the purchasing module to calculate landed costs for imported products.')}
               </p>
             </div>
           </div>
@@ -1837,7 +1970,7 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
               className="px-6 py-2.5 bg-slate-900 hover:bg-slate-800 active:scale-95 text-white rounded-xl text-xs font-black transition-all flex items-center gap-2 shadow-md cursor-pointer"
             >
               <Save className="w-4 h-4" />
-              <span>Guardar Configuración Monetaria</span>
+              <span>{L('Guardar Configuración Monetaria', 'Save Currency Settings')}</span>
             </button>
           </div>
         </div>
@@ -1848,14 +1981,14 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
         <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 sm:p-8 space-y-6">
           <div className="border-b border-slate-100 pb-4 flex items-center justify-between">
             <div>
-              <h2 className="text-base font-black text-slate-900">Facturación Electrónica en Línea (FEL)</h2>
+              <h2 className="text-base font-black text-slate-900">{L('Facturación Electrónica en Línea (FEL)', 'Electronic Invoicing (E-Invoice)')}</h2>
               <p className="text-xs text-slate-400">
-                Conexión oficial con el certificador autorizado de la SAT (Infile S.A.) para emisión de DTEs.
+                {L('Conexión oficial con el certificador autorizado de la SAT (Infile S.A.) para emisión de DTEs.', 'Official connection with the authorized Tax Authority certifier (Infile S.A.) for E-Invoice issuance.')}
               </p>
             </div>
             <span className="px-3 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-bold rounded-full flex items-center gap-1.5">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              Certificador Activo
+              {L('Certificador Activo', 'Active Certifier')}
             </span>
           </div>
 
@@ -1863,17 +1996,17 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
           <div className="p-5 bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-2xl space-y-2">
             <div className="flex items-center gap-2 text-amber-900 font-black text-xs uppercase tracking-wider">
               <HelpCircle className="w-4 h-4 text-amber-600 shrink-0" />
-              <span>Instrucciones Oficiales de Autorización ante la SAT:</span>
+              <span>{L('Instrucciones Oficiales de Autorización ante la SAT:', 'Official Tax Authority Authorization Instructions:')}</span>
             </div>
             <div className="text-xs text-amber-900 space-y-1.5 pl-6">
-              <p>Para emitir facturas electrónicas válidas en Guatemala, debe autorizarnos ante la SAT:</p>
+              <p>{L('Para emitir facturas electrónicas válidas en Guatemala, debe autorizarnos ante la SAT:', 'To issue valid Electronic Invoices, you must authorize the certifier with the Tax Authority:')}</p>
               <ol className="list-decimal space-y-1 pl-4 font-medium text-amber-800">
-                <li>Ingrese al portal de su <strong>Agencia Virtual SAT</strong> de Guatemala.</li>
-                <li>Diríjase a la sección: <em>Servicios &gt; Factura Electrónica &gt; Acreditación de Certificadores</em>.</li>
-                <li>Afilie el NIT de Infile S.A.: <strong className="font-mono bg-amber-100 px-1 py-0.5 rounded text-amber-950 font-black">12521337</strong>.</li>
+                <li>{L('Ingrese al portal de su Agencia Virtual SAT de Guatemala.', 'Log in to your Tax Authority Virtual Portal.')}</li>
+                <li>{L('Diríjase a la sección: Servicios > Factura Electrónica > Acreditación de Certificadores.', 'Navigate to: Services > Electronic Invoice > Certifier Accreditation.')}</li>
+                <li>{L(`Afilie el ${taxIdLabel} de Infile S.A.: `, `Register Infile S.A. ${taxIdLabel}: `)}<strong className="font-mono bg-amber-100 px-1 py-0.5 rounded text-amber-950 font-black">12521337</strong>.</li>
               </ol>
               <p className="pt-1 text-[11px] text-amber-700">
-                ✓ Una vez realizada la afiliación, las facturas emitidas desde el Punto de Venta (POS) se certificarán inmediatamente.
+                {L('✓ Una vez realizada la afiliación, las facturas emitidas desde el Punto de Venta (POS) se certificarán inmediatamente.', '✓ Once accredited, invoices issued from the Point of Sale (POS) will be certified immediately.')}
               </p>
             </div>
           </div>
@@ -1882,11 +2015,11 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
           <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-4">
             <div className="flex items-center justify-between">
               <div>
-                <h4 className="text-xs font-black text-slate-900">Credenciales del Certificador Infile</h4>
+                <h4 className="text-xs font-black text-slate-900">{L('Credenciales del Certificador Infile', 'E-Invoice Certifier Credentials (Infile)')}</h4>
                 <p className="text-[11px] text-slate-500">
                   {companyForm.fel_own_credentials
-                    ? 'Modo Privado: Utilizando credenciales exclusivas asignadas por Infile a esta empresa.'
-                    : 'Modo Global: Gestionado automáticamente por la cuenta maestra de IntegraPro S.A.'}
+                    ? L('Modo Privado: Utilizando credenciales exclusivas asignadas por Infile a esta empresa.', 'Private Mode: Using dedicated credentials assigned to this company.')
+                    : L('Modo Global: Gestionado automáticamente por la cuenta maestra de IntegraPro S.A.', 'Global Mode: Automatically managed by the master IntegraPro account.')}
                 </p>
               </div>
 
@@ -1897,7 +2030,7 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
                   onChange={(e) => setCompanyForm({ ...companyForm, fel_own_credentials: e.target.checked })}
                   className="w-4 h-4 text-indigo-600 rounded"
                 />
-                <span>Habilitar Credenciales Propias</span>
+                <span>{L('Habilitar Credenciales Propias', 'Enable Custom Credentials')}</span>
               </label>
             </div>
 
@@ -1905,7 +2038,7 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-3 border-t border-slate-200">
                 <div>
                   <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">
-                    Usuario Infile
+                    {L('Usuario Infile', 'Certifier Username')}
                   </label>
                   <input
                     type="text"
@@ -1917,7 +2050,7 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
 
                 <div>
                   <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">
-                    Llave de Certificación
+                    {L('Llave de Certificación', 'Certification Key')}
                   </label>
                   <div className="relative">
                     <input
@@ -1938,7 +2071,7 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
 
                 <div>
                   <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">
-                    Frase de Identificación
+                    {L('Frase de Identificación', 'Identification Phrase')}
                   </label>
                   <input
                     type="password"
@@ -1958,7 +2091,7 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
               className="px-6 py-2.5 bg-slate-900 hover:bg-slate-800 active:scale-95 text-white rounded-xl text-xs font-black transition-all flex items-center gap-2 shadow-md cursor-pointer"
             >
               <Save className="w-4 h-4" />
-              <span>Guardar Configuración FEL</span>
+              <span>{L('Guardar Configuración FEL', 'Save E-Invoice Settings')}</span>
             </button>
           </div>
         </div>
@@ -1976,8 +2109,8 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
                   NEO
                 </div>
                 <div>
-                  <h3 className="text-sm font-black text-slate-900">Pasarela Neonet (VisaNet Guatemala)</h3>
-                  <p className="text-[11px] text-slate-400">Cobro con tarjetas Visa y Mastercard en punto de venta y enlace web</p>
+                  <h3 className="text-sm font-black text-slate-900">{L('Pasarela Neonet (VisaNet Guatemala)', 'Neonet Gateway (VisaNet)')}</h3>
+                  <p className="text-[11px] text-slate-400">{L('Cobro con tarjetas Visa y Mastercard en punto de venta y enlace web', 'Visa and Mastercard payment processing at POS and payment links')}</p>
                 </div>
               </div>
 
@@ -1988,26 +2121,26 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
                   onChange={(e) => setCompanyForm({ ...companyForm, neonet_habilitado: e.target.checked })}
                   className="w-4 h-4 text-indigo-600 rounded"
                 />
-                <span>Habilitar Neonet</span>
+                <span>{L('Habilitar Neonet', 'Enable Neonet')}</span>
               </label>
             </div>
 
             {companyForm.neonet_habilitado && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
                 <div>
-                  <label className="block font-bold text-slate-700 uppercase mb-1">Ambiente de Operación</label>
+                  <label className="block font-bold text-slate-700 uppercase mb-1">{L('Ambiente de Operación', 'Operating Environment')}</label>
                   <select
                     value={companyForm.neonet_environment}
                     onChange={(e) => setCompanyForm({ ...companyForm, neonet_environment: e.target.value as any })}
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold"
                   >
-                    <option value="test">Modo Sandbox (Pruebas)</option>
-                    <option value="prod">Modo Producción (Cobro Real)</option>
+                    <option value="test">{L('Modo Sandbox (Pruebas)', 'Sandbox Mode (Testing)')}</option>
+                    <option value="prod">{L('Modo Producción (Cobro Real)', 'Production Mode (Live Charges)')}</option>
                   </select>
                 </div>
 
                 <div>
-                  <label className="block font-bold text-slate-700 uppercase mb-1">Merchant ID Neonet</label>
+                  <label className="block font-bold text-slate-700 uppercase mb-1">{L('Merchant ID Neonet', 'Neonet Merchant ID')}</label>
                   <input
                     type="text"
                     value={companyForm.neonet_merchant_id}
@@ -2017,7 +2150,7 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
                 </div>
 
                 <div>
-                  <label className="block font-bold text-slate-700 uppercase mb-1">Usuario de API</label>
+                  <label className="block font-bold text-slate-700 uppercase mb-1">{L('Usuario de API', 'API Username')}</label>
                   <input
                     type="text"
                     value={companyForm.neonet_user}
@@ -2027,7 +2160,7 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
                 </div>
 
                 <div>
-                  <label className="block font-bold text-slate-700 uppercase mb-1">Contraseña de API</label>
+                  <label className="block font-bold text-slate-700 uppercase mb-1">{L('Contraseña de API', 'API Password')}</label>
                   <div className="relative">
                     <input
                       type={showNeonetPass ? 'text' : 'password'}
@@ -2056,8 +2189,8 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
                   BAC
                 </div>
                 <div>
-                  <h3 className="text-sm font-black text-slate-900">Pasarela BAC Credomatic (Comprapag)</h3>
-                  <p className="text-[11px] text-slate-400">Procesamiento de pagos para tarjetas AMEX, Visa y Cuotas Credomatic</p>
+                  <h3 className="text-sm font-black text-slate-900">{L('Pasarela BAC Credomatic (Comprapag)', 'BAC Credomatic Gateway (Comprapag)')}</h3>
+                  <p className="text-[11px] text-slate-400">{L('Procesamiento de pagos para tarjetas AMEX, Visa y Cuotas Credomatic', 'Payment processing for AMEX, Visa, and Credomatic installment plans')}</p>
                 </div>
               </div>
 
@@ -2068,26 +2201,26 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
                   onChange={(e) => setCompanyForm({ ...companyForm, bac_habilitado: e.target.checked })}
                   className="w-4 h-4 text-rose-600 rounded"
                 />
-                <span>Habilitar BAC</span>
+                <span>{L('Habilitar BAC', 'Enable BAC')}</span>
               </label>
             </div>
 
             {companyForm.bac_habilitado && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
                 <div>
-                  <label className="block font-bold text-slate-700 uppercase mb-1">Ambiente de Operación</label>
+                  <label className="block font-bold text-slate-700 uppercase mb-1">{L('Ambiente de Operación', 'Operating Environment')}</label>
                   <select
                     value={companyForm.bac_environment}
                     onChange={(e) => setCompanyForm({ ...companyForm, bac_environment: e.target.value as any })}
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold"
                   >
-                    <option value="test">Modo Sandbox (Pruebas)</option>
-                    <option value="prod">Modo Producción (Cobro Real)</option>
+                    <option value="test">{L('Modo Sandbox (Pruebas)', 'Sandbox Mode (Testing)')}</option>
+                    <option value="prod">{L('Modo Producción (Cobro Real)', 'Production Mode (Live Charges)')}</option>
                   </select>
                 </div>
 
                 <div>
-                  <label className="block font-bold text-slate-700 uppercase mb-1">Merchant ID BAC</label>
+                  <label className="block font-bold text-slate-700 uppercase mb-1">{L('Merchant ID BAC', 'BAC Merchant ID')}</label>
                   <input
                     type="text"
                     value={companyForm.bac_merchant_id}
@@ -2135,7 +2268,7 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
               className="px-6 py-2.5 bg-slate-900 hover:bg-slate-800 active:scale-95 text-white rounded-xl text-xs font-black transition-all flex items-center gap-2 shadow-md cursor-pointer"
             >
               <Save className="w-4 h-4" />
-              <span>Guardar Pasarelas de Pago</span>
+              <span>{L('Guardar Pasarelas de Pago', 'Save Payment Gateways')}</span>
             </button>
           </div>
         </div>
@@ -2145,24 +2278,24 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
       {activeTab === 'modulos' && (
         <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 sm:p-8 space-y-6">
           <div className="border-b border-slate-100 pb-4">
-            <h2 className="text-base font-black text-slate-900">Módulos del Sistema IntegraPro</h2>
+            <h2 className="text-base font-black text-slate-900">{L('Módulos del Sistema IntegraPro', 'IntegraPro System Modules')}</h2>
             <p className="text-xs text-slate-400">
-              Activa o desactiva módulos y funciones avanzadas según el plan contratado por la empresa.
+              {L('Activa o desactiva módulos y funciones avanzadas según el plan contratado por la empresa.', 'Enable or disable advanced modules and features based on the company subscription plan.')}
             </p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {[
-              { id: 'sales', label: 'Ventas y Facturación FEL', desc: 'Emisión de facturas y tickets DTE con Infile.' },
-              { id: 'inventory', label: 'Inventario & Multibodega', desc: 'Kardex, ubicaciones y traslados de stock.' },
-              { id: 'accounting', label: 'Contabilidad y Libro Diario', desc: 'Libro diario, mayores y fiscalidad SAT.' },
-              { id: 'hr', label: 'Recursos Humanos & Nóminas', desc: 'Asistencia biométrica, planillas y liquidaciones Art. 82.' },
-              { id: 'purchases', label: 'Compras y Proveedores', desc: 'Facturas de proveedores, OCR y cálculo de costos.' },
-              { id: 'ai_assistant', label: 'Asistente IA & Scraper', desc: 'Extracción de productos en Shein/Temu y OCR de facturas.' },
-              { id: 'fel', label: 'Certificación FEL Automatizada', desc: 'Firma electrónica y timbrado en tiempo real.' },
-              { id: 'neonet', label: 'Pasarela Neonet (Visa/Mastercard)', desc: 'Terminal POS y cobro con tarjeta.' },
-              { id: 'bac', label: 'Pasarela BAC Credomatic', desc: 'Cuotas y procesamiento Compass.' },
-              { id: 'live_sales', label: 'TikTok Live & Social Commerce (Add-on)', desc: 'Canastas abiertas en vivo, reserva de stock en tiempo real, precios de remate y cobros unificados por WhatsApp.' },
+              { id: 'sales', label: L('Ventas y Facturación FEL', 'Sales & E-Invoicing'), desc: L('Emisión de facturas y tickets DTE con Infile.', 'Issue certified electronic invoices and POS receipts.') },
+              { id: 'inventory', label: L('Inventario & Multibodega', 'Inventory & Multi-Warehouse'), desc: L('Kardex, ubicaciones y traslados de stock.', 'Stock ledger, warehouse locations, and inventory transfers.') },
+              { id: 'accounting', label: L('Contabilidad y Libro Diario', 'Accounting & Journal Entries'), desc: L('Libro diario, mayores y fiscalidad SAT.', 'General ledger, journal entries, and tax compliance reports.') },
+              { id: 'hr', label: L('Recursos Humanos & Nóminas', 'Human Resources & Payroll'), desc: L('Asistencia biométrica, planillas y liquidaciones Art. 82.', 'Biometric attendance, payroll runs, and severance calculations.') },
+              { id: 'purchases', label: L('Compras y Proveedores', 'Purchasing & Suppliers'), desc: L('Facturas de proveedores, OCR y cálculo de costos.', 'Supplier bills, OCR scanning, and landed cost calculation.') },
+              { id: 'ai_assistant', label: L('Asistente IA & Scraper', 'AI Assistant & Product Scraper'), desc: L('Extracción de productos en Shein/Temu y OCR de facturas.', 'Product extraction from Shein/Temu and invoice OCR.') },
+              { id: 'fel', label: L('Certificación FEL Automatizada', 'Automated E-Invoice Certification'), desc: L('Firma electrónica y timbrado en tiempo real.', 'Real-time digital signature and electronic tax stamping.') },
+              { id: 'neonet', label: L('Pasarela Neonet (Visa/Mastercard)', 'Neonet Gateway (Visa/Mastercard)'), desc: L('Terminal POS y cobro con tarjeta.', 'POS terminal and card payment processing.') },
+              { id: 'bac', label: L('Pasarela BAC Credomatic', 'BAC Credomatic Gateway'), desc: L('Cuotas y procesamiento Compass.', 'Installments and Compass payment processing.') },
+              { id: 'live_sales', label: L('TikTok Live & Social Commerce (Add-on)', 'TikTok Live & Social Commerce (Add-on)'), desc: L('Canastas abiertas en vivo, reserva de stock en tiempo real, precios de remate y cobros unificados por WhatsApp.', 'Live open carts, real-time stock reservation, flash sale pricing, and unified WhatsApp checkout.') },
             ].map((mod) => (
               <div key={mod.id} className="p-4 bg-slate-50 border border-slate-200 rounded-2xl flex items-start justify-between gap-3">
                 <div className="space-y-1">
@@ -2186,7 +2319,7 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
               className="px-6 py-2.5 bg-slate-900 hover:bg-slate-800 active:scale-95 text-white rounded-xl text-xs font-black transition-all flex items-center gap-2 shadow-md cursor-pointer"
             >
               <Save className="w-4 h-4" />
-              <span>Guardar Módulos Activos</span>
+              <span>{L('Guardar Módulos Activos', 'Save Active Modules')}</span>
             </button>
           </div>
         </div>
@@ -2197,19 +2330,19 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
         <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 sm:p-8 space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
             <div>
-              <h2 className="text-base font-black text-slate-900">Directorio de Empresas (Multi-Tenant)</h2>
+              <h2 className="text-base font-black text-slate-900">{L('Directorio de Empresas (Multi-Tenant)', 'Company Directory (Multi-Tenant)')}</h2>
               <p className="text-xs text-slate-400">
-                Administración centralizada de empresas registradas en la plataforma IntegraPro SaaS.
+                {L('Administración centralizada de empresas registradas en la plataforma IntegraPro SaaS.', 'Centralized management of companies registered on the IntegraPro SaaS platform.')}
               </p>
             </div>
 
             <button
               type="button"
-              onClick={() => showToast('Modal de registro de nueva empresa abierto.')}
+              onClick={() => showToast(L('Modal de registro de nueva empresa abierto.', 'New company registration modal opened.'))}
               className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm cursor-pointer"
             >
               <Plus className="w-4 h-4" />
-              <span>Registrar Nueva Empresa</span>
+              <span>{L('Registrar Nueva Empresa', 'Register New Company')}</span>
             </button>
           </div>
 
@@ -2218,12 +2351,12 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
               <thead className="bg-slate-50 text-slate-500 uppercase tracking-wider font-semibold border-b border-slate-200">
                 <tr>
                   <th className="py-3 px-4">ID</th>
-                  <th className="py-3 px-4">Empresa / Razón Social</th>
-                  <th className="py-3 px-4">NIT</th>
-                  <th className="py-3 px-4">Régimen SAT</th>
-                  <th className="py-3 px-4">Plan SaaS</th>
-                  <th className="py-3 px-4 text-center">Estado</th>
-                  <th className="py-3 px-4 text-right">Acción</th>
+                  <th className="py-3 px-4">{L('Empresa / Razón Social', 'Company / Legal Name')}</th>
+                  <th className="py-3 px-4">{taxIdLabel}</th>
+                  <th className="py-3 px-4">{L('Régimen SAT', 'Tax Regime')}</th>
+                  <th className="py-3 px-4">{L('Plan SaaS', 'SaaS Plan')}</th>
+                  <th className="py-3 px-4 text-center">{L('Estado', 'Status')}</th>
+                  <th className="py-3 px-4 text-right">{L('Acción', 'Action')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 font-medium">
@@ -2234,8 +2367,8 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
                       <div className="font-bold text-slate-900">{emp.nombre}</div>
                       <div className="text-[10px] text-slate-400">{emp.razon_social}</div>
                     </td>
-                    <td className="py-3.5 px-4 font-mono font-semibold text-slate-700">{emp.nit}</td>
-                    <td className="py-3.5 px-4 text-slate-600">{emp.regimen}</td>
+                    <td className="py-3.5 px-4 font-mono font-semibold text-slate-700">{trTaxId(emp.nit)}</td>
+                    <td className="py-3.5 px-4 text-slate-600">{trRegime(emp.regimen)}</td>
                     <td className="py-3.5 px-4">
                       <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
                         {emp.plan.toUpperCase()}
@@ -2243,13 +2376,13 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
                     </td>
                     <td className="py-3.5 px-4 text-center">
                       <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                        Activa
+                        {trStatus('Activo')}
                       </span>
                     </td>
                     <td className="py-3.5 px-4 text-right">
                       {activeEmpresaId === emp.id ? (
                         <span className="px-3 py-1 bg-emerald-100 text-emerald-800 text-[11px] font-black rounded-lg">
-                          Activa Actual
+                          {L('Activa Actual', 'Currently Active')}
                         </span>
                       ) : isOwnerOperableEmpresa(emp.id) ? (
                         <button
@@ -2257,11 +2390,11 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
                           onClick={() => handleSwitchEmpresa(emp)}
                           className="px-3 py-1 bg-slate-900 hover:bg-slate-800 text-white text-[11px] font-bold rounded-lg transition-all cursor-pointer"
                         >
-                          Seleccionar
+                          {L('Seleccionar', 'Select')}
                         </button>
                       ) : (
                         <span className="px-2.5 py-1 bg-slate-100 text-slate-500 text-[10px] font-bold rounded-lg border border-slate-200">
-                          🔒 Privado
+                          {L('🔒 Privado', '🔒 Private')}
                         </span>
                       )}
                     </td>
@@ -2282,10 +2415,10 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
               <div>
                 <h2 className="text-base font-black text-slate-900 flex items-center gap-2">
                   <Users className="w-5 h-5 text-indigo-600" />
-                  Directorio de Usuarios del Sistema (UserResource)
+                  {L('Directorio de Usuarios del Sistema', 'System Users Directory')}
                 </h2>
                 <p className="text-xs text-slate-400">
-                  Control de cuentas, contraseñas, asignación de sucursal y roles operativos
+                  {L('Control de cuentas, contraseñas, asignación de sucursal y roles operativos', 'Manage accounts, passwords, branch assignments, and operational roles')}
                 </p>
               </div>
 
@@ -2308,37 +2441,37 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
                 className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white font-bold text-xs rounded-xl transition-all flex items-center gap-2 shadow-sm shadow-indigo-600/20 cursor-pointer self-start sm:self-auto"
               >
                 <UserPlus className="w-4 h-4" />
-                <span>Nuevo Usuario</span>
+                <span>{L('Nuevo Usuario', 'New User')}</span>
               </button>
             </div>
 
             {/* Resumen Rápido de Cuentas */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               <div className="p-3.5 bg-slate-50 border border-slate-200/80 rounded-2xl">
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Total Cuentas</span>
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{L('Total Cuentas', 'Total Accounts')}</span>
                 <p className="text-xl font-black text-slate-900 mt-0.5">{usuarios.length}</p>
-                <span className="text-[10px] text-emerald-600 font-semibold">100% autorizadas</span>
+                <span className="text-[10px] text-emerald-600 font-semibold">{L('100% autorizadas', '100% authorized')}</span>
               </div>
               <div className="p-3.5 bg-slate-50 border border-slate-200/80 rounded-2xl">
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Super Admins</span>
                 <p className="text-xl font-black text-indigo-700 mt-0.5">
                   {usuarios.filter(u => u.role === 'Super Admin').length}
                 </p>
-                <span className="text-[10px] text-slate-400">Acceso irrestricto</span>
+                <span className="text-[10px] text-slate-400">{L('Acceso irrestricto', 'Unrestricted access')}</span>
               </div>
               <div className="p-3.5 bg-slate-50 border border-slate-200/80 rounded-2xl">
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Cajeros POS</span>
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{L('Cajeros POS', 'POS Cashiers')}</span>
                 <p className="text-xl font-black text-emerald-700 mt-0.5">
                   {usuarios.filter(u => u.role === 'Cajero / Operador POS').length}
                 </p>
-                <span className="text-[10px] text-slate-400">En puntos de cobro</span>
+                <span className="text-[10px] text-slate-400">{L('En puntos de cobro', 'At checkout counters')}</span>
               </div>
               <div className="p-3.5 bg-slate-50 border border-slate-200/80 rounded-2xl">
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Activos Hoy</span>
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{L('Activos Hoy', 'Active Today')}</span>
                 <p className="text-xl font-black text-cyan-700 mt-0.5">
                   {usuarios.filter(u => u.estado === 'Activo').length}
                 </p>
-                <span className="text-[10px] text-cyan-600 font-semibold">Sesiones validadas</span>
+                <span className="text-[10px] text-cyan-600 font-semibold">{L('Sesiones validadas', 'Verified sessions')}</span>
               </div>
             </div>
 
@@ -2348,13 +2481,13 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
                 <table className="w-full text-left text-xs">
                   <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase text-[10px] tracking-wider">
                     <tr>
-                      <th className="py-3 px-4">Usuario / Email</th>
-                      <th className="py-3 px-4">Rol Asignado</th>
-                      <th className="py-3 px-4">Sucursal</th>
-                      <th className="py-3 px-4">Empleado Vinculado</th>
-                      <th className="py-3 px-4">Último Acceso</th>
-                      <th className="py-3 px-4 text-center">Estado</th>
-                      <th className="py-3 px-4 text-center">Acciones</th>
+                      <th className="py-3 px-4">{L('Usuario / Email', 'User / Email')}</th>
+                      <th className="py-3 px-4">{L('Rol Asignado', 'Assigned Role')}</th>
+                      <th className="py-3 px-4">{L('Sucursal', 'Branch')}</th>
+                      <th className="py-3 px-4">{L('Empleado Vinculado', 'Linked Employee')}</th>
+                      <th className="py-3 px-4">{L('Último Acceso', 'Last Login')}</th>
+                      <th className="py-3 px-4 text-center">{L('Estado', 'Status')}</th>
+                      <th className="py-3 px-4 text-center">{L('Acciones', 'Actions')}</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 font-medium">
@@ -2381,21 +2514,21 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
                               ? 'bg-purple-50 text-purple-700 border border-purple-200'
                               : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                           }`}>
-                            {u.role}
+                            {trRole(u.role)}
                           </span>
                         </td>
-                        <td className="py-3.5 px-4 text-slate-700 font-semibold">{u.sucursal_nombre}</td>
+                        <td className="py-3.5 px-4 text-slate-700 font-semibold">{trBranch(u.sucursal_nombre)}</td>
                         <td className="py-3.5 px-4">
                           {u.empleado_nombre ? (
                             <div>
                               <p className="text-slate-800 font-bold">{u.empleado_nombre}</p>
-                              <p className="text-[10px] text-slate-400 font-mono">DPI: {u.dpi}</p>
+                              <p className="text-[10px] text-slate-400 font-mono">{L('DPI', 'ID')}: {u.dpi}</p>
                             </div>
                           ) : (
-                            <span className="text-slate-400 italic text-[11px]">No vinculado</span>
+                            <span className="text-slate-400 italic text-[11px]">{L('No vinculado', 'Not linked')}</span>
                           )}
                         </td>
-                        <td className="py-3.5 px-4 text-slate-500 font-mono text-[11px]">{u.ultimo_acceso}</td>
+                        <td className="py-3.5 px-4 text-slate-500 font-mono text-[11px]">{trLastAccess(u.ultimo_acceso)}</td>
                         <td className="py-3.5 px-4 text-center">
                           <button
                             type="button"
@@ -2406,7 +2539,7 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
                                 : 'bg-slate-100 text-slate-500 border border-slate-300 hover:bg-slate-200'
                             }`}
                           >
-                            {u.estado}
+                            {trStatus(u.estado)}
                           </button>
                         </td>
                         <td className="py-3.5 px-4 text-center">
@@ -2428,15 +2561,15 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
                                 setShowNewUserModal(true);
                               }}
                               className="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors cursor-pointer"
-                              title="Editar Usuario"
+                              title={L('Editar Usuario', 'Edit User')}
                             >
                               <Edit3 className="w-3.5 h-3.5" />
                             </button>
                             <button
                               type="button"
-                              onClick={() => showToast(`Enlace para restablecer contraseña enviado al correo ${u.email}`)}
+                              onClick={() => showToast(L(`Enlace para restablecer contraseña enviado al correo ${u.email}`, `Password reset link sent to ${u.email}`))}
                               className="p-1.5 text-slate-500 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors cursor-pointer"
-                              title="Restablecer Contraseña"
+                              title={L('Restablecer Contraseña', 'Reset Password')}
                             >
                               <Key className="w-3.5 h-3.5" />
                             </button>
@@ -2453,49 +2586,49 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
           {/* Matriz de Roles y Permisos (Spatie Laravel) */}
           <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 sm:p-8 space-y-5">
             <div className="border-b border-slate-100 pb-4">
-              <h2 className="text-base font-black text-slate-900">Matriz de Roles y Permisos (Spatie Laravel)</h2>
-              <p className="text-xs text-slate-400">Control de privilegios y capacidades por perfil en la base de datos</p>
+              <h2 className="text-base font-black text-slate-900">{L('Matriz de Roles y Permisos (RBAC)', 'Roles & Permissions Matrix (RBAC)')}</h2>
+              <p className="text-xs text-slate-400">{L('Control de privilegios y capacidades por perfil en la base de datos', 'Role-based access privileges and capability control across the system')}</p>
             </div>
 
             <div className="divide-y divide-slate-100 text-xs">
               <div className="py-3.5 flex items-center justify-between">
                 <div>
                   <p className="font-extrabold text-slate-900 flex items-center gap-2">
-                    <Lock className="w-3.5 h-3.5 text-indigo-600" /> Super Admin / Administrador General
+                    <Lock className="w-3.5 h-3.5 text-indigo-600" /> {L('Super Admin / Administrador General', 'Super Admin / General Administrator')}
                   </p>
-                  <p className="text-slate-400">Acceso total a reportes financieros, liquidaciones de RRHH, anulaciones SAT y configuración de empresa.</p>
+                  <p className="text-slate-400">{L('Acceso total a reportes financieros, liquidaciones de RRHH, anulaciones SAT y configuración de empresa.', 'Full access to financial reports, HR settlements, invoice voiding, and company configuration.')}</p>
                 </div>
-                <span className="px-2.5 py-1 bg-indigo-50 text-indigo-700 font-black rounded-lg">Acceso Total</span>
+                <span className="px-2.5 py-1 bg-indigo-50 text-indigo-700 font-black rounded-lg">{L('Acceso Total', 'Full Access')}</span>
               </div>
 
               <div className="py-3.5 flex items-center justify-between">
                 <div>
                   <p className="font-extrabold text-slate-900 flex items-center gap-2">
-                    <Building2 className="w-3.5 h-3.5 text-cyan-600" /> Gerente de Sucursal
+                    <Building2 className="w-3.5 h-3.5 text-cyan-600" /> {L('Gerente de Sucursal', 'Branch Manager')}
                   </p>
-                  <p className="text-slate-400">Corte de caja Z, auditoría de asistencias de tienda, traslados de bodega y supervisión.</p>
+                  <p className="text-slate-400">{L('Corte de caja Z, auditoría de asistencias de tienda, traslados de bodega y supervisión.', 'Z-report cash closing, store attendance audit, warehouse transfers, and daily supervision.')}</p>
                 </div>
-                <span className="px-2.5 py-1 bg-cyan-50 text-cyan-700 font-black rounded-lg">Nivel Sucursal</span>
+                <span className="px-2.5 py-1 bg-cyan-50 text-cyan-700 font-black rounded-lg">{L('Nivel Sucursal', 'Branch Level')}</span>
               </div>
 
               <div className="py-3.5 flex items-center justify-between">
                 <div>
                   <p className="font-extrabold text-slate-900 flex items-center gap-2">
-                    <Key className="w-3.5 h-3.5 text-emerald-600" /> Cajero / Operador de Ventas (POS)
+                    <Key className="w-3.5 h-3.5 text-emerald-600" /> {L('Cajero / Operador de Ventas (POS)', 'Cashier / POS Sales Operator')}
                   </p>
-                  <p className="text-slate-400">Emisión de tickets FEL, cobro en efectivo y tarjeta. Sin acceso a RRHH ni configuraciones.</p>
+                  <p className="text-slate-400">{L('Emisión de tickets FEL, cobro en efectivo y tarjeta. Sin acceso a RRHH ni configuraciones.', 'Issue E-Invoice receipts and process cash/card payments. No access to HR or settings.')}</p>
                 </div>
-                <span className="px-2.5 py-1 bg-emerald-50 text-emerald-700 font-black rounded-lg">Caja Operativa</span>
+                <span className="px-2.5 py-1 bg-emerald-50 text-emerald-700 font-black rounded-lg">{L('Caja Operativa', 'POS Operations')}</span>
               </div>
 
               <div className="py-3.5 flex items-center justify-between">
                 <div>
                   <p className="font-extrabold text-slate-900 flex items-center gap-2">
-                    <FileText className="w-3.5 h-3.5 text-purple-600" /> Auditor Contable
+                    <FileText className="w-3.5 h-3.5 text-purple-600" /> {L('Auditor Contable', 'Accounting Auditor')}
                   </p>
-                  <p className="text-slate-400">Generación de partidas de Libro Diario, liquidaciones SAT-2046 e informes de retención.</p>
+                  <p className="text-slate-400">{L('Generación de partidas de Libro Diario, liquidaciones SAT-2046 e informes de retención.', 'Generate journal entries, tax filings, and tax withholding reports.')}</p>
                 </div>
-                <span className="px-2.5 py-1 bg-purple-50 text-purple-700 font-black rounded-lg">Nivel Financiero</span>
+                <span className="px-2.5 py-1 bg-purple-50 text-purple-700 font-black rounded-lg">{L('Nivel Financiero', 'Finance Level')}</span>
               </div>
             </div>
           </div>
@@ -2509,16 +2642,16 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
             <div>
               <h2 className="text-base font-black text-slate-900 flex items-center gap-2">
                 <Activity className="w-5 h-5 text-indigo-600" />
-                Monitor de Diagnóstico y Salud del Servidor (SystemHealth.php)
+                {L('Monitor de Diagnóstico y Salud del Servidor', 'Server Health & Diagnostics Monitor')}
               </h2>
               <p className="text-xs text-slate-400">
-                Chequeo en tiempo real de base de datos, almacenamiento, conectividad FEL y workers
+                {L('Chequeo en tiempo real de base de datos, almacenamiento, conectividad FEL y workers', 'Real-time health check for database, storage, E-Invoice connectivity, and background workers')}
               </p>
             </div>
 
             <div className="flex items-center gap-3">
               <span className="text-[11px] text-slate-400 font-medium hidden sm:inline">
-                Última comprobación: <strong className="text-slate-700">{healthData.lastCheck}</strong>
+                {L('Última comprobación:', 'Last check:')} <strong className="text-slate-700">{healthData.lastCheck || L('Hace un momento', 'Just now')}</strong>
               </span>
               <button
                 type="button"
@@ -2527,7 +2660,7 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
                 className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl transition-all flex items-center gap-2 shadow-sm cursor-pointer disabled:opacity-60"
               >
                 <RefreshCw className={`w-3.5 h-3.5 ${isHealthChecking ? 'animate-spin' : ''}`} />
-                <span>{isHealthChecking ? 'Diagnosticando...' : 'Ejecutar Diagnóstico en Vivo'}</span>
+                <span>{isHealthChecking ? L('Diagnosticando...', 'Running diagnostics...') : L('Ejecutar Diagnóstico en Vivo', 'Run Live Diagnostics')}</span>
               </button>
             </div>
           </div>
@@ -2541,7 +2674,7 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
                   <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold">
                     <Database className="w-4 h-4" />
                   </div>
-                  <span className="font-extrabold text-xs text-slate-800">Base de Datos</span>
+                  <span className="font-extrabold text-xs text-slate-800">{L('Base de Datos', 'Database')}</span>
                 </div>
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-200 flex items-center gap-1">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-600" />
@@ -2549,9 +2682,9 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
                 </span>
               </div>
               <div className="text-xs space-y-1 text-slate-600">
-                <p><strong>Motor:</strong> {healthData.db.engine}</p>
-                <p><strong>Tamaño en Disco:</strong> {healthData.db.size}</p>
-                <p><strong>Modelos Activos:</strong> {healthData.db.tables} tablas Eloquent</p>
+                <p><strong>{L('Motor:', 'Engine:')}</strong> {healthData.db.engine}</p>
+                <p><strong>{L('Tamaño en Disco:', 'Disk Size:')}</strong> {healthData.db.size}</p>
+                <p><strong>{L('Modelos Activos:', 'Active Models:')}</strong> {healthData.db.tables} {L('tablas Eloquent', 'database tables')}</p>
               </div>
             </div>
 
@@ -2562,17 +2695,17 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
                   <div className="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold">
                     <HardDrive className="w-4 h-4" />
                   </div>
-                  <span className="font-extrabold text-xs text-slate-800">Almacenamiento (Storage)</span>
+                  <span className="font-extrabold text-xs text-slate-800">{L('Almacenamiento (Storage)', 'File Storage')}</span>
                 </div>
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-200 flex items-center gap-1">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-600" />
-                  ESCRITURA OK
+                  {L('ESCRITURA OK', 'WRITE OK')}
                 </span>
               </div>
               <div className="text-xs space-y-1 text-slate-600">
-                <p><strong>Disco Público:</strong> {healthData.storage.disk}</p>
-                <p><strong>Prueba de Escritura:</strong> {healthData.storage.check}</p>
-                <p><strong>Permisos POSIX:</strong> {healthData.storage.permissions}</p>
+                <p><strong>{L('Disco Público:', 'Public Disk:')}</strong> {healthData.storage.disk}</p>
+                <p><strong>{L('Prueba de Escritura:', 'Write Test:')}</strong> {healthData.storage.check}</p>
+                <p><strong>{L('Permisos POSIX:', 'POSIX Permissions:')}</strong> {L(`Lectura / Escritura (${healthData.storage.permissions})`, `Read / Write (${healthData.storage.permissions})`)}</p>
               </div>
             </div>
 
@@ -2583,16 +2716,16 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
                   <div className="w-8 h-8 rounded-xl bg-sky-50 text-sky-600 flex items-center justify-center font-bold">
                     <Server className="w-4 h-4" />
                   </div>
-                  <span className="font-extrabold text-xs text-slate-800">Proveedor FEL Infile</span>
+                  <span className="font-extrabold text-xs text-slate-800">{L('Proveedor FEL Infile', 'E-Invoice Provider (Infile)')}</span>
                 </div>
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-200 flex items-center gap-1">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-600" />
-                  RESPONDIENDO • {healthData.fel.latency}
+                  {L('RESPONDIENDO', 'RESPONDING')} • {healthData.fel.latency}
                 </span>
               </div>
               <div className="text-xs space-y-1 text-slate-600">
-                <p><strong>Certificador:</strong> {healthData.fel.provider}</p>
-                <p><strong>NIT Oficial:</strong> 12521337</p>
+                <p><strong>{L('Certificador:', 'Certifier:')}</strong> {L('Infile SAT Oficial (NIT 12521337)', `Infile Tax Compliance (${taxIdLabel} 12521337)`)}</p>
+                <p><strong>{L('NIT Oficial:', `Official ${taxIdLabel}:`)}</strong> 12521337</p>
                 <p className="truncate"><strong>Endpoint:</strong> {healthData.fel.endpoint}</p>
               </div>
             </div>
@@ -2604,17 +2737,17 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
                   <div className="w-8 h-8 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center font-bold">
                     <Layers className="w-4 h-4" />
                   </div>
-                  <span className="font-extrabold text-xs text-slate-800">Colas y Tareas (Queue)</span>
+                  <span className="font-extrabold text-xs text-slate-800">{L('Colas y Tareas (Queue)', 'Queues & Background Jobs')}</span>
                 </div>
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-200 flex items-center gap-1">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-600" />
-                  OPERATIVO
+                  {L('OPERATIVO', 'OPERATIONAL')}
                 </span>
               </div>
               <div className="text-xs space-y-1 text-slate-600">
-                <p><strong>Tareas Pendientes:</strong> {healthData.queue.pending} en cola</p>
-                <p><strong>Tareas Fallidas:</strong> {healthData.queue.failed}</p>
-                <p><strong>Workers Activos:</strong> {healthData.queue.workers}</p>
+                <p><strong>{L('Tareas Pendientes:', 'Pending Jobs:')}</strong> {healthData.queue.pending} {L('en cola', 'queued')}</p>
+                <p><strong>{L('Tareas Fallidas:', 'Failed Jobs:')}</strong> {healthData.queue.failed}</p>
+                <p><strong>{L('Workers Activos:', 'Active Workers:')}</strong> {L(`${healthData.queue.workers} Activo (Scraper Shein & DTEs)`, `${healthData.queue.workers} Active (Product Scraper & E-Invoices)`)}</p>
               </div>
             </div>
 
@@ -2625,17 +2758,17 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
                   <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center font-bold">
                     <Activity className="w-4 h-4" />
                   </div>
-                  <span className="font-extrabold text-xs text-slate-800">Rendimiento de Servidor</span>
+                  <span className="font-extrabold text-xs text-slate-800">{L('Rendimiento de Servidor', 'Server Performance')}</span>
                 </div>
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-200 flex items-center gap-1">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-600" />
-                  CARGA 12%
+                  {L('CARGA', 'LOAD')} {healthData.memory.load}
                 </span>
               </div>
               <div className="text-xs space-y-1 text-slate-600">
-                <p><strong>Memoria RAM:</strong> {healthData.memory.usage}</p>
-                <p><strong>Carga CPU:</strong> {healthData.memory.load}</p>
-                <p><strong>Disponibilidad (Uptime):</strong> {healthData.memory.uptime}</p>
+                <p><strong>{L('Memoria RAM:', 'RAM Usage:')}</strong> {healthData.memory.usage}</p>
+                <p><strong>{L('Carga CPU:', 'CPU Load:')}</strong> {healthData.memory.load}</p>
+                <p><strong>{L('Disponibilidad (Uptime):', 'Server Uptime:')}</strong> {L(`${healthData.memory.uptimeDays} días, ${healthData.memory.uptimeHours} horas`, `${healthData.memory.uptimeDays} days, ${healthData.memory.uptimeHours} hours`)}</p>
               </div>
             </div>
           </div>
@@ -2643,18 +2776,18 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
           {/* Información Técnica de Enlace con Laravel API */}
           <div className="p-5 rounded-2xl bg-slate-900 text-white space-y-3 text-xs">
             <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-              <span className="font-bold text-slate-300">Detalles de Conexión RESTful & Auth Sanctum</span>
+              <span className="font-bold text-slate-300">{L('Detalles de Conexión RESTful & Auth Sanctum', 'RESTful API & Sanctum Auth Details')}</span>
               <span className="px-2 py-0.5 bg-emerald-500/20 text-emerald-400 font-bold rounded-lg text-[10px]">
-                Tokens Hashed Activos
+                {L('Tokens Hashed Activos', 'Hashed Tokens Active')}
               </span>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-slate-300 font-mono text-[11px]">
               <div>
-                <span className="text-slate-500 block text-[10px] uppercase font-sans">Endpoint Base API:</span>
+                <span className="text-slate-500 block text-[10px] uppercase font-sans">{L('Endpoint Base API:', 'API Base Endpoint:')}</span>
                 http://localhost:8000/api/v1
               </div>
               <div>
-                <span className="text-slate-500 block text-[10px] uppercase font-sans">Origen Frontend Autorizado (CORS):</span>
+                <span className="text-slate-500 block text-[10px] uppercase font-sans">{L('Origen Frontend Autorizado (CORS):', 'Authorized Frontend Origin (CORS):')}</span>
                 http://localhost:5173
               </div>
             </div>
@@ -2667,9 +2800,9 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
                 <Key className="w-5 h-5" />
               </span>
               <div>
-                <h4 className="text-xs font-black text-slate-900">Extensión Scraper Chrome (Shein, Temu, AliExpress)</h4>
+                <h4 className="text-xs font-black text-slate-900">{L('Extensión Scraper Chrome (Shein, Temu, AliExpress)', 'Chrome Scraper Extension (Shein, Temu, AliExpress)')}</h4>
                 <p className="text-[11px] text-slate-500">
-                  Genera la clave de API Bearer requerida para sincronizar productos directamente desde tu navegador.
+                  {L('Genera la clave de API Bearer requerida para sincronizar productos directamente desde tu navegador.', 'Generate the Bearer API token required to sync products directly from your browser.')}
                 </p>
               </div>
             </div>
@@ -2679,7 +2812,7 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
               className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white font-black text-xs rounded-xl transition-all shadow-sm flex items-center gap-2 cursor-pointer shrink-0"
             >
               <Key className="w-3.5 h-3.5" />
-              <span>Gestionar Token Scraper</span>
+              <span>{L('Gestionar Token Scraper', 'Manage Scraper Token')}</span>
             </button>
           </div>
         </div>
@@ -2695,11 +2828,11 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
                   <Database className="w-5 h-5" />
                 </span>
                 <h2 className="text-base font-extrabold text-slate-900">
-                  Conexiones a Bases de Datos Externas
+                  {L('Conexiones a Bases de Datos Externas', 'External Database Connections')}
                 </h2>
               </div>
               <p className="text-xs text-slate-500 mt-1 max-w-2xl">
-                Sincronización bidireccional y réplicas de catálogo de productos, existencias e inventario desde servidores remotos (MySQL, PostgreSQL, SQL Server).
+                {L('Sincronización bidireccional y réplicas de catálogo de productos, existencias e inventario desde servidores remotos (MySQL, PostgreSQL, SQL Server).', 'Two-way synchronization and catalog replication for products, stock, and inventory from remote servers (MySQL, PostgreSQL, SQL Server).')}
               </p>
             </div>
 
@@ -2709,7 +2842,7 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
               className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white font-bold text-xs rounded-xl shadow-md shadow-blue-600/20 transition-all flex items-center gap-2 cursor-pointer self-start sm:self-auto"
             >
               <Plus className="w-4 h-4" />
-              <span>Nueva Conexión</span>
+              <span>{L('Nueva Conexión', 'New Connection')}</span>
             </button>
           </div>
 
@@ -2744,23 +2877,25 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
 
                   <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200 flex items-center gap-1">
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse" />
-                    Activa
+                    {trStatus('Activo')}
                   </span>
                 </div>
 
                 <div className="grid grid-cols-2 gap-2 text-[11px] bg-white p-3 rounded-xl border border-slate-100 font-medium text-slate-600">
                   <div>
-                    <span className="text-slate-400 block text-[10px]">Base de Datos:</span>
+                    <span className="text-slate-400 block text-[10px]">{L('Base de Datos:', 'Database:')}</span>
                     <strong className="text-slate-800 font-mono">{conn.database}</strong>
                   </div>
                   <div>
-                    <span className="text-slate-400 block text-[10px]">Usuario Remoto:</span>
+                    <span className="text-slate-400 block text-[10px]">{L('Usuario Remoto:', 'Remote User:')}</span>
                     <strong className="text-slate-800 font-mono">{conn.username}</strong>
                   </div>
                   <div className="col-span-2 pt-1 border-t border-slate-100 flex items-center justify-between text-[10px]">
-                    <span className="text-slate-400">Última Sincronización:</span>
+                    <span className="text-slate-400">{L('Última Sincronización:', 'Last Sync:')}</span>
                     <span className="font-mono font-semibold text-slate-700">
-                      {conn.ultima_sincronizacion || 'Nunca sincronizado'}
+                      {conn.ultima_sincronizacion
+                        ? new Date(conn.ultima_sincronizacion).toLocaleString(locale)
+                        : L('Nunca sincronizado', 'Never synced')}
                     </span>
                   </div>
                 </div>
@@ -2774,7 +2909,7 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
                       className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[11px] rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
                     >
                       <RefreshCw className={`w-3.5 h-3.5 ${testingConnId === conn.id ? 'animate-spin text-blue-600' : 'text-slate-500'}`} />
-                      <span>{testingConnId === conn.id ? 'Probando...' : 'Probar'}</span>
+                      <span>{testingConnId === conn.id ? L('Probando...', 'Testing...') : L('Probar', 'Test')}</span>
                     </button>
 
                     <button
@@ -2784,7 +2919,7 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
                       className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-[11px] rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
                     >
                       <RefreshCw className={`w-3.5 h-3.5 ${syncingConnId === conn.id ? 'animate-spin text-blue-600' : 'text-blue-500'}`} />
-                      <span>{syncingConnId === conn.id ? 'Sincronizando...' : 'Sincronizar Catálogo'}</span>
+                      <span>{syncingConnId === conn.id ? L('Sincronizando...', 'Syncing...') : L('Sincronizar Catálogo', 'Sync Catalog')}</span>
                     </button>
                   </div>
 
@@ -2792,7 +2927,7 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
                     type="button"
                     onClick={() => handleDeleteConnection(conn.id)}
                     className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
-                    title="Eliminar conexión"
+                    title={L('Eliminar conexión', 'Delete connection')}
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
@@ -2805,9 +2940,9 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
             <div className="text-center py-12 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
               <Database className="w-10 h-10 text-slate-300 mx-auto mb-2" />
               <p className="text-xs font-bold text-slate-700">
-                {isLoadingConexiones ? 'Cargando conexiones...' : 'No hay conexiones externas registradas'}
+                {isLoadingConexiones ? L('Cargando conexiones...', 'Loading connections...') : L('No hay conexiones externas registradas', 'No external connections registered')}
               </p>
-              <p className="text-[11px] text-slate-400 mt-0.5">Haga clic en "+ Nueva Conexión" para integrar una base de datos remota.</p>
+              <p className="text-[11px] text-slate-400 mt-0.5">{L('Haga clic en "+ Nueva Conexión" para integrar una base de datos remota.', 'Click "+ New Connection" to integrate a remote database.')}</p>
             </div>
           )}
         </div>
@@ -2828,8 +2963,8 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
                   <Database className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-black text-slate-900">Nueva Conexión Externa</h3>
-                  <p className="text-[11px] text-slate-400">Configuración de servidor de BD remoto</p>
+                  <h3 className="text-sm font-black text-slate-900">{L('Nueva Conexión Externa', 'New External Connection')}</h3>
+                  <p className="text-[11px] text-slate-400">{L('Configuración de servidor de BD remoto', 'Remote database server configuration')}</p>
                 </div>
               </div>
               <button
@@ -2843,11 +2978,11 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
 
             <form onSubmit={handleSaveConnection} className="space-y-3.5 text-xs">
               <div>
-                <label className="block font-bold text-slate-700 mb-1">Nombre Descriptivo</label>
+                <label className="block font-bold text-slate-700 mb-1">{L('Nombre Descriptivo', 'Descriptive Name')}</label>
                 <input
                   type="text"
                   required
-                  placeholder="ej. Sucursal Mazatenango MySQL"
+                  placeholder={L('ej. Sucursal Mazatenango MySQL', 'e.g., Central Warehouse MySQL')}
                   value={newConnForm.nombre}
                   onChange={(e) => setNewConnForm({ ...newConnForm, nombre: e.target.value })}
                   className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-medium focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -2856,7 +2991,7 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">Motor / Driver</label>
+                  <label className="block font-bold text-slate-700 mb-1">{L('Motor / Driver', 'Engine / Driver')}</label>
                   <select
                     value={newConnForm.driver}
                     onChange={(e) => {
@@ -2872,7 +3007,7 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
                   </select>
                 </div>
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">Puerto</label>
+                  <label className="block font-bold text-slate-700 mb-1">{L('Puerto', 'Port')}</label>
                   <input
                     type="number"
                     required
@@ -2884,11 +3019,11 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
               </div>
 
               <div>
-                <label className="block font-bold text-slate-700 mb-1">Host o Dirección IP</label>
+                <label className="block font-bold text-slate-700 mb-1">{L('Host o Dirección IP', 'Host or IP Address')}</label>
                 <input
                   type="text"
                   required
-                  placeholder="ej. 190.85.120.44 o db.miempresa.com"
+                  placeholder={L('ej. 190.85.120.44 o db.miempresa.com', 'e.g., 190.85.120.44 or db.mycompany.com')}
                   value={newConnForm.host}
                   onChange={(e) => setNewConnForm({ ...newConnForm, host: e.target.value })}
                   className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-mono focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -2896,11 +3031,11 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
               </div>
 
               <div>
-                <label className="block font-bold text-slate-700 mb-1">Nombre de Base de Datos</label>
+                <label className="block font-bold text-slate-700 mb-1">{L('Nombre de Base de Datos', 'Database Name')}</label>
                 <input
                   type="text"
                   required
-                  placeholder="ej. bodega_central_db"
+                  placeholder={L('ej. bodega_central_db', 'e.g., central_warehouse_db')}
                   value={newConnForm.database}
                   onChange={(e) => setNewConnForm({ ...newConnForm, database: e.target.value })}
                   className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-mono focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -2909,18 +3044,18 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">Usuario</label>
+                  <label className="block font-bold text-slate-700 mb-1">{L('Usuario', 'Username')}</label>
                   <input
                     type="text"
                     required
-                    placeholder="ej. root o sync_app"
+                    placeholder={L('ej. root o sync_app', 'e.g., root or sync_app')}
                     value={newConnForm.username}
                     onChange={(e) => setNewConnForm({ ...newConnForm, username: e.target.value })}
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-medium focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">Contraseña</label>
+                  <label className="block font-bold text-slate-700 mb-1">{L('Contraseña', 'Password')}</label>
                   <input
                     type="password"
                     placeholder="••••••••"
@@ -2937,13 +3072,13 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
                   onClick={() => setShowNewConnModal(false)}
                   className="px-4 py-2 font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
                 >
-                  Cancelar
+                  {L('Cancelar', 'Cancel')}
                 </button>
                 <button
                   type="submit"
                   className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-md transition-all cursor-pointer"
                 >
-                  Guardar Conexión
+                  {L('Guardar Conexión', 'Save Connection')}
                 </button>
               </div>
             </form>
@@ -2962,9 +3097,9 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
                 </div>
                 <div>
                   <h3 className="text-sm font-black text-slate-900">
-                    {editingUserId ? 'Editar Usuario del Sistema' : 'Crear Nuevo Usuario (UserResource)'}
+                    {editingUserId ? L('Editar Usuario del Sistema', 'Edit System User') : L('Crear Nuevo Usuario', 'Create New User')}
                   </h3>
-                  <p className="text-[11px] text-slate-400">Credenciales de acceso, rol Spatie y vinculación de empleado</p>
+                  <p className="text-[11px] text-slate-400">{L('Credenciales de acceso, rol y vinculación de empleado', 'Login credentials, role permissions, and employee link')}</p>
                 </div>
               </div>
               <button
@@ -2982,22 +3117,22 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
             <form onSubmit={handleSaveUser} className="space-y-4 text-xs">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="font-bold text-slate-700 block mb-1">Nombre Completo:</label>
+                  <label className="font-bold text-slate-700 block mb-1">{L('Nombre Completo:', 'Full Name:')}</label>
                   <input
                     type="text"
                     required
-                    placeholder="Ej. Juan Carlos Morales"
+                    placeholder={L('Ej. Juan Carlos Morales', 'e.g., John Miller')}
                     value={userForm.name}
                     onChange={(e) => setUserForm({ ...userForm, name: e.target.value })}
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-indigo-500 font-semibold"
                   />
                 </div>
                 <div>
-                  <label className="font-bold text-slate-700 block mb-1">Correo Electrónico (Login):</label>
+                  <label className="font-bold text-slate-700 block mb-1">{L('Correo Electrónico (Login):', 'Email Address (Login):')}</label>
                   <input
                     type="email"
                     required
-                    placeholder="usuario@integrapro.com"
+                    placeholder={L('usuario@integrapro.com', 'user@integrapro.com')}
                     value={userForm.email}
                     onChange={(e) => setUserForm({ ...userForm, email: e.target.value })}
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-indigo-500 font-semibold"
@@ -3008,7 +3143,7 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="font-bold text-slate-700 block mb-1">
-                    {editingUserId ? 'Nueva Contraseña (dejar en blanco para conservar):' : 'Contraseña de Acceso:'}
+                    {editingUserId ? L('Nueva Contraseña (dejar en blanco para conservar):', 'New Password (leave blank to keep current):') : L('Contraseña de Acceso:', 'Access Password:')}
                   </label>
                   <input
                     type="password"
@@ -3020,39 +3155,39 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
                   />
                 </div>
                 <div>
-                  <label className="font-bold text-slate-700 block mb-1">Rol en el Sistema (Spatie):</label>
+                  <label className="font-bold text-slate-700 block mb-1">{L('Rol en el Sistema:', 'System Role:')}</label>
                   <select
                     value={userForm.role}
                     onChange={(e: any) => setUserForm({ ...userForm, role: e.target.value })}
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-indigo-500 font-semibold"
                   >
-                    <option value="Super Admin">Super Admin / Administrador General</option>
-                    <option value="Gerente de Sucursal">Gerente de Sucursal</option>
-                    <option value="Cajero / Operador POS">Cajero / Operador POS</option>
-                    <option value="Auditor Contable">Auditor Contable</option>
+                    <option value="Super Admin">{L('Super Admin / Administrador General', 'Super Admin / General Administrator')}</option>
+                    <option value="Gerente de Sucursal">{L('Gerente de Sucursal', 'Branch Manager')}</option>
+                    <option value="Cajero / Operador POS">{L('Cajero / Operador POS', 'Cashier / POS Operator')}</option>
+                    <option value="Auditor Contable">{L('Auditor Contable', 'Accounting Auditor')}</option>
                   </select>
                 </div>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="font-bold text-slate-700 block mb-1">Sucursal Asignada:</label>
+                  <label className="font-bold text-slate-700 block mb-1">{L('Sucursal Asignada:', 'Assigned Branch:')}</label>
                   <select
                     value={userForm.sucursal_nombre}
                     onChange={(e) => setUserForm({ ...userForm, sucursal_nombre: e.target.value })}
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-indigo-500 font-semibold"
                   >
-                    <option value="Sucursal Central - Ciudad">Sucursal Central - Ciudad</option>
-                    <option value="Sucursal Norte - Carretera al Atlántico">Sucursal Norte - Carretera al Atlántico</option>
-                    <option value="Sucursal Sur - Villa Nueva">Sucursal Sur - Villa Nueva</option>
-                    <option value="Todas las Sucursales">Todas las Sucursales (Corporativo)</option>
+                    <option value="Sucursal Central - Ciudad">{L('Sucursal Central - Ciudad', 'Central Branch - Downtown')}</option>
+                    <option value="Sucursal Norte - Carretera al Atlántico">{L('Sucursal Norte - Carretera al Atlántico', 'North Branch - Atlantic Highway')}</option>
+                    <option value="Sucursal Sur - Villa Nueva">{L('Sucursal Sur - Villa Nueva', 'South Branch - Villa Nueva')}</option>
+                    <option value="Todas las Sucursales">{L('Todas las Sucursales (Corporativo)', 'All Branches (Corporate)')}</option>
                   </select>
                 </div>
                 <div>
-                  <label className="font-bold text-slate-700 block mb-1">DPI / Ficha de Empleado (Opcional):</label>
+                  <label className="font-bold text-slate-700 block mb-1">{L('DPI / Ficha de Empleado (Opcional):', 'National ID / Employee Badge (Optional):')}</label>
                   <input
                     type="text"
-                    placeholder="Ej. 2345 67890 0101"
+                    placeholder={L('Ej. 2345 67890 0101', 'e.g., ID-2345-0101')}
                     value={userForm.dpi}
                     onChange={(e) => setUserForm({ ...userForm, dpi: e.target.value })}
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-indigo-500 font-mono"
@@ -3062,23 +3197,23 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
 
               {/* Permisos Directos Específicos */}
               <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
-                <span className="font-bold text-slate-800 block">Permisos Directos Adicionales:</span>
+                <span className="font-bold text-slate-800 block">{L('Permisos Directos Adicionales:', 'Additional Direct Permissions:')}</span>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] text-slate-600">
                   <label className="flex items-center gap-2 cursor-pointer">
                     <input type="checkbox" defaultChecked className="rounded text-indigo-600" />
-                    <span>Emisión y Certificación FEL</span>
+                    <span>{L('Emisión y Certificación FEL', 'E-Invoice Issuance & Certification')}</span>
                   </label>
                   <label className="flex items-center gap-2 cursor-pointer">
                     <input type="checkbox" defaultChecked className="rounded text-indigo-600" />
-                    <span>Corte Z de Caja y Cuadre POS</span>
+                    <span>{L('Corte Z de Caja y Cuadre POS', 'POS Z-Report & Cash Reconciliation')}</span>
                   </label>
                   <label className="flex items-center gap-2 cursor-pointer">
                     <input type="checkbox" className="rounded text-indigo-600" />
-                    <span>Anulación de Facturas FEL en SAT</span>
+                    <span>{L('Anulación de Facturas FEL en SAT', 'Void Certified E-Invoices')}</span>
                   </label>
                   <label className="flex items-center gap-2 cursor-pointer">
                     <input type="checkbox" className="rounded text-indigo-600" />
-                    <span>Acceso a Liquidaciones y Planilla RRHH</span>
+                    <span>{L('Acceso a Liquidaciones y Planilla RRHH', 'Access HR Payroll & Settlements')}</span>
                   </label>
                 </div>
               </div>
@@ -3092,14 +3227,14 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
                   }}
                   className="px-4 py-2 text-slate-600 hover:bg-slate-100 font-bold rounded-xl transition-colors cursor-pointer"
                 >
-                  Cancelar
+                  {L('Cancelar', 'Cancel')}
                 </button>
                 <button
                   type="submit"
                   className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white font-bold rounded-xl transition-all shadow-sm shadow-indigo-600/20 cursor-pointer flex items-center gap-1.5"
                 >
                   <Save className="w-4 h-4" />
-                  <span>{editingUserId ? 'Guardar Cambios' : 'Registrar Usuario'}</span>
+                  <span>{editingUserId ? L('Guardar Cambios', 'Save Changes') : L('Registrar Usuario', 'Register User')}</span>
                 </button>
               </div>
             </form>
@@ -3112,10 +3247,13 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
         <div className="space-y-1">
           <h3 className="text-sm font-black text-rose-700 flex items-center gap-2">
             <AlertTriangle className="w-4 h-4 text-rose-600" />
-            Zona de Peligro • Eliminar Empresa
+            {L('Zona de Peligro • Eliminar Empresa', 'Danger Zone • Delete Company')}
           </h3>
           <p className="text-xs text-slate-500 max-w-xl">
-            Esta acción eliminará de forma irreversible toda la información fiscal, clientes, kardex y facturas de la empresa <strong>{companyForm.nombre}</strong>. Solo disponible para Super Admin.
+            {L(
+              'Esta acción eliminará de forma irreversible toda la información fiscal, clientes, kardex y facturas de la empresa ',
+              'This action will permanently delete all tax records, customers, stock ledgers, and invoices for '
+            )}<strong>{companyForm.nombre}</strong>{L('. Solo disponible para Super Admin.', '. Available to Super Admin only.')}
           </p>
         </div>
 
@@ -3125,7 +3263,7 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
           className="px-4 py-2.5 bg-rose-600 hover:bg-rose-700 active:scale-95 text-white font-bold text-xs rounded-xl transition-all flex items-center gap-2 shadow-sm cursor-pointer whitespace-nowrap self-start sm:self-auto"
         >
           <Trash2 className="w-4 h-4" />
-          <span>Eliminar Empresa</span>
+          <span>{L('Eliminar Empresa', 'Delete Company')}</span>
         </button>
       </div>
 
@@ -3138,13 +3276,13 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
                 <AlertTriangle className="w-6 h-6" />
               </div>
               <div>
-                <h3 className="text-sm font-black text-slate-900">¿Confirmar Eliminación?</h3>
-                <p className="text-[11px] text-slate-400">Esta acción no se puede deshacer</p>
+                <h3 className="text-sm font-black text-slate-900">{L('¿Confirmar Eliminación?', 'Confirm Deletion?')}</h3>
+                <p className="text-[11px] text-slate-400">{L('Esta acción no se puede deshacer', 'This action cannot be undone')}</p>
               </div>
             </div>
 
             <p className="text-xs text-slate-600 leading-relaxed">
-              Para confirmar, escribe exactamente el nombre de la empresa:
+              {L('Para confirmar, escribe exactamente el nombre de la empresa:', 'To confirm, type the exact company name below:')}
               <br />
               <strong className="font-mono font-bold text-rose-700 bg-rose-50 px-2 py-0.5 rounded mt-1 inline-block">
                 {companyForm.nombre}
@@ -3153,7 +3291,7 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
 
             <input
               type="text"
-              placeholder="Escribe el nombre de la empresa para confirmar..."
+              placeholder={L('Escribe el nombre de la empresa para confirmar...', 'Type the company name to confirm...')}
               value={deleteConfirmationText}
               onChange={(e) => setDeleteConfirmationText(e.target.value)}
               className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold"
@@ -3168,7 +3306,7 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
                 }}
                 className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
               >
-                Cancelar
+                {L('Cancelar', 'Cancel')}
               </button>
               <button
                 type="button"
@@ -3181,7 +3319,7 @@ export default function SettingsView({ currentEmpresa, empresas: propEmpresas, i
                 }`}
               >
                 <Trash2 className="w-3.5 h-3.5" />
-                <span>Confirmar Eliminación</span>
+                <span>{L('Confirmar Eliminación', 'Confirm Deletion')}</span>
               </button>
             </div>
           </div>

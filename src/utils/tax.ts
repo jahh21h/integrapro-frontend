@@ -1,7 +1,8 @@
 /**
- * Módulo de Cálculo Fiscal y Tributario de Guatemala (SAT)
+ * Módulo de Cálculo Fiscal y Tributario (SAT / Tax Compliance)
  * Cumplimiento con Decreto 27-92 (Ley del IVA) y Decreto 10-2012 (Ley de Actualización Tributaria)
  */
+import { tLang } from '../context/LanguageContext';
 
 export type TipoRegimenSAT = 'general' | 'pequeno_contribuyente' | 'exento';
 
@@ -23,10 +24,10 @@ export interface TaxCalculationResult {
  */
 export function getTipoRegimenSAT(regimenStr: string = ''): TipoRegimenSAT {
   const clean = (regimenStr || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-  if (clean.includes('pequeno') || clean.includes('pequeno contribuyente') || clean.includes('5%')) {
+  if (clean.includes('pequeno') || clean.includes('pequeno contribuyente') || clean.includes('5%') || clean.includes('small')) {
     return 'pequeno_contribuyente';
   }
-  if (clean.includes('exento') || clean.includes('informal') || clean.includes('no factura') || clean.includes('0%')) {
+  if (clean.includes('exento') || clean.includes('informal') || clean.includes('no factura') || clean.includes('0%') || clean.includes('exempt')) {
     return 'exento';
   }
   return 'general';
@@ -37,9 +38,9 @@ export function getTipoRegimenSAT(regimenStr: string = ''): TipoRegimenSAT {
  */
 export function formatRegimenLabel(regimenStr: string = ''): string {
   const tipo = getTipoRegimenSAT(regimenStr);
-  if (tipo === 'pequeno_contribuyente') return 'Pequeño Contribuyente (5%)';
-  if (tipo === 'exento') return 'Informal / Exento (0% IVA)';
-  return 'General (IVA 12%)';
+  if (tipo === 'pequeno_contribuyente') return tLang('Pequeño Contribuyente (5%)', 'Small Business (5% Flat)');
+  if (tipo === 'exento') return tLang('Informal / Exento (0% IVA)', 'Tax-Exempt (0% VAT)');
+  return tLang('General (IVA 12%)', 'Standard Tax (12% VAT)');
 }
 
 /**
@@ -50,39 +51,29 @@ export function getRegimenBadge(regimenStr: string = '') {
   if (tipo === 'pequeno_contribuyente') {
     return {
       tipo,
-      label: 'Pequeño Contribuyente (5%)',
+      label: tLang('Pequeño Contribuyente (5%)', 'Small Business (5% Flat)'),
       badgeClass: 'bg-purple-50 text-purple-800 border-purple-200',
-      shortLabel: '5% SAT'
+      shortLabel: tLang('5% SAT', '5% Flat Tax')
     };
   }
   if (tipo === 'exento') {
     return {
       tipo,
-      label: 'Informal / Exento (0% IVA)',
+      label: tLang('Informal / Exento (0% IVA)', 'Tax-Exempt (0% VAT)'),
       badgeClass: 'bg-amber-50 text-amber-800 border-amber-200',
-      shortLabel: '0% IVA'
+      shortLabel: tLang('0% IVA', '0% VAT')
     };
   }
   return {
     tipo,
-    label: 'General (IVA 12%)',
+    label: tLang('General (IVA 12%)', 'Standard Tax (12% VAT)'),
     badgeClass: 'bg-emerald-50 text-emerald-800 border-emerald-200',
-    shortLabel: 'IVA 12%'
+    shortLabel: tLang('IVA 12%', '12% VAT')
   };
 }
 
 /**
  * Calcula los impuestos para una venta según el régimen de la empresa emisora
- * 
- * Reglas SAT Guatemala:
- * - Régimen General: Precios al público incluyen 12% de IVA.
- *   Base Imponible = Total / 1.12
- *   IVA Débito Fiscal = Total - Base Imponible
- * 
- * - Régimen Pequeño Contribuyente: Tasa fija del 5% sobre ventas brutas.
- *   Por ley (Art. 47-50 Dto. 27-92), NO genera derecho a crédito fiscal.
- *   El IVA (12%) es Q0.00 para el comprador.
- *   El impuesto a pagar por el contribuyente a SAT es Total * 5%.
  */
 export function calculateSaleTaxes(total: number, regimenStr: string = ''): TaxCalculationResult {
   const validTotal = Math.max(0, Number(total) || 0);
@@ -92,30 +83,36 @@ export function calculateSaleTaxes(total: number, regimenStr: string = ''): TaxC
     const impuesto5 = +(validTotal * 0.05).toFixed(2);
     return {
       tipoRegimen: 'pequeno_contribuyente',
-      regimenLabel: 'Pequeño Contribuyente (5%)',
+      regimenLabel: tLang('Pequeño Contribuyente (5%)', 'Small Business (5% Flat)'),
       total: validTotal,
       subtotalNeto: validTotal,
       ivaMonto: 0.00,
       porcentajeIva: 5,
       impuestoCalculadoSAT: impuesto5,
-      tasaIvaTexto: '0% IVA (No genera Crédito Fiscal)',
-      fraseFiscalFEL: 'Factura de Pequeño Contribuyente. No genera derecho a crédito fiscal.',
-      codigoFormularioSAT: 'SAT-2047'
+      tasaIvaTexto: tLang('0% IVA (No genera Crédito Fiscal)', '0% VAT (No Tax Credit Eligible)'),
+      fraseFiscalFEL: tLang(
+        'Factura de Pequeño Contribuyente. No genera derecho a crédito fiscal.',
+        'Small Business Invoice. Does not generate VAT tax credit rights.'
+      ),
+      codigoFormularioSAT: tLang('SAT-2047', 'TAX-2047')
     };
   }
 
   if (tipo === 'exento') {
     return {
       tipoRegimen: 'exento',
-      regimenLabel: 'Exento de Impuestos',
+      regimenLabel: tLang('Exento de Impuestos', 'Tax-Exempt'),
       total: validTotal,
       subtotalNeto: validTotal,
       ivaMonto: 0.00,
       porcentajeIva: 0,
       impuestoCalculadoSAT: 0.00,
-      tasaIvaTexto: 'Exento de IVA',
-      fraseFiscalFEL: 'Sujeto Exento de Impuestos según normativa legal vigente.',
-      codigoFormularioSAT: 'SAT-EXENTO'
+      tasaIvaTexto: tLang('Exento de IVA', 'VAT Exempt'),
+      fraseFiscalFEL: tLang(
+        'Sujeto Exento de Impuestos según normativa legal vigente.',
+        'Tax-Exempt entity under applicable tax regulations.'
+      ),
+      codigoFormularioSAT: tLang('SAT-EXENTO', 'TAX-EXEMPT')
     };
   }
 
@@ -124,15 +121,18 @@ export function calculateSaleTaxes(total: number, regimenStr: string = ''): TaxC
   const iva = +(validTotal - baseImponible).toFixed(2);
   return {
     tipoRegimen: 'general',
-    regimenLabel: 'Régimen General (IVA 12%)',
+    regimenLabel: tLang('Régimen General (IVA 12%)', 'Standard Tax Regime (12% VAT)'),
     total: validTotal,
     subtotalNeto: baseImponible,
     ivaMonto: iva,
     porcentajeIva: 12,
     impuestoCalculadoSAT: iva,
-    tasaIvaTexto: 'IVA 12% Incluido',
-    fraseFiscalFEL: 'Sujeto a pagos trimestrales ISR según Decreto 10-2012 / IVA Débito Fiscal 12%',
-    codigoFormularioSAT: 'SAT-2046'
+    tasaIvaTexto: tLang('IVA 12% Incluido', '12% VAT Included'),
+    fraseFiscalFEL: tLang(
+      'Sujeto a pagos trimestrales ISR según Decreto 10-2012 / IVA Débito Fiscal 12%',
+      'Subject to quarterly income tax filings / 12% VAT Output Tax'
+    ),
+    codigoFormularioSAT: tLang('SAT-2046', 'TAX-2046')
   };
 }
 
@@ -148,15 +148,12 @@ export function calculateMonthlyTaxSettlement(
   const tipo = getTipoRegimenSAT(regimenStr);
 
   if (tipo === 'pequeno_contribuyente') {
-    // En Pequeño Contribuyente:
-    // Impuesto = 5% sobre ventas brutas.
-    // Compras no generan crédito fiscal deducible.
     const impuestoBruto = +(ventasTotales * 0.05).toFixed(2);
     const impuestoAPagar = Math.max(0, +(impuestoBruto - retencionesIvaRecibidas).toFixed(2));
 
     return {
       tipoRegimen: tipo,
-      codigoFormulario: 'SAT-2047 (Pequeño Contribuyente)',
+      codigoFormulario: tLang('SAT-2047 (Pequeño Contribuyente)', 'Form 2047 (Small Business 5%)'),
       ventasBrutas: ventasTotales,
       baseImponibleVentas: ventasTotales,
       tasaEfectiva: '5%',
@@ -165,7 +162,10 @@ export function calculateMonthlyTaxSettlement(
       comprasBrutas: comprasTotales,
       baseImponibleCompras: comprasTotales,
       creditoFiscal: 0, // No deducible
-      creditoFiscalExplicacion: 'Las compras no generan crédito fiscal en Pequeño Contribuyente (Art. 49 Dto. 27-92).',
+      creditoFiscalExplicacion: tLang(
+        'Las compras no generan crédito fiscal en Pequeño Contribuyente (Art. 49 Dto. 27-92).',
+        'Purchases do not generate deductible VAT tax credit under the Small Business 5% regime.'
+      ),
       retencionesIvaRecibidas,
       totalAPagarSAT: impuestoAPagar,
       remanenteCredito: 0
@@ -173,20 +173,21 @@ export function calculateMonthlyTaxSettlement(
   }
 
   if (tipo === 'exento') {
-    // En Régimen Informal / Exento:
-    // No genera Débito Fiscal ni Crédito Fiscal a SAT (0% IVA).
     return {
       tipoRegimen: 'exento' as const,
-      codigoFormulario: 'No Aplica (Régimen Informal / Exento)',
+      codigoFormulario: tLang('No Aplica (Régimen Informal / Exento)', 'N/A (Tax-Exempt Regime)'),
       ventasBrutas: ventasTotales,
       baseImponibleVentas: ventasTotales,
-      tasaEfectiva: '0% (Exento)',
+      tasaEfectiva: tLang('0% (Exento)', '0% (Exempt)'),
       debitoFiscal: 0,
       impuestoDeterminado: 0,
       comprasBrutas: comprasTotales,
       baseImponibleCompras: comprasTotales,
       creditoFiscal: 0,
-      creditoFiscalExplicacion: 'Operación bajo régimen informal/exento: no genera crédito ni débito fiscal SAT.',
+      creditoFiscalExplicacion: tLang(
+        'Operación bajo régimen informal/exento: no genera crédito ni débito fiscal SAT.',
+        'Operating under Tax-Exempt regime: generates no VAT debit or tax credit.'
+      ),
       retencionesIvaRecibidas: 0,
       totalAPagarSAT: 0,
       remanenteCredito: 0
@@ -205,7 +206,7 @@ export function calculateMonthlyTaxSettlement(
 
   return {
     tipoRegimen: tipo,
-    codigoFormulario: 'SAT-2046 (IVA General)',
+    codigoFormulario: tLang('SAT-2046 (IVA General)', 'Form 2046 (Standard 12% VAT)'),
     ventasBrutas: ventasTotales,
     baseImponibleVentas: baseVentas,
     tasaEfectiva: '12%',
@@ -214,7 +215,10 @@ export function calculateMonthlyTaxSettlement(
     comprasBrutas: comprasTotales,
     baseImponibleCompras: baseCompras,
     creditoFiscal,
-    creditoFiscalExplicacion: 'Crédito fiscal deducible al 12% sobre compras y servicios afectos.',
+    creditoFiscalExplicacion: tLang(
+      'Crédito fiscal deducible al 12% sobre compras y servicios afectos.',
+      'Deductible 12% VAT tax credit on eligible purchases and services.'
+    ),
     retencionesIvaRecibidas,
     totalAPagarSAT: saldoFinal > 0 ? +saldoFinal.toFixed(2) : 0,
     remanenteCredito: saldoFinal < 0 ? +Math.abs(saldoFinal).toFixed(2) : 0

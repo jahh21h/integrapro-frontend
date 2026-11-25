@@ -16,6 +16,7 @@ import TimeFormatToggle from '../components/TimeFormatToggle';
 import SpecificTimePicker from '../components/SpecificTimePicker';
 import { EmpresaSaaS } from '../types';
 import { branchesApi } from '../api';
+import { useLanguage } from '../context/LanguageContext';
 
 interface SucursalItem {
   id: number;
@@ -38,9 +39,29 @@ interface BranchesProps {
 }
 
 export default function Branches({ currentEmpresa }: BranchesProps = {}) {
+  const { L, isEn } = useLanguage();
   const { formatSchedule } = useTimeFormat();
   const [showNewBranchModal, setShowNewBranchModal] = useState(false);
   const [notificationToast, setNotificationToast] = useState<string | null>(null);
+
+  const trBranchStatus = (estado: SucursalItem['estado']) => {
+    if (estado === 'Operando') return L('Operando', 'Operating');
+    if (estado === 'En Inventario') return L('En Inventario', 'In Inventory');
+    return L('Cerrada', 'Closed');
+  };
+
+  const trScheduleText = (horario: string) => {
+    if (!isEn) return horario;
+    return horario
+      .replace(/Lunes a Sábado/gi, 'Mon to Sat')
+      .replace(/Lunes a Domingo/gi, 'Mon to Sun')
+      .replace(/Lunes a Viernes/gi, 'Mon to Fri')
+      .replace(/Martes a Domingo/gi, 'Tue to Sun');
+  };
+
+  const trFallbackField = (val: string, esDef: string, enDef: string) => {
+    return val === esDef ? L(esDef, enDef) : val;
+  };
 
   const [sucursales, setSucursales] = useState<SucursalItem[]>([]);
 
@@ -106,9 +127,12 @@ export default function Branches({ currentEmpresa }: BranchesProps = {}) {
       });
       await loadBranches();
       setShowNewBranchModal(false);
-      showToast(`Sucursal "${newBranch.nombre}" guardada y sincronizada en el servidor.`);
+      showToast(L(
+        `Sucursal "${newBranch.nombre}" guardada y sincronizada en el servidor.`,
+        `Branch "${newBranch.nombre}" saved and synced with server.`
+      ));
     } catch (err: any) {
-      showToast(err?.response?.data?.message || 'Error al crear la sucursal en el servidor.');
+      showToast(err?.response?.data?.message || L('Error al crear la sucursal en el servidor.', 'Error creating branch on the server.'));
       return;
     }
     setNewBranch({
@@ -141,12 +165,12 @@ export default function Branches({ currentEmpresa }: BranchesProps = {}) {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-slate-200">
         <div>
           <h1 className="text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2.5">
-            Red de Sucursales & Puntos de Venta
+            {L('Red de Sucursales & Puntos de Venta', 'Branch Network & Points of Sale')}
             <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-cyan-50 text-cyan-700 border border-cyan-200">
-              Multi-Branch
+              {L('Multi-Sucursal', 'Multi-Branch')}
             </span>
           </h1>
-          <p className="text-xs text-slate-500 font-medium">Control independiente de inventario, cajas y personal asignado por sucursal</p>
+          <p className="text-xs text-slate-500 font-medium">{L('Control independiente de inventario, cajas y personal asignado por sucursal', 'Independent control of inventory, cash registers, and staff assigned per branch')}</p>
         </div>
 
         <div className="flex items-center gap-2">
@@ -157,7 +181,7 @@ export default function Branches({ currentEmpresa }: BranchesProps = {}) {
             className="px-4 py-2.5 bg-cyan-600 hover:bg-cyan-700 text-white rounded-xl text-xs font-bold shadow-md shadow-cyan-600/25 transition-all flex items-center gap-2 cursor-pointer"
           >
             <Plus className="w-4 h-4" />
-            <span>Nueva Sucursal</span>
+            <span>{L('Nueva Sucursal', 'New Branch')}</span>
           </button>
         </div>
       </div>
@@ -181,22 +205,22 @@ export default function Branches({ currentEmpresa }: BranchesProps = {}) {
                 </div>
 
                 <span className="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                  {s.estado}
+                  {trBranchStatus(s.estado)}
                 </span>
               </div>
 
               <div className="py-4 space-y-2.5 text-xs text-slate-600">
                 <div className="flex items-start gap-2">
                   <MapPin className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
-                  <span className="text-[11px] leading-tight">{s.direccion}</span>
+                  <span className="text-[11px] leading-tight">{trFallbackField(s.direccion, 'Dirección no especificada', 'Address not specified')}</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <Phone className="w-4 h-4 text-slate-400 shrink-0" />
-                  <span className="text-[11px]">{s.telefono}</span>
+                  <span className="text-[11px]">{trFallbackField(s.telefono, 'Sin teléfono', 'No phone')}</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <Building2 className="w-4 h-4 text-slate-400 shrink-0" />
-                  <span className="text-[11px]">Encargado: <strong className="text-slate-800">{s.encargado}</strong></span>
+                  <span className="text-[11px]">{L('Encargado:', 'Manager:')} <strong className="text-slate-800">{trFallbackField(s.encargado, 'Administración', 'Administration')}</strong></span>
                 </div>
               </div>
 
@@ -204,13 +228,13 @@ export default function Branches({ currentEmpresa }: BranchesProps = {}) {
               <div className="grid grid-cols-2 gap-2 pt-3 border-t border-slate-100">
                 <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-100 text-center">
                   <div className="flex items-center justify-center gap-1 text-slate-400 text-[10px] font-semibold">
-                    <Users className="w-3 h-3" /> Colaboradores
+                    <Users className="w-3 h-3" /> {L('Colaboradores', 'Employees')}
                   </div>
                   <p className="text-sm font-black text-slate-900 mt-0.5">{s.empleadosCount}</p>
                 </div>
                 <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-100 text-center">
                   <div className="flex items-center justify-center gap-1 text-slate-400 text-[10px] font-semibold">
-                    <Boxes className="w-3 h-3" /> Unidades Stock
+                    <Boxes className="w-3 h-3" /> {L('Unidades Stock', 'Stock Units')}
                   </div>
                   <p className="text-sm font-black text-slate-900 mt-0.5">{s.productosStockCount}</p>
                 </div>
@@ -221,7 +245,7 @@ export default function Branches({ currentEmpresa }: BranchesProps = {}) {
             <div className="pt-2.5 mt-2 border-t border-slate-100 flex items-center justify-between text-[10px]">
               <span className="flex items-center gap-1 font-bold text-slate-700">
                 <MapPin className="w-3 h-3 text-cyan-600" />
-                <span>Geocerca: Radio de {s.radio_permitido || 50}m</span>
+                <span>{L(`Geocerca: Radio de ${s.radio_permitido || 50}m`, `Geofence: ${s.radio_permitido || 50}m radius`)}</span>
               </span>
               <span className="font-mono text-slate-400">
                 {s.latitud?.toFixed(4)}, {s.longitud?.toFixed(4)}
@@ -229,9 +253,9 @@ export default function Branches({ currentEmpresa }: BranchesProps = {}) {
             </div>
 
             <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs mt-2">
-              <span className="text-[10px] text-slate-500 font-medium font-mono">{formatSchedule(s.horario)}</span>
+              <span className="text-[10px] text-slate-500 font-medium font-mono">{formatSchedule(trScheduleText(s.horario))}</span>
               <button className="text-cyan-600 hover:text-cyan-800 font-bold flex items-center gap-1">
-                <Edit3 className="w-3.5 h-3.5" /> Editar
+                <Edit3 className="w-3.5 h-3.5" /> {L('Editar', 'Edit')}
               </button>
             </div>
           </div>
@@ -243,7 +267,7 @@ export default function Branches({ currentEmpresa }: BranchesProps = {}) {
         <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="max-w-lg w-full bg-white rounded-3xl shadow-2xl border border-slate-200 animate-in fade-in zoom-in-95 duration-150">
             <div className="p-5 border-b border-slate-100 flex items-center justify-between">
-              <h3 className="text-base font-black text-slate-900">Añadir Nueva Sucursal a la Red</h3>
+              <h3 className="text-base font-black text-slate-900">{L('Añadir Nueva Sucursal a la Red', 'Add New Branch to Network')}</h3>
               <button onClick={() => setShowNewBranchModal(false)} className="p-1 text-slate-400 hover:text-slate-600 rounded-lg">
                 <X className="w-4 h-4" />
               </button>
@@ -251,10 +275,10 @@ export default function Branches({ currentEmpresa }: BranchesProps = {}) {
 
             <form onSubmit={handleCreateBranch} className="p-6 space-y-4">
               <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Nombre de Sucursal *</label>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">{L('Nombre de Sucursal *', 'Branch Name *')}</label>
                 <input
                   required
-                  placeholder="Ej. Sucursal Carretera a El Salvador"
+                  placeholder={L('Ej. Sucursal Carretera a El Salvador', 'e.g. Downtown Main Branch')}
                   value={newBranch.nombre}
                   onChange={(e) => setNewBranch({ ...newBranch, nombre: e.target.value })}
                   className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:bg-white focus:outline-none focus:ring-2 focus:ring-cyan-500"
@@ -262,10 +286,10 @@ export default function Branches({ currentEmpresa }: BranchesProps = {}) {
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Dirección Exacta *</label>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">{L('Dirección Exacta *', 'Exact Address *')}</label>
                 <input
                   required
-                  placeholder="Ej. Km 18.5 Carretera a El Salvador"
+                  placeholder={L('Ej. Km 18.5 Carretera a El Salvador', 'e.g. 123 Main St, Suite 200')}
                   value={newBranch.direccion}
                   onChange={(e) => setNewBranch({ ...newBranch, direccion: e.target.value })}
                   className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:bg-white focus:outline-none focus:ring-2 focus:ring-cyan-500"
@@ -274,18 +298,18 @@ export default function Branches({ currentEmpresa }: BranchesProps = {}) {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Teléfono</label>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">{L('Teléfono', 'Phone')}</label>
                   <input
-                    placeholder="+502 2400-0000"
+                    placeholder={L('+502 2400-0000', '+1 (555) 240-0000')}
                     value={newBranch.telefono}
                     onChange={(e) => setNewBranch({ ...newBranch, telefono: e.target.value })}
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:bg-white focus:outline-none focus:ring-2 focus:ring-cyan-500"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Encargado</label>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">{L('Encargado', 'Manager')}</label>
                   <input
-                    placeholder="Nombre del Gerente"
+                    placeholder={L('Nombre del Gerente', 'Manager Name')}
                     value={newBranch.encargado}
                     onChange={(e) => setNewBranch({ ...newBranch, encargado: e.target.value })}
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:bg-white focus:outline-none focus:ring-2 focus:ring-cyan-500"
@@ -296,38 +320,38 @@ export default function Branches({ currentEmpresa }: BranchesProps = {}) {
               {/* Horario de Atención Específico */}
               <div className="pt-2 border-t border-slate-100 space-y-3">
                 <span className="text-xs font-bold text-slate-700 uppercase tracking-wider block">
-                  Horario de Atención de la Sucursal:
+                  {L('Horario de Atención de la Sucursal:', 'Branch Business Hours:')}
                 </span>
 
                 <div>
-                  <label className="block text-[11px] font-bold text-slate-500 mb-1">Días Hábiles:</label>
+                  <label className="block text-[11px] font-bold text-slate-500 mb-1">{L('Días Hábiles:', 'Business Days:')}</label>
                   <select
                     value={newBranch.dias}
                     onChange={(e) => setNewBranch({ ...newBranch, dias: e.target.value })}
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:bg-white focus:outline-none focus:ring-2 focus:ring-cyan-500"
                   >
-                    <option value="Lunes a Sábado">Lunes a Sábado</option>
-                    <option value="Lunes a Domingo">Lunes a Domingo</option>
-                    <option value="Lunes a Viernes">Lunes a Viernes</option>
-                    <option value="Martes a Domingo">Martes a Domingo</option>
+                    <option value="Lunes a Sábado">{L('Lunes a Sábado', 'Monday to Saturday')}</option>
+                    <option value="Lunes a Domingo">{L('Lunes a Domingo', 'Monday to Sunday')}</option>
+                    <option value="Lunes a Viernes">{L('Lunes a Viernes', 'Monday to Friday')}</option>
+                    <option value="Martes a Domingo">{L('Martes a Domingo', 'Tuesday to Sunday')}</option>
                   </select>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <SpecificTimePicker
-                    label="Hora de Apertura"
+                    label={L('Hora de Apertura', 'Opening Time')}
                     required
                     value={newBranch.horaApertura}
                     onChange={(val) => setNewBranch({ ...newBranch, horaApertura: val })}
-                    helperText="Apertura al público"
+                    helperText={L('Apertura al público', 'Opens to public')}
                   />
 
                   <SpecificTimePicker
-                    label="Hora de Cierre"
+                    label={L('Hora de Cierre', 'Closing Time')}
                     required
                     value={newBranch.horaCierre}
                     onChange={(val) => setNewBranch({ ...newBranch, horaCierre: val })}
-                    helperText="Cierre de sucursal"
+                    helperText={L('Cierre de sucursal', 'Branch closing time')}
                   />
                 </div>
               </div>
@@ -335,12 +359,12 @@ export default function Branches({ currentEmpresa }: BranchesProps = {}) {
               {/* Configuración de Geocerca GPS (Laravel: latitud, longitud, radio_permitido) */}
               <div className="pt-2 border-t border-slate-100 space-y-3">
                 <span className="text-xs font-bold text-slate-700 uppercase tracking-wider block">
-                  Geocerca & Ubicación Física (Para Reloj Checador):
+                  {L('Geocerca & Ubicación Física (Para Reloj Checador):', 'Geofence & Physical Location (For Time Clock):')}
                 </span>
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div>
-                    <label className="block text-[11px] font-bold text-slate-500 mb-1">Latitud GPS</label>
+                    <label className="block text-[11px] font-bold text-slate-500 mb-1">{L('Latitud GPS', 'GPS Latitude')}</label>
                     <input
                       type="number"
                       step="0.0001"
@@ -352,7 +376,7 @@ export default function Branches({ currentEmpresa }: BranchesProps = {}) {
                   </div>
 
                   <div>
-                    <label className="block text-[11px] font-bold text-slate-500 mb-1">Longitud GPS</label>
+                    <label className="block text-[11px] font-bold text-slate-500 mb-1">{L('Longitud GPS', 'GPS Longitude')}</label>
                     <input
                       type="number"
                       step="0.0001"
@@ -364,7 +388,7 @@ export default function Branches({ currentEmpresa }: BranchesProps = {}) {
                   </div>
 
                   <div>
-                    <label className="block text-[11px] font-bold text-slate-500 mb-1">Radio Permitido (m)</label>
+                    <label className="block text-[11px] font-bold text-slate-500 mb-1">{L('Radio Permitido (m)', 'Allowed Radius (m)')}</label>
                     <input
                       type="number"
                       min="10"
@@ -377,13 +401,16 @@ export default function Branches({ currentEmpresa }: BranchesProps = {}) {
                   </div>
                 </div>
                 <p className="text-[10px] text-slate-400">
-                  Los colaboradores solo podrán checar entrada si su GPS se encuentra dentro de este radio de metros.
+                  {L(
+                    'Los colaboradores solo podrán checar entrada si su GPS se encuentra dentro de este radio de metros.',
+                    'Employees can only clock in if their GPS is within this radius in meters.'
+                  )}
                 </p>
               </div>
 
               <div className="pt-4 border-t border-slate-100 flex justify-end gap-2">
-                <button type="button" onClick={() => setShowNewBranchModal(false)} className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50 rounded-xl transition-colors cursor-pointer">Cancelar</button>
-                <button type="submit" className="px-5 py-2.5 bg-cyan-600 hover:bg-cyan-700 text-white text-xs font-bold rounded-xl shadow-md shadow-cyan-600/20 transition-all cursor-pointer">Registrar Sucursal</button>
+                <button type="button" onClick={() => setShowNewBranchModal(false)} className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50 rounded-xl transition-colors cursor-pointer">{L('Cancelar', 'Cancel')}</button>
+                <button type="submit" className="px-5 py-2.5 bg-cyan-600 hover:bg-cyan-700 text-white text-xs font-bold rounded-xl shadow-md shadow-cyan-600/20 transition-all cursor-pointer">{L('Registrar Sucursal', 'Register Branch')}</button>
               </div>
             </form>
           </div>

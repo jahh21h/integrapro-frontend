@@ -35,6 +35,7 @@ import {
 import { FELCertificadoDTE, EmpresaSaaS, Cliente } from '../types';
 import { useTimeFormat } from '../context/TimeFormatContext';
 import { useLiveSales } from '../context/LiveSalesContext';
+import { useLanguage } from '../context/LanguageContext';
 import { calculateSaleTaxes } from '../utils/tax';
 import { inventoryApi, salesApi } from '../api';
 import { getTenantClients } from '../data/realClients';
@@ -64,11 +65,12 @@ interface PosTerminalProps {
 }
 
 export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
+  const { L, isEn, money, currencySymbol, locale, taxIdLabel, trPayment, trClient, trTaxId } = useLanguage();
   const fallbackEmpresaId = getStoredActiveEmpresaId() || 0;
   const empresaActiva: EmpresaSaaS = currentEmpresa || {
     id: fallbackEmpresaId,
-    nombre: fallbackEmpresaId === 1 ? 'Fashion Styles' : 'Empresa Activa',
-    razon_social: fallbackEmpresaId === 1 ? 'Fashion Styles S.A.' : 'Empresa Activa',
+    nombre: fallbackEmpresaId === 1 ? 'Fashion Styles' : L('Empresa Activa', 'Active Company'),
+    razon_social: fallbackEmpresaId === 1 ? 'Fashion Styles S.A.' : L('Empresa Activa', 'Active Company'),
     nit: 'CF',
     pais: 'GT',
     regimen: 'General (IVA 12%)',
@@ -76,7 +78,7 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
     activa: true,
     telefono: '',
     email: '',
-    direccion: 'Ciudad de Guatemala'
+    direccion: L('Ciudad de Guatemala', 'Guatemala City')
   };
   const { formatTime } = useTimeFormat();
   const [selectedCategory, setSelectedCategory] = useState<string>('Todos');
@@ -113,10 +115,10 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
     if (bag.costo_envio > 0) {
       unifiedItems.push({
         id: 99999,
-        name: `Servicio de Entrega (${bag.empresa_envio || 'Guatex / Mensajería'})`,
+        name: `${L('Servicio de Entrega', 'Delivery Service')} (${bag.empresa_envio || L('Guatex / Mensajería', 'Courier / Shipping')})`,
         price: bag.costo_envio,
         stock: 999,
-        category: 'Servicios',
+        category: L('Servicios', 'Services'),
         sku: 'SERV-ENVIO',
         image: 'https://images.unsplash.com/photo-1549465220-1a8b9238cd48?w=400',
         quantity: 1
@@ -138,17 +140,45 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
   const [newClientData, setNewClientData] = useState({
     nombre: '',
     apellido: '',
-    nit: 'CF',
+    nit: isEn ? 'N/A' : 'CF',
     telefono: '',
-    direccion: 'Ciudad de Guatemala',
+    direccion: L('Ciudad de Guatemala', 'Guatemala City'),
     limite_credito: 5000
   });
 
   // Modo de Facturación: Ticket Simple (Predeterminado) vs FEL SAT (Infile Opcional)
   const [tipoComprobante, setTipoComprobante] = useState<'ticket' | 'fel'>('ticket');
-  const [nitReceptor, setNitReceptor] = useState<string>('CF');
-  const [nombreReceptor, setNombreReceptor] = useState<string>('Consumidor Final');
-  const [direccionReceptor, setDireccionReceptor] = useState<string>('Ciudad de Guatemala');
+  const [nitReceptor, setNitReceptor] = useState<string>(isEn ? 'N/A' : 'CF');
+  const [nombreReceptor, setNombreReceptor] = useState<string>(L('Consumidor Final', 'Walk-in Customer'));
+  const [direccionReceptor, setDireccionReceptor] = useState<string>(L('Ciudad de Guatemala', 'Guatemala City'));
+
+  // Sincronizar textos por defecto al cambiar idioma si no se ha asignado un cliente específico
+  useEffect(() => {
+    if (!selectedClient) {
+      setNombreReceptor(prev =>
+        prev === 'Consumidor Final' || prev === 'Walk-in Customer'
+          ? L('Consumidor Final', 'Walk-in Customer')
+          : prev
+      );
+      setNitReceptor(prev =>
+        prev === 'CF' || prev === 'C/F' || prev === 'N/A'
+          ? (isEn ? 'N/A' : 'CF')
+          : prev
+      );
+      setDireccionReceptor(prev =>
+        prev === 'Ciudad de Guatemala' || prev === 'Guatemala City'
+          ? L('Ciudad de Guatemala', 'Guatemala City')
+          : prev
+      );
+    }
+    setNewClientData(prev => ({
+      ...prev,
+      nit: prev.nit === 'CF' || prev.nit === 'N/A' ? (isEn ? 'N/A' : 'CF') : prev.nit,
+      direccion: prev.direccion === 'Ciudad de Guatemala' || prev.direccion === 'Guatemala City'
+        ? L('Ciudad de Guatemala', 'Guatemala City')
+        : prev.direccion
+    }));
+  }, [isEn, selectedClient]);
   
   // Método de Pago & Cálculo de Cambio / Abono Inicial en Crédito
   const [metodoPago, setMetodoPago] = useState<'efectivo' | 'tarjeta' | 'transferencia' | 'credito'>('efectivo');
@@ -230,7 +260,7 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
             if (rawApellido && rawNombre.toLowerCase().endsWith(rawApellido.toLowerCase())) {
               cleanNombreCompleto = rawNombre;
             }
-            if (!cleanNombreCompleto) cleanNombreCompleto = 'Cliente';
+            if (!cleanNombreCompleto) cleanNombreCompleto = L('Cliente', 'Customer');
 
             return {
               id_cliente: c.id_cliente,
@@ -240,7 +270,7 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
               nit: c.nit ? (c.nit.trim().toUpperCase() === 'C/F' ? 'CF' : c.nit.trim()) : 'CF',
               telefono: c.telefono ? c.telefono.trim() : 'N/A',
               email: c.email || 'N/A',
-              direccion: c.direccion || 'Ciudad de Guatemala',
+              direccion: c.direccion || L('Ciudad de Guatemala', 'Guatemala City'),
               tipo_cliente: c.tipo_cliente || 'normal',
               descuento_aplicable: Number(c.descuento_aplicable) || 0,
               dias_credito: Number(c.dias_credito) || 30,
@@ -375,14 +405,14 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
 
   const addToCart = (product: Product) => {
     if (product.stock <= 0) {
-      setSaleError(`"${product.name}" no tiene existencias disponibles (Stock: 0).`);
+      setSaleError(L(`"${product.name}" no tiene existencias disponibles (Stock: 0).`, `"${product.name}" is out of stock (Stock: 0).`));
       return;
     }
     setCart(prevCart => {
       const existing = prevCart.find(item => item.id === product.id);
       if (existing) {
         if (existing.quantity + 1 > product.stock) {
-          setSaleError(`Stock máximo alcanzado para "${product.name}" (Disponible: ${product.stock}).`);
+          setSaleError(L(`Stock máximo alcanzado para "${product.name}" (Disponible: ${product.stock}).`, `Maximum stock reached for "${product.name}" (Available: ${product.stock}).`));
           return prevCart;
         }
         setSaleError(null);
@@ -402,7 +432,7 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
           const newQty = item.quantity + delta;
           if (newQty <= 0) return null;
           if (delta > 0 && newQty > item.stock) {
-            setSaleError(`Stock máximo alcanzado para "${item.name}" (Disponible: ${item.stock}).`);
+            setSaleError(L(`Stock máximo alcanzado para "${item.name}" (Disponible: ${item.stock}).`, `Maximum stock reached for "${item.name}" (Available: ${item.stock}).`));
             return item;
           }
           setSaleError(null);
@@ -523,10 +553,10 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
 
   const handleSelectClient = (client: Cliente) => {
     setSelectedClient(client);
-    setNombreReceptor(client.nombre_completo);
+    setNombreReceptor(trClient(client.nombre_completo));
     const cleanNit = client.nit.trim().toUpperCase() === 'C/F' ? 'CF' : client.nit.trim().toUpperCase();
-    setNitReceptor(cleanNit);
-    setDireccionReceptor(client.direccion || 'Ciudad de Guatemala');
+    setNitReceptor(trTaxId(cleanNit));
+    setDireccionReceptor(client.direccion || L('Ciudad de Guatemala', 'Guatemala City'));
     setClientModalOpen(false);
     setClientSearchTerm('');
     setShowNewClientForm(false);
@@ -534,9 +564,9 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
 
   const handleResetToCF = () => {
     setSelectedClient(null);
-    setNombreReceptor('Consumidor Final');
-    setNitReceptor('CF');
-    setDireccionReceptor('Ciudad de Guatemala');
+    setNombreReceptor(L('Consumidor Final', 'Walk-in Customer'));
+    setNitReceptor(isEn ? 'N/A' : 'CF');
+    setDireccionReceptor(L('Ciudad de Guatemala', 'Guatemala City'));
   };
 
   const handleCreateQuickClient = async (e: React.FormEvent) => {
@@ -544,7 +574,8 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
     if (!newClientData.nombre.trim()) return;
 
     const fullName = `${newClientData.nombre.trim()} ${newClientData.apellido.trim()}`.trim();
-    const cleanNit = newClientData.nit.trim().toUpperCase() || 'CF';
+    const rawNit = newClientData.nit.trim().toUpperCase();
+    const cleanNit = !rawNit || rawNit === 'N/A' ? 'CF' : rawNit;
 
     try {
       const res = await salesApi.createClient({
@@ -552,7 +583,7 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
         apellido: newClientData.apellido.trim(),
         nit: cleanNit,
         telefono: newClientData.telefono.trim() || null,
-        direccion: newClientData.direccion.trim() || 'Ciudad de Guatemala',
+        direccion: newClientData.direccion.trim() || L('Ciudad de Guatemala', 'Guatemala City'),
         tipo_cliente: 'normal',
         empresa_id: empresaActiva.id
       });
@@ -565,7 +596,7 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
         nit: created?.nit || cleanNit,
         telefono: created?.telefono || newClientData.telefono.trim() || 'N/A',
         email: created?.email || 'N/A',
-        direccion: created?.direccion || newClientData.direccion.trim() || 'Ciudad de Guatemala',
+        direccion: created?.direccion || newClientData.direccion.trim() || L('Ciudad de Guatemala', 'Guatemala City'),
         tipo_cliente: 'normal',
         descuento_aplicable: 0,
         dias_credito: 30,
@@ -585,7 +616,7 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
         nit: cleanNit,
         telefono: newClientData.telefono.trim() || 'N/A',
         email: 'N/A',
-        direccion: newClientData.direccion.trim() || 'Ciudad de Guatemala',
+        direccion: newClientData.direccion.trim() || L('Ciudad de Guatemala', 'Guatemala City'),
         tipo_cliente: 'normal',
         descuento_aplicable: 0,
         dias_credito: 30,
@@ -601,9 +632,9 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
     setNewClientData({
       nombre: '',
       apellido: '',
-      nit: 'CF',
+      nit: isEn ? 'N/A' : 'CF',
       telefono: '',
-      direccion: 'Ciudad de Guatemala',
+      direccion: L('Ciudad de Guatemala', 'Guatemala City'),
       limite_credito: 5000
     });
   };
@@ -611,9 +642,9 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
   const handleNitChange = (val: string) => {
     const clean = val.trim().toUpperCase();
     setNitReceptor(clean);
-    if (clean === 'CF' || clean === '') {
+    if (clean === 'CF' || clean === 'C/F' || clean === 'N/A' || clean === '') {
       setSelectedClient(null);
-      setNombreReceptor('Consumidor Final');
+      setNombreReceptor(L('Consumidor Final', 'Walk-in Customer'));
     } else {
       const match = clientsList.find(c => {
         const cNit = c.nit.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
@@ -622,8 +653,8 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
       });
       if (match) {
         setSelectedClient(match);
-        setNombreReceptor(match.nombre_completo);
-        setDireccionReceptor(match.direccion || 'Ciudad de Guatemala');
+        setNombreReceptor(trClient(match.nombre_completo));
+        setDireccionReceptor(match.direccion || L('Ciudad de Guatemala', 'Guatemala City'));
       } else if (clean.length >= 4) {
         // Búsqueda remota instantánea en backend (aislada por empresa)
         salesApi.getClients({ id_empresa: empresaActiva.id, search: clean, per_page: 5 }).then(res => {
@@ -639,7 +670,7 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
               nit: first.nit || clean,
               telefono: first.telefono || 'N/A',
               email: first.email || 'N/A',
-              direccion: first.direccion || 'Ciudad de Guatemala',
+              direccion: first.direccion || L('Ciudad de Guatemala', 'Guatemala City'),
               tipo_cliente: first.tipo_cliente || 'normal',
               descuento_aplicable: Number(first.descuento_aplicable) || 0,
               dias_credito: Number(first.dias_credito) || 30,
@@ -647,19 +678,19 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
               limite_credito: Number(first.limite_credito) || 5000
             };
             setSelectedClient(cleanC);
-            setNombreReceptor(cleanC.nombre_completo);
+            setNombreReceptor(trClient(cleanC.nombre_completo));
             setDireccionReceptor(cleanC.direccion);
           }
         }).catch(() => {});
       } else if (clean === '1048291-K' || clean === '1048291K') {
         setNombreReceptor('Distribuidora San José S.A.');
-        setDireccionReceptor('Zona 12, Ciudad de Guatemala');
+        setDireccionReceptor(L('Zona 12, Ciudad de Guatemala', 'Zone 12, Guatemala City'));
       } else if (clean === '7489234-1' || clean === '74892341') {
         setNombreReceptor('Comercializadora El Porvenir');
-        setDireccionReceptor('Zona 4, Mixco');
+        setDireccionReceptor(L('Zona 4, Mixco', 'Zone 4, Mixco'));
       } else if (clean === '8942104-5') {
         setNombreReceptor('Importadora Chapina y Cía. Ltda.');
-        setDireccionReceptor('Zona 9, Ciudad de Guatemala');
+        setDireccionReceptor(L('Zona 9, Ciudad de Guatemala', 'Zone 9, Guatemala City'));
       }
     }
   };
@@ -671,7 +702,7 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
     const serie = 'F' + Math.floor(1000 + Math.random() * 9000);
     const numero = Math.floor(100000000 + Math.random() * 900000000).toString();
     const now = new Date();
-    const fechaStr = `${now.toLocaleDateString('es-GT')} ${formatTime(now, true)}`;
+    const fechaStr = `${now.toLocaleDateString(locale)} ${formatTime(now, true)}`;
 
     const dte: FELCertificadoDTE = {
       uuid: generatedUuid,
@@ -680,12 +711,12 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
       fechaCertificacion: fechaStr,
       nitEmisor: empresaActiva.nit || '10429182-3',
       nombreEmisor: empresaActiva.razon_social || empresaActiva.nombre,
-      nitReceptor: nitReceptor || 'CF',
-      nombreReceptor: nombreReceptor || 'Consumidor Final',
+      nitReceptor: nitReceptor || (isEn ? 'N/A' : 'CF'),
+      nombreReceptor: nombreReceptor || L('Consumidor Final', 'Walk-in Customer'),
       direccionReceptor: direccionReceptor,
       total: total,
       iva: taxInfo.ivaMonto,
-      certificador: 'INFILE, S.A. NIT: 1252133-7 (Emisión DTE)',
+      certificador: L('INFILE, S.A. NIT: 1252133-7 (Emisión DTE)', 'INFILE, S.A. Tax ID: 1252133-7 (E-Invoice Issuer)'),
       fraseFiscal: taxInfo.fraseFiscalFEL,
       qrUrl: `https://fel.sat.gob.gt/verificador/?uuid=${generatedUuid}`
     };
@@ -699,31 +730,41 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
     const abonoInicialNum = metodoPago === 'credito' ? (parseFloat(abonoInicial) || 0) : 0;
 
     if (metodoPago === 'efectivo' && efectivoRecibido.trim() !== '' && efectivoNum < total) {
-      setSaleError(`El efectivo recibido (Q ${efectivoNum.toFixed(2)}) es menor al total a cobrar (Q ${total.toFixed(2)}).`);
+      setSaleError(L(
+        `El efectivo recibido (${money(efectivoNum)}) es menor al total a cobrar (${money(total)}).`,
+        `Cash received (${money(efectivoNum)}) is less than the total due (${money(total)}).`
+      ));
       return;
     }
 
     if (metodoPago === 'credito') {
       if (!selectedClient) {
-        setSaleError('Para registrar una venta al crédito debes asignar primero un cliente de tu cartera (no Consumidor Final).');
+        setSaleError(L(
+          'Para registrar una venta al crédito debes asignar primero un cliente de tu cartera (no Consumidor Final).',
+          'To record a credit sale, please assign a customer from your directory first (not Walk-in Customer).'
+        ));
         setClientModalOpen(true);
         return;
       }
       if (abonoInicialNum < 0) {
-        setSaleError('El abono inicial no puede ser negativo.');
+        setSaleError(L('El abono inicial no puede ser negativo.', 'Initial down payment cannot be negative.'));
         return;
       }
       if (abonoInicialNum >= total && total > 0) {
-        setSaleError('El abono inicial cubre el 100% de la venta. Selecciona Efectivo, Tarjeta o Transferencia para cobrar al contado.');
+        setSaleError(L(
+          'El abono inicial cubre el 100% de la venta. Selecciona Efectivo, Tarjeta o Transferencia para cobrar al contado.',
+          'The initial payment covers 100% of the sale. Select Cash, Card, or Bank Transfer to collect in full.'
+        ));
         return;
       }
       const saldoFinanciar = Math.max(0, total - abonoInicialNum);
       if (selectedClient.limite_credito > 0) {
         const disponible = Math.max(0, selectedClient.limite_credito - selectedClient.saldo_actual);
         if (saldoFinanciar > disponible + 0.01) {
-          setSaleError(
-            `El monto al crédito (Q ${saldoFinanciar.toFixed(2)}) excede el límite disponible de ${selectedClient.nombre_completo} (Q ${disponible.toFixed(2)}).`
-          );
+          setSaleError(L(
+            `El monto al crédito (${money(saldoFinanciar)}) excede el límite disponible de ${selectedClient.nombre_completo} (${money(disponible)}).`,
+            `The credit amount (${money(saldoFinanciar)}) exceeds ${selectedClient.nombre_completo}'s available limit (${money(disponible)}).`
+          ));
           return;
         }
       }
@@ -749,7 +790,10 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
           precio_unitario: item.price
         })),
         descuento: 0,
-        observaciones: `Venta POS en vivo - ${certificarFEL || tipoComprobante === 'fel' ? 'Factura FEL' : 'Ticket Caja'}`
+        observaciones: L(
+          `Venta POS en vivo - ${certificarFEL || tipoComprobante === 'fel' ? 'Factura FEL' : 'Ticket Caja'}`,
+          `Live POS Sale - ${certificarFEL || tipoComprobante === 'fel' ? 'E-Invoice' : 'POS Receipt'}`
+        )
       };
 
       const res = await salesApi.createSale(salePayload);
@@ -785,9 +829,12 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
       console.error('Error al registrar venta en el servidor:', err);
       const validationErrors = err?.response?.data?.errors;
       const firstValidationMsg = validationErrors ? String(Object.values(validationErrors).flat()[0] || '') : '';
-      const errMsg = firstValidationMsg || err?.response?.data?.message || err?.message || 'Error al conectar con el servidor para registrar la venta.';
+      const errMsg = firstValidationMsg || err?.response?.data?.message || err?.message || L('Error al conectar con el servidor para registrar la venta.', 'Failed to connect to the server to record the sale.');
       setSaleError(errMsg);
-      alert(`⚠️ ERROR AL PROCESAR VENTA:\n\n${errMsg}\n\nLa venta NO se registró en la base de datos ni se descontó inventario.`);
+      alert(L(
+        `⚠️ ERROR AL PROCESAR VENTA:\n\n${errMsg}\n\nLa venta NO se registró en la base de datos ni se descontó inventario.`,
+        `⚠️ ERROR PROCESSING SALE:\n\n${errMsg}\n\nThe sale was NOT recorded in the database and inventory was not deducted.`
+      ));
     } finally {
       setIsProcessingSale(false);
     }
@@ -809,9 +856,9 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
     setAbonoMetodo('efectivo');
     setLastSaleId(null);
     setSelectedClient(null);
-    setNitReceptor('CF');
-    setNombreReceptor('Consumidor Final');
-    setDireccionReceptor('Ciudad de Guatemala');
+    setNitReceptor(isEn ? 'N/A' : 'CF');
+    setNombreReceptor(L('Consumidor Final', 'Walk-in Customer'));
+    setDireccionReceptor(L('Ciudad de Guatemala', 'Guatemala City'));
     setShowCertificarForm(false);
     setTipoComprobante('ticket');
     setEditingDiscountId(null);
@@ -823,7 +870,10 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
     try {
       await salesApi.downloadSalePdf(lastSaleId);
     } catch (err: any) {
-      alert(`No se pudo generar el PDF: ${err?.response?.data?.message || err?.message || 'Error de conexión'}`);
+      alert(L(
+        `No se pudo generar el PDF: ${err?.response?.data?.message || err?.message || 'Error de conexión'}`,
+        `Could not generate PDF: ${err?.response?.data?.message || err?.message || 'Connection error'}`
+      ));
     } finally {
       setIsDownloadingPdf(false);
     }
@@ -843,11 +893,14 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
             ⚡
           </div>
           <div className="space-y-1">
-            <h2 className="text-lg font-black text-slate-900">Punto de Venta Deshabilitado</h2>
-            <p className="text-xs font-bold text-indigo-700 uppercase tracking-wider">Fortexa Technologies • Empresa de Software & SaaS</p>
+            <h2 className="text-lg font-black text-slate-900">{L('Punto de Venta Deshabilitado', 'Point of Sale Disabled')}</h2>
+            <p className="text-xs font-bold text-indigo-700 uppercase tracking-wider">{L('Fortexa Technologies • Empresa de Software & SaaS', 'Fortexa Technologies • Software & SaaS Company')}</p>
           </div>
           <p className="text-xs text-slate-500 leading-relaxed">
-            Las operaciones de Fortexa no utilizan caja registradora de mostrador retail; se gestionan mediante contratos corporativos, suscripciones recurrentes de RutaFuel Pro y licencias Hotmart.
+            {L(
+              'Las operaciones de Fortexa no utilizan caja registradora de mostrador retail; se gestionan mediante contratos corporativos, suscripciones recurrentes de RutaFuel Pro y licencias Hotmart.',
+              'Fortexa operations do not use a retail countertop cash register; they are managed through corporate contracts, recurring RutaFuel Pro subscriptions, and Hotmart licenses.'
+            )}
           </p>
         </div>
       </div>
@@ -865,7 +918,7 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
               <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
               <input
                 type="text"
-                placeholder="Buscar por nombre, código de barras o SKU..."
+                placeholder={L('Buscar por nombre, código de barras o SKU...', 'Search by name, barcode, or SKU...')}
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 font-medium"
@@ -873,7 +926,7 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
             </div>
             <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-700 rounded-xl border border-emerald-100 text-xs font-bold">
               <Building className="w-3.5 h-3.5" />
-              <span>Sucursal Central</span>
+              <span>{L('Sucursal Central', 'Central Branch')}</span>
             </div>
             <div className={`hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-[11px] font-bold ${
               isLiveConnected 
@@ -882,7 +935,7 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
             }`}>
               <span className={`w-2 h-2 rounded-full ${isLiveConnected ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
               <Wifi className="w-3 h-3 text-emerald-600" />
-              <span>{isLiveConnected ? 'Droplet en Vivo' : 'Modo Local'}</span>
+              <span>{isLiveConnected ? L('Droplet en Vivo', 'Live Server') : L('Modo Local', 'Local Mode')}</span>
             </div>
           </div>
 
@@ -898,7 +951,7 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
                     : 'bg-slate-100/80 text-slate-600 hover:bg-slate-200/70'
                 }`}
               >
-                {cat}
+                {cat === 'Todos' ? L('Todos', 'All') : cat}
               </button>
             ))}
           </div>
@@ -912,15 +965,19 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
                 <Building className="w-8 h-8" />
               </div>
               <h4 className="text-base font-black text-slate-800 mb-1">
-                0 Productos en {empresaActiva.nombre}
+                {L(`0 Productos en ${empresaActiva.nombre}`, `0 Products in ${empresaActiva.nombre}`)}
               </h4>
               <p className="text-xs text-slate-500 max-w-md leading-relaxed mb-4">
-                Esta empresa actualmente no tiene catálogo de productos registrado en la base de datos de producción (ID: {empresaActiva.id}).
-                Todos los <strong>2,492 productos activos</strong> de la tienda pertenecen a la cuenta de <strong>Fashion Styles</strong>.
+                {L(
+                  'Esta empresa actualmente no tiene catálogo de productos registrado en la base de datos de producción',
+                  'This company currently has no product catalog registered in the production database'
+                )} (ID: {empresaActiva.id}).{' '}
+                {L('Todos los', 'All')} <strong>{L('2,492 productos activos', '2,492 active products')}</strong>{' '}
+                {L('de la tienda pertenecen a la cuenta de', 'belong to the')} <strong>Fashion Styles</strong>{isEn ? ' account.' : '.'}
               </p>
               <div className="flex items-center gap-2">
                 <span className="text-[11px] font-semibold text-slate-600 bg-slate-100 px-3 py-1.5 rounded-xl border border-slate-200/60">
-                  💡 Selecciona <strong>Fashion Styles</strong> en el selector superior para ver y facturar los 2,492 productos.
+                  💡 {L('Selecciona', 'Select')} <strong>Fashion Styles</strong> {L('en el selector superior para ver y facturar los 2,492 productos.', 'in the top switcher to view and sell all 2,492 products.')}
                 </span>
               </div>
             </div>
@@ -937,7 +994,7 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
                   className={`aspect-square w-full rounded-xl bg-slate-100 overflow-hidden mb-2 relative group/img ${
                     product.image ? 'cursor-pointer' : 'cursor-default'
                   }`}
-                  title={product.image ? "Clic para ver fotografía en grande" : "Sin fotografía asignada"}
+                  title={product.image ? L('Clic para ver fotografía en grande', 'Click to enlarge photo') : L('Sin fotografía asignada', 'No photo assigned')}
                 >
                   {product.image ? (
                     <>
@@ -953,7 +1010,7 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
                       <div className="absolute inset-0 bg-slate-900/35 opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center justify-center">
                         <span className="px-2 py-1 rounded-lg bg-black/60 text-white flex items-center gap-1 text-[10px] font-bold shadow-md">
                           <ZoomIn className="w-3.5 h-3.5" />
-                          Ver Foto
+                          {L('Ver Foto', 'View Photo')}
                         </span>
                       </div>
                     </>
@@ -966,7 +1023,7 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
                   <span className={`absolute top-1.5 right-1.5 backdrop-blur-sm text-white text-[10px] font-black px-1.5 py-0.5 rounded-md pointer-events-none ${
                     product.stock <= 0 ? 'bg-rose-600/90' : 'bg-slate-900/75'
                   }`}>
-                    {product.stock <= 0 ? 'Agotado' : `Stock: ${product.stock}`}
+                    {product.stock <= 0 ? L('Agotado', 'Out of Stock') : `Stock: ${product.stock}`}
                   </span>
                 </div>
 
@@ -978,14 +1035,17 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
 
               <div className="mt-3 flex items-center justify-between pt-2 border-t border-slate-100">
                 <span className="text-sm font-black text-slate-900">
-                  Q {product.price.toFixed(2)}
+                  {money(product.price)}
                 </span>
                 {product.priceSource === 'costo' && (
                   <span
                     className="text-[9px] font-extrabold text-amber-700 bg-amber-50 border border-amber-300 px-1.5 py-0.5 rounded-md"
-                    title="Este producto aún no tiene precio de venta; se está mostrando el precio de compra. Actualízalo en Inventario para vender con margen."
+                    title={L(
+                      'Este producto aún no tiene precio de venta; se está mostrando el precio de compra. Actualízalo en Inventario para vender con margen.',
+                      'This product has no sale price yet; showing purchase cost. Update it in Inventory to sell with margin.'
+                    )}
                   >
-                    COSTO
+                    {L('COSTO', 'COST')}
                   </span>
                 )}
 
@@ -1002,7 +1062,7 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
                       ? 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed'
                       : 'bg-emerald-600 hover:bg-emerald-700 active:scale-90 text-white shadow-md shadow-emerald-600/25 cursor-pointer'
                   }`}
-                  title={product.stock <= 0 ? 'Sin existencias disponibles en inventario' : `Añadir ${product.name} al carrito`}
+                  title={product.stock <= 0 ? L('Sin existencias disponibles en inventario', 'Out of stock in inventory') : L(`Añadir ${product.name} al carrito`, `Add ${product.name} to cart`)}
                 >
                   <Plus className="w-4 h-4" />
                 </button>
@@ -1017,7 +1077,7 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
                 onClick={() => setDisplayLimit(prev => prev + 48)}
                 className="px-6 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl shadow-sm transition-all flex items-center gap-2 cursor-pointer"
               >
-                <span>Cargar más productos ({filteredProducts.length - displayLimit} restantes)</span>
+                <span>{L(`Cargar más productos (${filteredProducts.length - displayLimit} restantes)`, `Load more products (${filteredProducts.length - displayLimit} remaining)`)}</span>
               </button>
             </div>
           )}
@@ -1031,9 +1091,9 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
           <div className="flex items-center justify-between pb-3 border-b border-slate-100">
             <div className="flex items-center gap-2">
               <ShoppingBag className="w-5 h-5 text-emerald-600" />
-              <h3 className="text-sm font-black text-slate-900">Comprobante de Caja</h3>
+              <h3 className="text-sm font-black text-slate-900">{L('Comprobante de Caja', 'POS Checkout')}</h3>
               <span className="text-[10px] bg-slate-100 px-2 py-0.5 rounded-full font-bold text-slate-600">
-                {cart.reduce((a, b) => a + b.quantity, 0)} items
+                {cart.reduce((a, b) => a + b.quantity, 0)} {L('items', 'items')}
               </span>
             </div>
             {cart.length > 0 && (
@@ -1042,7 +1102,7 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
                 className="text-xs font-bold text-rose-500 hover:text-rose-700 flex items-center gap-1"
               >
                 <Trash2 className="w-3.5 h-3.5" />
-                <span>Vaciar</span>
+                <span>{L('Vaciar', 'Clear')}</span>
               </button>
             )}
           </div>
@@ -1052,7 +1112,7 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
             <div className="flex items-center justify-between">
               <span className="text-[11px] font-black text-slate-800 flex items-center gap-1.5">
                 <Users className="w-3.5 h-3.5 text-indigo-600" />
-                Cliente de la Venta
+                {L('Cliente de la Venta', 'Sale Customer')}
               </span>
               <button
                 type="button"
@@ -1060,7 +1120,7 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
                 className="text-[10px] font-bold text-indigo-700 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 px-2 py-0.5 rounded-lg border border-indigo-200 transition-colors flex items-center gap-1 cursor-pointer"
               >
                 <Search className="w-2.5 h-2.5" />
-                <span>{selectedClient ? 'Cambiar Cliente' : 'Buscar / Asignar'}</span>
+                <span>{selectedClient ? L('Cambiar Cliente', 'Change Customer') : L('Buscar / Asignar', 'Search / Assign')}</span>
               </button>
             </div>
 
@@ -1069,10 +1129,10 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-1.5">
                     <span className="text-xs font-black text-slate-900 truncate">
-                      {selectedClient.nombre_completo}
+                      {trClient(selectedClient.nombre_completo)}
                     </span>
                     <span className="text-[9px] font-mono font-bold px-1.5 py-0.2 rounded bg-indigo-100 text-indigo-800 shrink-0">
-                      NIT: {selectedClient.nit}
+                      {taxIdLabel}: {trTaxId(selectedClient.nit)}
                     </span>
                   </div>
                   <div className="flex items-center gap-2 text-[10px] text-slate-400 mt-0.5">
@@ -1084,7 +1144,7 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
                     )}
                     {selectedClient.limite_credito > 0 && (
                       <span className="text-emerald-700 font-bold">
-                        Crédito: Q {(selectedClient.limite_credito - selectedClient.saldo_actual).toFixed(2)} disp.
+                        {L('Crédito:', 'Credit:')} {money(selectedClient.limite_credito - selectedClient.saldo_actual)} {L('disp.', 'avail.')}
                       </span>
                     )}
                   </div>
@@ -1093,7 +1153,7 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
                   type="button"
                   onClick={handleResetToCF}
                   className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
-                  title="Restablecer a Consumidor Final (CF)"
+                  title={L('Restablecer a Consumidor Final (CF)', 'Reset to Walk-in Customer')}
                 >
                   <X className="w-3.5 h-3.5" />
                 </button>
@@ -1108,12 +1168,12 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
                     <User className="w-3.5 h-3.5" />
                   </div>
                   <div>
-                    <p className="text-xs font-bold text-slate-800">Consumidor Final (CF)</p>
-                    <p className="text-[10px] text-slate-400">Clic para asignar cliente específico</p>
+                    <p className="text-xs font-bold text-slate-800">{L('Consumidor Final (CF)', 'Walk-in Customer')}</p>
+                    <p className="text-[10px] text-slate-400">{L('Clic para asignar cliente específico', 'Click to assign a specific customer')}</p>
                   </div>
                 </div>
                 <span className="text-[10px] font-black text-indigo-700 bg-indigo-50 group-hover:bg-indigo-100 px-2 py-1 rounded-lg border border-indigo-100">
-                  Elegir
+                  {L('Elegir', 'Select')}
                 </span>
               </div>
             )}
@@ -1128,10 +1188,10 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
                     </span>
                     <div className="min-w-0">
                       <p className="text-[11px] font-black text-purple-950 truncate">
-                        Canasta TikTok Live ({liveBag.items.length} prendas apartadas)
+                        {L(`Canasta TikTok Live (${liveBag.items.length} prendas apartadas)`, `TikTok Live Bag (${liveBag.items.length} reserved items)`)}
                       </p>
                       <p className="text-[10px] text-purple-700 font-mono">
-                        Total Live: Q {liveBag.total.toFixed(2)} ({liveBag.usuario_tiktok})
+                        {L('Total Live:', 'Live Total:')} {money(liveBag.total)} ({liveBag.usuario_tiktok})
                       </p>
                     </div>
                   </div>
@@ -1141,7 +1201,7 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
                     className="px-2.5 py-1.5 bg-gradient-to-r from-purple-600 to-rose-600 hover:from-purple-700 hover:to-rose-700 active:scale-95 text-white font-bold text-[10px] rounded-lg shadow-sm transition-all flex items-center gap-1 cursor-pointer shrink-0"
                   >
                     <Sparkles className="w-3 h-3" />
-                    <span>Unificar Canasta</span>
+                    <span>{L('Unificar Canasta', 'Merge Bag')}</span>
                   </button>
                 </div>
               </div>
@@ -1152,8 +1212,8 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
           <div className="mt-3 p-2.5 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
             <div className="flex items-center justify-between">
               <div>
-                <span className="text-[11px] font-black text-slate-800 block">Comprobante de Caja</span>
-                <span className="text-[9.5px] text-slate-400">Cobro rápido vs Factura</span>
+                <span className="text-[11px] font-black text-slate-800 block">{L('Comprobante de Caja', 'Receipt Type')}</span>
+                <span className="text-[9.5px] text-slate-400">{L('Cobro rápido vs Factura', 'Quick Receipt vs E-Invoice')}</span>
               </div>
               <div className="flex items-center bg-white p-0.5 border border-slate-200 rounded-xl shadow-xs">
                 <button
@@ -1166,7 +1226,7 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
                   }`}
                 >
                   <Receipt className="w-3 h-3 text-emerald-400" />
-                  <span>Ticket Caja (Normal)</span>
+                  <span>{L('Ticket Caja (Normal)', 'Standard Receipt')}</span>
                 </button>
                 <button
                   type="button"
@@ -1178,7 +1238,7 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
                   }`}
                 >
                   <FileCheck2 className="w-3 h-3" />
-                  <span>Factura FEL</span>
+                  <span>{L('Factura FEL', 'E-Invoice')}</span>
                 </button>
               </div>
             </div>
@@ -1188,30 +1248,30 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
               <div className="flex items-center justify-between text-[10px] text-slate-500 bg-white p-1.5 rounded-lg border border-slate-200">
                 <span className="flex items-center gap-1">
                   <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                  Cobro directo en caja sin requerir certificador SAT
+                  {L('Cobro directo en caja sin requerir certificador SAT', 'Direct checkout without external tax certification')}
                 </span>
-                <span className="text-indigo-600 font-bold">Facturable después</span>
+                <span className="text-indigo-600 font-bold">{L('Facturable después', 'Invoice later')}</span>
               </div>
             ) : (
               <div className="space-y-1.5 pt-1 text-xs">
                 <div className="flex gap-1.5">
                   <div className="w-1/3">
-                    <label className="text-[10px] font-bold text-slate-500">NIT Receptor</label>
+                    <label className="text-[10px] font-bold text-slate-500">{L('NIT Receptor', 'Customer Tax ID')}</label>
                     <input
                       type="text"
                       value={nitReceptor}
                       onChange={(e) => handleNitChange(e.target.value)}
-                      placeholder="NIT o CF"
+                      placeholder={L('NIT o CF', 'Tax ID or N/A')}
                       className="w-full px-2 py-1 bg-white border border-slate-200 rounded-lg text-xs font-mono font-bold text-slate-800 focus:outline-none focus:ring-1 focus:ring-emerald-500 uppercase"
                     />
                   </div>
                   <div className="flex-1">
-                    <label className="text-[10px] font-bold text-slate-500">Nombre / Razón Social</label>
+                    <label className="text-[10px] font-bold text-slate-500">{L('Nombre / Razón Social', 'Customer / Company Name')}</label>
                     <input
                       type="text"
                       value={nombreReceptor}
                       onChange={(e) => setNombreReceptor(e.target.value)}
-                      placeholder="Nombre del cliente"
+                      placeholder={L('Nombre del cliente', 'Customer name')}
                       className="w-full px-2 py-1 bg-white border border-slate-200 rounded-lg text-xs font-semibold text-slate-800 focus:outline-none focus:ring-1 focus:ring-emerald-500"
                     />
                   </div>
@@ -1219,14 +1279,14 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
                 <div className="flex items-center justify-between text-[10px] text-slate-400">
                   <span className="flex items-center gap-1 text-amber-700 font-medium">
                     <span className="w-2 h-2 rounded-full bg-amber-500" />
-                    Modo Simulado / Certificador en Configuración
+                    {L('Modo Simulado / Certificador en Configuración', 'Simulated Mode / Certifier in Settings')}
                   </span>
                   <button 
                     type="button" 
-                    onClick={() => handleNitChange('CF')}
+                    onClick={() => handleNitChange(isEn ? 'N/A' : 'CF')}
                     className="text-emerald-700 font-bold hover:underline"
                   >
-                    Usar CF
+                    {L('Usar CF', 'Use Walk-in')}
                   </button>
                 </div>
               </div>
@@ -1238,8 +1298,8 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
             {cart.length === 0 ? (
               <div className="text-center py-8 text-slate-400">
                 <ShoppingBag className="w-10 h-10 mx-auto stroke-1 text-slate-300 mb-2" />
-                <p className="text-xs font-bold text-slate-500">El carrito está vacío</p>
-                <p className="text-[10px]">Agrega productos del catálogo para comenzar</p>
+                <p className="text-xs font-bold text-slate-500">{L('El carrito está vacío', 'Cart is empty')}</p>
+                <p className="text-[10px]">{L('Agrega productos del catálogo para comenzar', 'Add products from the catalog to begin')}</p>
               </div>
             ) : (
               cart.map((item) => {
@@ -1261,7 +1321,7 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
                       <div className="min-w-0 flex-1">
                         <p className="text-xs font-bold text-slate-800 truncate" title={item.name}>{item.name}</p>
                         <div className="flex items-center gap-2 mt-0.5">
-                          <p className="text-[10px] text-slate-400">Q {item.price.toFixed(2)} c/u</p>
+                          <p className="text-[10px] text-slate-400">{money(item.price)} {L('c/u', 'ea')}</p>
                           
                           {/* Botón / Badge para aplicar Descuento instantáneo */}
                           {itemDisc > 0 ? (
@@ -1269,20 +1329,20 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
                               type="button"
                               onClick={() => handleToggleDiscount(item)}
                               className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-amber-100 hover:bg-amber-200 text-amber-800 text-[10px] font-black border border-amber-300 transition-colors cursor-pointer"
-                              title="Modificar o eliminar descuento"
+                              title={L('Modificar o eliminar descuento', 'Edit or remove discount')}
                             >
                               <Tag className="w-2.5 h-2.5" />
-                              <span>-Q {itemDisc.toFixed(2)}</span>
+                              <span>-{money(itemDisc)}</span>
                             </button>
                           ) : (
                             <button
                               type="button"
                               onClick={() => handleToggleDiscount(item)}
                               className="inline-flex items-center gap-0.5 text-[10px] font-bold text-amber-700 hover:text-amber-800 hover:underline cursor-pointer"
-                              title="Aplicar descuento inmediato a este producto"
+                              title={L('Aplicar descuento inmediato a este producto', 'Apply instant discount to this item')}
                             >
                               <Tag className="w-2.5 h-2.5" />
-                              <span>+ Desc</span>
+                              <span>{L('+ Desc', '+ Disc')}</span>
                             </button>
                           )}
                         </div>
@@ -1308,21 +1368,21 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
                         {itemDisc > 0 ? (
                           <>
                             <p className="text-[10px] text-slate-400 line-through">
-                              Q {itemGross.toFixed(2)}
+                              {money(itemGross)}
                             </p>
                             <p className="text-xs font-black text-emerald-700">
-                              Q {itemNet.toFixed(2)}
+                              {money(itemNet)}
                             </p>
                           </>
                         ) : (
                           <p className="text-xs font-black text-slate-900">
-                            Q {itemGross.toFixed(2)}
+                            {money(itemGross)}
                           </p>
                         )}
                         <button
                           onClick={() => removeFromCart(item.id)}
                           className="text-slate-400 hover:text-rose-500 transition-colors p-0.5 cursor-pointer mt-0.5"
-                          title="Eliminar producto"
+                          title={L('Eliminar producto', 'Remove item')}
                         >
                           <Trash2 className="w-3 h-3" />
                         </button>
@@ -1335,7 +1395,7 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
                         <div className="flex items-center justify-between">
                           <span className="text-[10px] font-black text-amber-900 flex items-center gap-1">
                             <Tag className="w-3 h-3 text-amber-700" />
-                            Descuento al producto:
+                            {L('Descuento al producto:', 'Item discount:')}
                           </span>
                           <button
                             type="button"
@@ -1346,11 +1406,11 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
                           </button>
                         </div>
 
-                        {/* Input en Quetzales */}
+                        {/* Input en moneda activa */}
                         <div className="flex items-center gap-1.5">
                           <div className="relative flex-1">
                             <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">
-                              Q
+                              {currencySymbol}
                             </span>
                             <input
                               type="number"
@@ -1370,9 +1430,9 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
                               type="button"
                               onClick={() => handleRemoveDiscount(item.id)}
                               className="px-2 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 text-[10px] font-bold rounded-lg border border-rose-200 cursor-pointer"
-                              title="Quitar descuento"
+                              title={L('Quitar descuento', 'Remove discount')}
                             >
-                              Quitar
+                              {L('Quitar', 'Remove')}
                             </button>
                           )}
 
@@ -1381,13 +1441,13 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
                             onClick={() => setEditingDiscountId(null)}
                             className="px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white text-[10px] font-black rounded-lg shadow-2xs cursor-pointer"
                           >
-                            Listo
+                            {L('Listo', 'Done')}
                           </button>
                         </div>
 
                         {/* Chips de porcentaje rápido */}
                         <div className="flex items-center gap-1 pt-0.5">
-                          <span className="text-[9px] font-bold text-amber-800">Rápido:</span>
+                          <span className="text-[9px] font-bold text-amber-800">{L('Rápido:', 'Quick:')}</span>
                           {[5, 10, 15, 20, 25, 50].map((pct) => (
                             <button
                               key={pct}
@@ -1413,7 +1473,7 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
           <div className="space-y-1.5 text-xs">
             {/* Indicador interno de Régimen Emisor (el IVA se registra internamente en Contabilidad, sin desglose en el recibo del cliente) */}
             <div className="flex items-center justify-between pb-1.5 border-b border-slate-100">
-              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Régimen Emisor:</span>
+              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">{L('Régimen Emisor:', 'Tax Regime:')}</span>
               <span
                 className={`text-[10px] font-black px-2 py-0.5 rounded-full border ${
                   taxInfo.tipoRegimen === 'general'
@@ -1422,7 +1482,10 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
                     ? 'bg-purple-50 text-purple-800 border-purple-200'
                     : 'bg-amber-50 text-amber-800 border-amber-200'
                 }`}
-                title="El impuesto correspondiente a este régimen se registra internamente en Contabilidad y Reportes SAT; no se desglosa en el comprobante del cliente."
+                title={L(
+                  'El impuesto correspondiente a este régimen se registra internamente en Contabilidad y Reportes SAT; no se desglosa en el comprobante del cliente.',
+                  'The applicable tax for this regime is recorded internally in Accounting and Tax Reports; not itemized on the customer receipt.'
+                )}
               >
                 {taxInfo.regimenLabel}
               </span>
@@ -1432,19 +1495,22 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
               <div className="flex justify-between text-[11px] text-amber-800 font-bold bg-amber-50 px-2.5 py-1 rounded-xl border border-amber-200">
                 <span className="flex items-center gap-1">
                   <Tag className="w-3 h-3 text-amber-600" />
-                  Ahorro en productos (desc. individual)
+                  {L('Ahorro en productos (desc. individual)', 'Item savings (line discounts)')}
                 </span>
-                <span>- Q {totalDiscount.toFixed(2)}</span>
+                <span>- {money(totalDiscount)}</span>
               </div>
             )}
 
             <div className="flex justify-between items-baseline text-base font-black text-slate-900 pt-1">
-              <span>Total a Cobrar</span>
-              <span className="text-emerald-700">Q {total.toFixed(2)}</span>
+              <span>{L('Total a Cobrar', 'Total Due')}</span>
+              <span className="text-emerald-700">{money(total)}</span>
             </div>
             {taxInfo.tipoRegimen !== 'exento' && total > 0 && (
               <p className="text-[10px] text-slate-400 text-right">
-                Impuesto interno registrado en sistema ({taxInfo.tipoRegimen === 'general' ? 'IVA 12%' : 'SAT 5%'} — no visible en recibo)
+                {L(
+                  `Impuesto interno registrado en sistema (${taxInfo.tipoRegimen === 'general' ? 'IVA 12%' : 'SAT 5%'} — no visible en recibo)`,
+                  `Internal tax recorded in system (${taxInfo.tipoRegimen === 'general' ? '12% VAT' : '5% Flat Tax'} — hidden from receipt)`
+                )}
               </p>
             )}
           </div>
@@ -1461,7 +1527,7 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
               }`}
             >
               <Banknote className="w-3.5 h-3.5 text-emerald-600" />
-              <span>Efectivo</span>
+              <span>{trPayment('efectivo')}</span>
             </button>
             <button 
               type="button"
@@ -1473,7 +1539,7 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
               }`}
             >
               <CreditCard className="w-3.5 h-3.5 text-indigo-600" />
-              <span>Tarjeta</span>
+              <span>{trPayment('tarjeta')}</span>
             </button>
             <button 
               type="button"
@@ -1485,7 +1551,7 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
               }`}
             >
               <QrCode className="w-3.5 h-3.5 text-sky-600" />
-              <span>Transf.</span>
+              <span>{L('Transf.', 'Transfer')}</span>
             </button>
             <button 
               type="button"
@@ -1497,7 +1563,7 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
               }`}
             >
               <Coins className="w-3.5 h-3.5 text-amber-600" />
-              <span>Crédito</span>
+              <span>{trPayment('credito')}</span>
             </button>
           </div>
 
@@ -1505,7 +1571,7 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
           {metodoPago === 'efectivo' && cart.length > 0 && (
             <div className="p-2 bg-emerald-50/60 rounded-xl border border-emerald-100 flex items-center justify-between text-xs">
               <div className="flex items-center gap-2">
-                <span className="text-[11px] font-bold text-slate-700">Recibido: Q</span>
+                <span className="text-[11px] font-bold text-slate-700">{L('Recibido:', 'Received:')} {currencySymbol}</span>
                 <input
                   type="number"
                   step="0.01"
@@ -1516,9 +1582,9 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
                 />
               </div>
               <div className="text-right">
-                <span className="text-[10px] text-slate-500 block">Cambio a entregar:</span>
+                <span className="text-[10px] text-slate-500 block">{L('Cambio a entregar:', 'Change due:')}</span>
                 <span className={`text-xs font-black ${cambio >= 0 ? 'text-emerald-700' : 'text-rose-600'}`}>
-                  Q {cambio.toFixed(2)}
+                  {money(cambio)}
                 </span>
               </div>
             </div>
@@ -1529,7 +1595,7 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
             <div>
               <input
                 type="text"
-                placeholder="No. de Autorización / Referencia de Transacción..."
+                placeholder={L('No. de Autorización / Referencia de Transacción...', 'Auth # / Transaction Reference...')}
                 value={referenciaPago}
                 onChange={(e) => setReferenciaPago(e.target.value)}
                 className="w-full px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:outline-none"
@@ -1543,11 +1609,11 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
               <div className="flex items-center justify-between">
                 <span className="font-bold text-amber-900 flex items-center gap-1.5 text-xs">
                   <Coins className="w-3.5 h-3.5 text-amber-700" />
-                  Venta al Crédito (CXC)
+                  {L('Venta al Crédito (CXC)', 'Credit Sale (A/R)')}
                 </span>
                 {selectedClient && (
                   <span className="text-[10px] font-bold text-amber-800 bg-amber-100 px-1.5 py-0.5 rounded">
-                    Plazo: {selectedClient.dias_credito || 30} días
+                    {L(`Plazo: ${selectedClient.dias_credito || 30} días`, `Term: ${selectedClient.dias_credito || 30} days`)}
                   </span>
                 )}
               </div>
@@ -1555,30 +1621,30 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
               {selectedClient ? (
                 <div className="space-y-1 text-[11px] bg-white p-2 rounded-xl border border-amber-100">
                   <div className="flex justify-between">
-                    <span className="text-slate-500">Cliente Titular:</span>
-                    <span className="font-black text-slate-800 truncate max-w-[170px]">{selectedClient.nombre_completo}</span>
+                    <span className="text-slate-500">{L('Cliente Titular:', 'Account Holder:')}</span>
+                    <span className="font-black text-slate-800 truncate max-w-[170px]">{trClient(selectedClient.nombre_completo)}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-slate-500">Límite Autorizado:</span>
-                    <span className="font-semibold text-slate-700">Q {selectedClient.limite_credito.toFixed(2)}</span>
+                    <span className="text-slate-500">{L('Límite Autorizado:', 'Credit Limit:')}</span>
+                    <span className="font-semibold text-slate-700">{money(selectedClient.limite_credito)}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-slate-500">Saldo Deudor Actual:</span>
-                    <span className="font-bold text-rose-600">Q {selectedClient.saldo_actual.toFixed(2)}</span>
+                    <span className="text-slate-500">{L('Saldo Deudor Actual:', 'Current Balance:')}</span>
+                    <span className="font-bold text-rose-600">{money(selectedClient.saldo_actual)}</span>
                   </div>
                   <div className="flex justify-between pt-1 border-t border-slate-100 font-bold">
-                    <span>Crédito Disponible:</span>
+                    <span>{L('Crédito Disponible:', 'Available Credit:')}</span>
                     <span className={selectedClient.limite_credito - selectedClient.saldo_actual >= Math.max(0, total - (parseFloat(abonoInicial) || 0)) ? 'text-emerald-700' : 'text-rose-600'}>
-                      Q {Math.max(0, selectedClient.limite_credito - selectedClient.saldo_actual).toFixed(2)}
+                      {money(Math.max(0, selectedClient.limite_credito - selectedClient.saldo_actual))}
                     </span>
                   </div>
 
                   {/* Abono Inicial / Enganche Opcional */}
                   <div className="pt-2 mt-1 border-t border-amber-100 space-y-1.5">
                     <div className="flex items-center justify-between gap-2">
-                      <label className="text-[10px] font-bold text-amber-900">Abono inicial hoy (opcional):</label>
+                      <label className="text-[10px] font-bold text-amber-900">{L('Abono inicial hoy (opcional):', 'Down payment today (optional):')}</label>
                       <div className="relative w-28">
-                        <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-400">Q</span>
+                        <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-400">{currencySymbol}</span>
                         <input
                           type="number"
                           step="0.01"
@@ -1605,22 +1671,22 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
                                   : 'bg-slate-50 text-slate-600 border-slate-200'
                               }`}
                             >
-                              {m === 'transferencia' ? 'Transf.' : m}
+                              {m === 'transferencia' ? L('Transf.', 'Transfer') : trPayment(m)}
                             </button>
                           ))}
                         </div>
                         {abonoMetodo !== 'efectivo' && (
                           <input
                             type="text"
-                            placeholder="Ref. del abono inicial..."
+                            placeholder={L('Ref. del abono inicial...', 'Down payment ref...')}
                             value={referenciaPago}
                             onChange={(e) => setReferenciaPago(e.target.value)}
                             className="w-full px-2.5 py-1 bg-slate-50 border border-slate-200 rounded-lg text-[10px] font-medium focus:bg-white focus:outline-none"
                           />
                         )}
                         <div className="flex justify-between text-[10px] font-black text-amber-900 bg-amber-50 px-2 py-1 rounded-lg">
-                          <span>Queda en Cuentas por Cobrar:</span>
-                          <span>Q {Math.max(0, total - (parseFloat(abonoInicial) || 0)).toFixed(2)}</span>
+                          <span>{L('Queda en Cuentas por Cobrar:', 'Added to Accounts Receivable:')}</span>
+                          <span>{money(Math.max(0, total - (parseFloat(abonoInicial) || 0)))}</span>
                         </div>
                       </div>
                     )}
@@ -1629,21 +1695,24 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
                   {selectedClient.limite_credito > 0 && Math.max(0, total - (parseFloat(abonoInicial) || 0)) > (selectedClient.limite_credito - selectedClient.saldo_actual) && (
                     <div className="p-1.5 bg-rose-50 rounded-lg border border-rose-200 flex items-center gap-1 text-[10px] text-rose-700 font-bold mt-1">
                       <AlertCircle className="w-3 h-3 shrink-0" />
-                      <span>La venta excede el límite disponible del cliente.</span>
+                      <span>{L('La venta excede el límite disponible del cliente.', 'Sale exceeds the customer available credit limit.')}</span>
                     </div>
                   )}
                 </div>
               ) : (
                 <div className="p-2 bg-white rounded-xl border border-amber-200 text-[10px] space-y-1.5">
                   <p className="text-amber-900 font-medium leading-relaxed">
-                    ⚠️ Para registrar una venta al crédito, asigna un cliente con cuenta activa de cartera.
+                    {L(
+                      '⚠️ Para registrar una venta al crédito, asigna un cliente con cuenta activa de cartera.',
+                      '⚠️ To record a credit sale, assign a customer with an active credit account.'
+                    )}
                   </p>
                   <button
                     type="button"
                     onClick={() => setClientModalOpen(true)}
                     className="w-full py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-black rounded-lg transition-colors cursor-pointer shadow-xs"
                   >
-                    Asignar Cliente Ahora
+                    {L('Asignar Cliente Ahora', 'Assign Customer Now')}
                   </button>
                 </div>
               )}
@@ -1655,7 +1724,7 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
             <div className="p-3 bg-rose-50 border border-rose-200 rounded-2xl flex items-start gap-2.5 text-rose-800 text-xs animate-in fade-in">
               <AlertCircle className="w-4 h-4 text-rose-600 flex-shrink-0 mt-0.5" />
               <div className="flex-1">
-                <p className="font-bold">No se pudo procesar la venta:</p>
+                <p className="font-bold">{L('No se pudo procesar la venta:', 'Could not process sale:')}</p>
                 <p className="text-[11px] text-rose-700 mt-0.5">{saleError}</p>
               </div>
               <button
@@ -1679,12 +1748,12 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
               {isProcessingSale ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin text-emerald-400" />
-                  <span>REGISTRANDO EN BASE DE DATOS...</span>
+                  <span>{L('REGISTRANDO EN BASE DE DATOS...', 'RECORDING IN DATABASE...')}</span>
                 </>
               ) : (
                 <>
                   <Receipt className="w-4 h-4 text-emerald-400" />
-                  <span>COBRAR VENTA (TICKET DE CAJA) • Q {total.toFixed(2)}</span>
+                  <span>{L('COBRAR VENTA (TICKET DE CAJA)', 'CHARGE SALE (POS RECEIPT)')} • {money(total)}</span>
                 </>
               )}
             </button>
@@ -1698,12 +1767,12 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
               {isProcessingSale ? (
                 <>
                   <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-700" />
-                  <span>Certificando con SAT Infile...</span>
+                  <span>{L('Certificando con SAT Infile...', 'Certifying E-Invoice...')}</span>
                 </>
               ) : (
                 <>
                   <FileCheck2 className="w-3.5 h-3.5 text-emerald-700" />
-                  <span>Cobrar y Certificar Factura FEL (SAT)</span>
+                  <span>{L('Cobrar y Certificar Factura FEL (SAT)', 'Charge & Issue Electronic Invoice')}</span>
                 </>
               )}
             </button>
@@ -1724,37 +1793,37 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
                   type="button"
                   onClick={() => setSaleCompletedModal(false)}
                   className="p-1.5 rounded-xl bg-white/10 hover:bg-white/20 active:scale-95 text-white transition-all flex items-center gap-1 cursor-pointer mr-1"
-                  title="Regresar a la pantalla de venta"
+                  title={L('Regresar a la pantalla de venta', 'Back to POS screen')}
                 >
                   <ArrowLeft className="w-4 h-4" />
-                  <span className="text-[11px] font-bold hidden sm:inline">Regresar</span>
+                  <span className="text-[11px] font-bold hidden sm:inline">{L('Regresar', 'Back')}</span>
                 </button>
                 <CheckCircle2 className="w-5 h-5 text-emerald-300 flex-shrink-0" />
                 <div>
                   <h3 className="text-xs font-black">
-                    {dteCertificado ? 'Factura Electrónica FEL Certificada' : '¡Venta Registrada Exitosamente!'}
+                    {dteCertificado ? L('Factura Electrónica FEL Certificada', 'Electronic Invoice Certified') : L('¡Venta Registrada Exitosamente!', 'Sale Recorded Successfully!')}
                   </h3>
                   <p className="text-[10px] text-emerald-100">
-                    {dteCertificado ? 'SAT Infile DTE Autorizado' : 'Ticket de Caja Interno'}
+                    {dteCertificado ? L('SAT Infile DTE Autorizado', 'Authorized E-Invoice (DTE)') : L('Ticket de Caja Interno', 'Internal POS Receipt')}
                   </p>
                 </div>
               </div>
               <div className="flex items-center gap-2">
                 <span className="text-[10px] bg-white/20 px-2 py-0.5 rounded-full font-bold">
-                  Q {total.toFixed(2)}
+                  {money(total)}
                 </span>
                 <button
                   type="button"
                   onClick={() => setSaleCompletedModal(false)}
                   className="p-1 rounded-lg hover:bg-white/10 text-white/70 hover:text-white transition-all cursor-pointer"
-                  title="Cerrar y volver al POS"
+                  title={L('Cerrar y volver al POS', 'Close and return to POS')}
                 >
                   <X className="w-4 h-4" />
                 </button>
               </div>
             </div>
 
-            {/* Simulación del Comprobante Térmico / FEL Oficial de Guatemala */}
+            {/* Simulación del Comprobante Térmico / FEL Oficial */}
             <div className="p-5 font-mono text-[11px] text-slate-700 space-y-3 max-h-[60vh] overflow-y-auto">
               <div className="text-center pb-2 border-b border-dashed border-slate-300">
                 {/* Logo dinámico por empresa activa */}
@@ -1769,45 +1838,48 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
                 )}
                 <p className="font-black text-sm text-slate-900 uppercase tracking-tight">{empresaActiva.nombre}</p>
                 <p className="text-[10px] text-slate-500 font-medium">{empresaActiva.razon_social || empresaActiva.nombre}</p>
-                <p className="text-[10px] text-slate-500">NIT: {empresaActiva.nit || 'CF'}</p>
+                <p className="text-[10px] text-slate-500">{taxIdLabel}: {trTaxId(empresaActiva.nit)}</p>
                 {empresaActiva.direccion && <p className="text-[10px] text-slate-500">{empresaActiva.direccion}</p>}
-                {empresaActiva.telefono && <p className="text-[10px] text-slate-500">PBX / WhatsApp: {empresaActiva.telefono}</p>}
+                {empresaActiva.telefono && <p className="text-[10px] text-slate-500">{L('PBX / WhatsApp:', 'Phone / WhatsApp:')} {empresaActiva.telefono}</p>}
               </div>
 
               {dteCertificado ? (
                 <div className="bg-emerald-50/70 p-2.5 rounded-xl border border-emerald-100 space-y-1 text-[10px]">
                   <div className="flex justify-between items-center">
-                    <span className="font-bold text-slate-600">No. Autorización (UUID):</span>
+                    <span className="font-bold text-slate-600">{L('No. Autorización (UUID):', 'Authorization # (UUID):')}</span>
                     <button 
                       onClick={() => copyToClipboard(dteCertificado.uuid)} 
                       className="text-emerald-700 hover:underline flex items-center gap-0.5 font-bold"
                     >
                       <Copy className="w-2.5 h-2.5" />
-                      {copiedUuid ? 'Copiado!' : 'Copiar'}
+                      {copiedUuid ? L('¡Copiado!', 'Copied!') : L('Copiar', 'Copy')}
                     </button>
                   </div>
                   <p className="font-mono text-emerald-950 font-black break-all text-[9.5px]">
                     {dteCertificado.uuid}
                   </p>
                   <div className="grid grid-cols-2 gap-1 pt-1 border-t border-emerald-200/60 text-slate-600">
-                    <p><span className="font-bold">Serie:</span> {dteCertificado.serie}</p>
-                    <p><span className="font-bold">Número DTE:</span> {dteCertificado.numero}</p>
-                    <p className="col-span-2"><span className="font-bold">Fecha Cert.:</span> {dteCertificado.fechaCertificacion}</p>
+                    <p><span className="font-bold">{L('Serie:', 'Series:')}</span> {dteCertificado.serie}</p>
+                    <p><span className="font-bold">{L('Número DTE:', 'E-Invoice #:')}</span> {dteCertificado.numero}</p>
+                    <p className="col-span-2"><span className="font-bold">{L('Fecha Cert.:', 'Certified Date:')}</span> {dteCertificado.fechaCertificacion}</p>
                   </div>
                 </div>
               ) : (
                 <div className="space-y-2.5">
                   <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200 space-y-1 text-[10px]">
                     <div className="flex justify-between items-center text-slate-700">
-                      <span className="font-bold">No. Ticket de Caja:</span>
+                      <span className="font-bold">{L('No. Ticket de Caja:', 'Receipt Number:')}</span>
                       <span className="font-mono font-black text-slate-900">{ticketNumero}</span>
                     </div>
                     <div className="flex justify-between items-center text-slate-500">
-                      <span>Tipo Comprobante:</span>
-                      <span className="font-semibold text-slate-800">Recibo / Ticket de Venta Interno</span>
+                      <span>{L('Tipo Comprobante:', 'Document Type:')}</span>
+                      <span className="font-semibold text-slate-800">{L('Recibo / Ticket de Venta Interno', 'Internal Sales Receipt')}</span>
                     </div>
                     <p className="text-[9px] text-slate-400 italic pt-0.5">
-                      ✓ Venta cobrada y registrada en caja. Sin conexión a certificador requerida.
+                      {L(
+                        '✓ Venta cobrada y registrada en caja. Sin conexión a certificador requerida.',
+                        '✓ Sale paid and recorded at register. No external tax certifier required.'
+                      )}
                     </p>
                   </div>
 
@@ -1817,10 +1889,10 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
                       <div>
                         <p className="text-xs font-black text-indigo-950 flex items-center gap-1.5">
                           <FileCheck2 className="w-3.5 h-3.5 text-indigo-600" />
-                          Facturar Venta por Aparte (FEL SAT)
+                          {L('Facturar Venta por Aparte (FEL SAT)', 'Issue Separate E-Invoice')}
                         </p>
                         <p className="text-[10px] text-indigo-700">
-                          ¿El cliente solicitó Factura con NIT posterior al cobro?
+                          {L('¿El cliente solicitó Factura con NIT posterior al cobro?', 'Did the customer request a Tax ID Invoice after checkout?')}
                         </p>
                       </div>
                       <button
@@ -1828,7 +1900,7 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
                         onClick={() => setShowCertificarForm(!showCertificarForm)}
                         className="px-2.5 py-1 text-[10px] font-black bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg shadow-xs cursor-pointer transition-all"
                       >
-                        {showCertificarForm ? 'Cancelar' : 'Facturar Ahora'}
+                        {showCertificarForm ? L('Cancelar', 'Cancel') : L('Facturar Ahora', 'Invoice Now')}
                       </button>
                     </div>
 
@@ -1836,22 +1908,22 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
                       <div className="pt-2 border-t border-indigo-200 space-y-2">
                         <div className="grid grid-cols-2 gap-2 text-[10px]">
                           <div>
-                            <label className="block font-bold text-slate-600 mb-0.5">NIT del Cliente</label>
+                            <label className="block font-bold text-slate-600 mb-0.5">{L('NIT del Cliente', 'Customer Tax ID')}</label>
                             <input
                               type="text"
                               value={nitReceptor}
                               onChange={(e) => handleNitChange(e.target.value)}
-                              placeholder="NIT o CF"
+                              placeholder={L('NIT o CF', 'Tax ID or N/A')}
                               className="w-full px-2 py-1 bg-white border border-slate-300 rounded-lg font-mono font-bold uppercase"
                             />
                           </div>
                           <div>
-                            <label className="block font-bold text-slate-600 mb-0.5">Nombre / Razón Social</label>
+                            <label className="block font-bold text-slate-600 mb-0.5">{L('Nombre / Razón Social', 'Customer / Company Name')}</label>
                             <input
                               type="text"
                               value={nombreReceptor}
                               onChange={(e) => setNombreReceptor(e.target.value)}
-                              placeholder="Nombre del cliente"
+                              placeholder={L('Nombre del cliente', 'Customer name')}
                               className="w-full px-2 py-1 bg-white border border-slate-300 rounded-lg font-semibold"
                             />
                           </div>
@@ -1863,7 +1935,7 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
                           className="w-full py-2 bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-500 hover:to-teal-600 active:scale-95 text-white font-black text-xs rounded-xl shadow-md shadow-emerald-600/25 flex items-center justify-center gap-1.5 transition-all cursor-pointer"
                         >
                           <FileCheck2 className="w-3.5 h-3.5" />
-                          <span>Certificar e Imprimir Factura FEL</span>
+                          <span>{L('Certificar e Imprimir Factura FEL', 'Certify & Print E-Invoice')}</span>
                         </button>
                       </div>
                     )}
@@ -1872,15 +1944,15 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
               )}
 
               <div className="space-y-0.5 pt-1 text-[10px]">
-                <p><span className="font-bold">Cliente:</span> {dteCertificado ? dteCertificado.nombreReceptor : (selectedClient ? selectedClient.nombre_completo : nombreReceptor)}</p>
-                <p><span className="font-bold">NIT Receptor:</span> {dteCertificado ? dteCertificado.nitReceptor : (selectedClient ? selectedClient.nit : nitReceptor)}</p>
+                <p><span className="font-bold">{L('Cliente:', 'Customer:')}</span> {trClient(dteCertificado ? dteCertificado.nombreReceptor : (selectedClient ? selectedClient.nombre_completo : nombreReceptor))}</p>
+                <p><span className="font-bold">{L('NIT Receptor:', 'Customer Tax ID:')}</span> {trTaxId(dteCertificado ? dteCertificado.nitReceptor : (selectedClient ? selectedClient.nit : nitReceptor))}</p>
                 {selectedClient && selectedClient.telefono !== 'N/A' && (
-                  <p><span className="font-bold">Teléfono:</span> {selectedClient.telefono}</p>
+                  <p><span className="font-bold">{L('Teléfono:', 'Phone:')}</span> {selectedClient.telefono}</p>
                 )}
-                <p><span className="font-bold">Método Pago:</span> {metodoPago.toUpperCase()} {referenciaPago ? `(${referenciaPago})` : ''}</p>
+                <p><span className="font-bold">{L('Método Pago:', 'Payment Method:')}</span> {trPayment(metodoPago).toUpperCase()} {referenciaPago ? `(${referenciaPago})` : ''}</p>
                 {metodoPago === 'efectivo' && efectivoNum > 0 && (
                   <p className="text-emerald-800 font-bold">
-                    Efectivo: Q {efectivoNum.toFixed(2)} | Cambio: Q {cambio.toFixed(2)}
+                    {L('Efectivo:', 'Cash:')} {money(efectivoNum)} | {L('Cambio:', 'Change:')} {money(cambio)}
                   </p>
                 )}
               </div>
@@ -1890,11 +1962,11 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
                 <table className="w-full text-[10px]">
                   <thead>
                     <tr className="border-b border-slate-200 text-left">
-                      <th className="pb-1 text-center w-6">Cant.</th>
-                      <th className="pb-1">Descripción</th>
-                      <th className="pb-1 text-right">Precio</th>
-                      <th className="pb-1 text-right text-amber-800">Desc.</th>
-                      <th className="pb-1 text-right">Total</th>
+                      <th className="pb-1 text-center w-6">{L('Cant.', 'Qty')}</th>
+                      <th className="pb-1">{L('Descripción', 'Description')}</th>
+                      <th className="pb-1 text-right">{L('Precio', 'Price')}</th>
+                      <th className="pb-1 text-right text-amber-800">{L('Desc.', 'Disc.')}</th>
+                      <th className="pb-1 text-right">{L('Total', 'Total')}</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
@@ -1906,11 +1978,11 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
                         <tr key={item.id}>
                           <td className="py-1 font-bold text-center">{item.quantity}</td>
                           <td className="py-1 pr-1 truncate max-w-[110px]" title={item.name}>{item.name}</td>
-                          <td className="py-1 text-right text-slate-500">Q {item.price.toFixed(2)}</td>
+                          <td className="py-1 text-right text-slate-500">{money(item.price)}</td>
                           <td className="py-1 text-right font-medium text-amber-700">
-                            {itemDisc > 0 ? `-Q ${itemDisc.toFixed(2)}` : 'Q 0.00'}
+                            {itemDisc > 0 ? `-${money(itemDisc)}` : money(0)}
                           </td>
-                          <td className="py-1 text-right font-black text-slate-900">Q {itemNet.toFixed(2)}</td>
+                          <td className="py-1 text-right font-black text-slate-900">{money(itemNet)}</td>
                         </tr>
                       );
                     })}
@@ -1921,20 +1993,20 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
               {/* Total limpio sin desglose de IVA al cliente (el descuento ya está visible individualmente en cada producto) */}
               <div className="pt-2 border-t border-dashed border-slate-300 space-y-1 text-right text-[11px]">
                 <p className="text-xs font-black text-slate-900">
-                  TOTAL A PAGAR: Q {total.toFixed(2)}
+                  {L('TOTAL A PAGAR:', 'TOTAL DUE:')} {money(total)}
                 </p>
                 {metodoPago === 'credito' ? (
                   <>
                     <p className="text-[11px] font-bold text-emerald-700">
-                      Abonado hoy: Q {(parseFloat(abonoInicial) || 0).toFixed(2)}
+                      {L('Abonado hoy:', 'Paid today:')} {money(parseFloat(abonoInicial) || 0)}
                     </p>
                     <p className="text-[11px] font-black text-rose-600">
-                      Saldo Pendiente (CxC): Q {Math.max(0, total - (parseFloat(abonoInicial) || 0)).toFixed(2)}
+                      {L('Saldo Pendiente (CxC):', 'Balance Due (A/R):')} {money(Math.max(0, total - (parseFloat(abonoInicial) || 0)))}
                     </p>
                   </>
                 ) : (
                   <p className="text-[10px] font-bold text-emerald-700">
-                    Estado: PAGADO COMPLETAMENTE
+                    {L('Estado: PAGADO COMPLETAMENTE', 'Status: PAID IN FULL')}
                   </p>
                 )}
               </div>
@@ -1946,15 +2018,15 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
                     <QrCode className="w-12 h-12 text-slate-800" />
                   </div>
                   <div className="text-[9px] text-slate-500 leading-tight">
-                    <p className="font-bold text-slate-700">Verificador SAT FEL</p>
-                    <p>Certificador: {dteCertificado.certificador}</p>
+                    <p className="font-bold text-slate-700">{L('Verificador SAT FEL', 'E-Invoice Tax Verifier')}</p>
+                    <p>{L('Certificador:', 'Certifier:')} {dteCertificado.certificador}</p>
                     <p className="text-emerald-700 italic">{dteCertificado.fraseFiscal}</p>
                   </div>
                 </div>
               )}
 
               <p className="text-center text-[9px] text-slate-400 pt-2">
-                ¡Gracias por su preferencia! • Conservar comprobante
+                {L('¡Gracias por su preferencia! • Conservar comprobante', 'Thank you for your business! • Keep your receipt')}
               </p>
             </div>
 
@@ -1964,10 +2036,10 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
                 type="button"
                 onClick={() => setSaleCompletedModal(false)}
                 className="px-3 py-2.5 bg-white hover:bg-slate-100 active:scale-95 text-slate-700 text-xs font-bold rounded-xl border border-slate-200 transition-all flex items-center gap-1.5 shadow-2xs cursor-pointer"
-                title="Regresar a la pantalla de venta (mantiene los productos en caja)"
+                title={L('Regresar a la pantalla de venta (mantiene los productos en caja)', 'Back to POS screen (keeps items in cart)')}
               >
                 <ArrowLeft className="w-3.5 h-3.5 text-slate-500" />
-                <span>Regresar</span>
+                <span>{L('Regresar', 'Back')}</span>
               </button>
 
               {lastSaleId && (
@@ -1976,7 +2048,7 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
                   disabled={isDownloadingPdf}
                   onClick={handleOpenSalePdf}
                   className="px-3 py-2.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white text-xs font-black rounded-xl transition-all flex items-center gap-1.5 shadow-sm cursor-pointer disabled:opacity-50"
-                  title="Descargar comprobante PDF elegante (con descuentos individuales y estado de cuenta)"
+                  title={L('Descargar comprobante PDF elegante (con descuentos individuales y estado de cuenta)', 'Download formatted PDF receipt (with line discounts and balance summary)')}
                 >
                   {isDownloadingPdf ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileText className="w-3.5 h-3.5" />}
                   <span>PDF</span>
@@ -1991,7 +2063,7 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
                 className="px-3 py-2.5 bg-slate-200 hover:bg-slate-300 active:scale-95 text-slate-800 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 cursor-pointer"
               >
                 <Printer className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Ticket</span>
+                <span className="hidden sm:inline">{L('Ticket', 'Receipt')}</span>
               </button>
               
               <button
@@ -1999,7 +2071,7 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
                 onClick={handleFinishSale}
                 className="flex-1 py-2.5 bg-slate-900 hover:bg-slate-800 active:scale-95 text-white text-xs font-black rounded-xl transition-all flex items-center justify-center gap-1.5 shadow-sm cursor-pointer"
               >
-                <span>Nueva Venta</span>
+                <span>{L('Nueva Venta', 'New Sale')}</span>
                 <ArrowRight className="w-3.5 h-3.5" />
               </button>
             </div>
@@ -2031,7 +2103,7 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
                 type="button"
                 onClick={() => setEnlargedProduct(null)}
                 className="p-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-500 transition-colors cursor-pointer"
-                title="Cerrar vista previa"
+                title={L('Cerrar vista previa', 'Close preview')}
               >
                 <X className="w-4 h-4" />
               </button>
@@ -2048,11 +2120,11 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
               ) : (
                 <div className="text-slate-400 flex flex-col items-center gap-2">
                   <ImageIcon className="w-16 h-16 stroke-1 text-slate-600" />
-                  <span className="text-xs">Sin fotografía disponible</span>
+                  <span className="text-xs">{L('Sin fotografía disponible', 'No photo available')}</span>
                 </div>
               )}
               <span className="absolute top-3 right-3 bg-slate-900/80 backdrop-blur-md text-white text-xs font-black px-2.5 py-1 rounded-xl border border-white/20">
-                Stock: {enlargedProduct.stock} unidades
+                {L(`Stock: ${enlargedProduct.stock} unidades`, `Stock: ${enlargedProduct.stock} units`)}
               </span>
             </div>
 
@@ -2060,10 +2132,10 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
             <div className="p-5 flex items-center justify-between gap-4 bg-slate-50/80 border-t border-slate-100">
               <div>
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
-                  Precio de Venta
+                  {L('Precio de Venta', 'Sale Price')}
                 </span>
                 <span className="text-xl font-black text-slate-900">
-                  Q {enlargedProduct.price.toFixed(2)}
+                  {money(enlargedProduct.price)}
                 </span>
               </div>
 
@@ -2076,7 +2148,7 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
                 className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs rounded-xl shadow-lg shadow-emerald-600/30 flex items-center gap-2 transition-all cursor-pointer"
               >
                 <Plus className="w-4 h-4" />
-                <span>Agregar al Carrito</span>
+                <span>{L('Agregar al Carrito', 'Add to Cart')}</span>
               </button>
             </div>
           </div>
@@ -2100,9 +2172,11 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
                   <Users className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-black text-slate-900">Seleccionar Cliente para la Venta</h3>
+                  <h3 className="text-sm font-black text-slate-900">{L('Seleccionar Cliente para la Venta', 'Select Customer for Sale')}</h3>
                   <p className="text-[10px] text-slate-500 font-medium">
-                    {totalClientsCount > 0 ? `${totalClientsCount} clientes registrados` : `${clientsList.length} clientes registrados`} • Saldos y Crédito
+                    {totalClientsCount > 0
+                      ? L(`${totalClientsCount} clientes registrados`, `${totalClientsCount} registered customers`)
+                      : L(`${clientsList.length} clientes registrados`, `${clientsList.length} registered customers`)} • {L('Saldos y Crédito', 'Balances & Credit')}
                   </p>
                 </div>
               </div>
@@ -2137,7 +2211,7 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
                         fetchClientsList(clientSearchTerm);
                       }
                     }}
-                    placeholder="Buscar por nombre, NIT o teléfono..."
+                    placeholder={L('Buscar por nombre, NIT o teléfono...', 'Search by name, Tax ID, or phone...')}
                     className="w-full pl-9 pr-8 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-900 placeholder:text-slate-400 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all"
                     autoFocus
                   />
@@ -2149,7 +2223,7 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
                         fetchClientsList('');
                       }}
                       className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer p-0.5"
-                      title="Limpiar búsqueda"
+                      title={L('Limpiar búsqueda', 'Clear search')}
                     >
                       <X className="w-3.5 h-3.5" />
                     </button>
@@ -2166,13 +2240,13 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
                   }`}
                 >
                   <UserPlus className="w-3.5 h-3.5" />
-                  <span>{showNewClientForm ? 'Ver Lista' : 'Nuevo'}</span>
+                  <span>{showNewClientForm ? L('Ver Lista', 'View List') : L('Nuevo', 'New')}</span>
                 </button>
               </div>
 
               {/* Botón rápido Consumidor Final */}
               <div className="flex items-center justify-between pt-1">
-                <span className="text-[10px] text-slate-400 font-medium">Acceso rápido:</span>
+                <span className="text-[10px] text-slate-400 font-medium">{L('Acceso rápido:', 'Quick select:')}</span>
                 <button
                   type="button"
                   onClick={() => {
@@ -2182,7 +2256,7 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
                   className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 text-[10px] font-black rounded-lg transition-colors cursor-pointer flex items-center gap-1"
                 >
                   <User className="w-3 h-3 text-slate-500" />
-                  <span>Usar Consumidor Final (CF)</span>
+                  <span>{L('Usar Consumidor Final (CF)', 'Use Walk-in Customer')}</span>
                 </button>
               </div>
             </div>
@@ -2193,63 +2267,63 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
                 <form onSubmit={handleCreateQuickClient} className="p-3 bg-indigo-50/50 rounded-2xl border border-indigo-100 space-y-3">
                   <div className="flex items-center gap-1.5 text-xs font-black text-indigo-950 pb-1 border-b border-indigo-200/60">
                     <UserPlus className="w-4 h-4 text-indigo-600" />
-                    <span>Registrar Nuevo Cliente Rápido</span>
+                    <span>{L('Registrar Nuevo Cliente Rápido', 'Quick Register New Customer')}</span>
                   </div>
 
                   <div className="grid grid-cols-2 gap-2 text-xs">
                     <div>
-                      <label className="block text-[10px] font-bold text-slate-600 mb-0.5">Nombre *</label>
+                      <label className="block text-[10px] font-bold text-slate-600 mb-0.5">{L('Nombre *', 'First Name *')}</label>
                       <input
                         type="text"
                         required
                         value={newClientData.nombre}
                         onChange={(e) => setNewClientData({ ...newClientData, nombre: e.target.value })}
-                        placeholder="Ej. María"
+                        placeholder={L('Ej. María', 'e.g. Maria')}
                         className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-xl font-medium focus:ring-1 focus:ring-indigo-500"
                       />
                     </div>
                     <div>
-                      <label className="block text-[10px] font-bold text-slate-600 mb-0.5">Apellido</label>
+                      <label className="block text-[10px] font-bold text-slate-600 mb-0.5">{L('Apellido', 'Last Name')}</label>
                       <input
                         type="text"
                         value={newClientData.apellido}
                         onChange={(e) => setNewClientData({ ...newClientData, apellido: e.target.value })}
-                        placeholder="Ej. Morales"
+                        placeholder={L('Ej. Morales', 'e.g. Morales')}
                         className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-xl font-medium focus:ring-1 focus:ring-indigo-500"
                       />
                     </div>
                     <div>
-                      <label className="block text-[10px] font-bold text-slate-600 mb-0.5">NIT (o CF)</label>
+                      <label className="block text-[10px] font-bold text-slate-600 mb-0.5">{L('NIT (o CF)', 'Tax ID (or N/A)')}</label>
                       <input
                         type="text"
                         value={newClientData.nit}
                         onChange={(e) => setNewClientData({ ...newClientData, nit: e.target.value.toUpperCase() })}
-                        placeholder="CF o NIT"
+                        placeholder={L('CF o NIT', 'N/A or Tax ID')}
                         className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-xl font-mono font-bold uppercase focus:ring-1 focus:ring-indigo-500"
                       />
                     </div>
                     <div>
-                      <label className="block text-[10px] font-bold text-slate-600 mb-0.5">Teléfono</label>
+                      <label className="block text-[10px] font-bold text-slate-600 mb-0.5">{L('Teléfono', 'Phone')}</label>
                       <input
                         type="text"
                         value={newClientData.telefono}
                         onChange={(e) => setNewClientData({ ...newClientData, telefono: e.target.value })}
-                        placeholder="Ej. 5555-1234"
+                        placeholder={L('Ej. 5555-1234', 'e.g. 555-1234')}
                         className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-xl font-medium focus:ring-1 focus:ring-indigo-500"
                       />
                     </div>
                     <div className="col-span-2">
-                      <label className="block text-[10px] font-bold text-slate-600 mb-0.5">Dirección</label>
+                      <label className="block text-[10px] font-bold text-slate-600 mb-0.5">{L('Dirección', 'Address')}</label>
                       <input
                         type="text"
                         value={newClientData.direccion}
                         onChange={(e) => setNewClientData({ ...newClientData, direccion: e.target.value })}
-                        placeholder="Ciudad de Guatemala"
+                        placeholder={L('Ciudad de Guatemala', 'Guatemala City')}
                         className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-xl font-medium focus:ring-1 focus:ring-indigo-500"
                       />
                     </div>
                     <div className="col-span-2">
-                      <label className="block text-[10px] font-bold text-slate-600 mb-0.5">Límite de Crédito (Q)</label>
+                      <label className="block text-[10px] font-bold text-slate-600 mb-0.5">{L('Límite de Crédito', 'Credit Limit')} ({currencySymbol})</label>
                       <input
                         type="number"
                         step="100"
@@ -2267,13 +2341,13 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
                       onClick={() => setShowNewClientForm(false)}
                       className="px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-200 rounded-xl cursor-pointer"
                     >
-                      Cancelar
+                      {L('Cancelar', 'Cancel')}
                     </button>
                     <button
                       type="submit"
                       className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black rounded-xl shadow-sm cursor-pointer"
                     >
-                      Guardar y Asignar a la Venta
+                      {L('Guardar y Asignar a la Venta', 'Save & Assign to Sale')}
                     </button>
                   </div>
                 </form>
@@ -2282,13 +2356,15 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
                   {filteredClients.length === 0 ? (
                     <div className="text-center py-8 text-slate-400">
                       <Users className="w-8 h-8 mx-auto text-slate-300 mb-1" />
-                      <p className="text-xs font-bold text-slate-600">No se encontraron clientes con "{clientSearchTerm}"</p>
+                      <p className="text-xs font-bold text-slate-600">
+                        {L(`No se encontraron clientes con "${clientSearchTerm}"`, `No customers found matching "${clientSearchTerm}"`)}
+                      </p>
                       <button
                         type="button"
                         onClick={() => setShowNewClientForm(true)}
                         className="mt-2 text-xs font-black text-indigo-600 hover:underline cursor-pointer"
                       >
-                        + Registrar "{clientSearchTerm}" como nuevo cliente
+                        {L(`+ Registrar "${clientSearchTerm}" como nuevo cliente`, `+ Register "${clientSearchTerm}" as a new customer`)}
                       </button>
                     </div>
                   ) : (
@@ -2317,21 +2393,21 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
                             <div className="min-w-0">
                               <div className="flex items-center gap-1.5">
                                 <p className="text-xs font-black text-slate-900 truncate">
-                                  {client.nombre_completo}
+                                  {trClient(client.nombre_completo)}
                                 </p>
                                 <span className="text-[9px] font-mono px-1 py-0.2 rounded bg-slate-100 text-slate-600 font-bold shrink-0">
-                                  NIT: {client.nit}
+                                  {taxIdLabel}: {trTaxId(client.nit)}
                                 </span>
                               </div>
                               <div className="flex items-center gap-2 text-[10px] text-slate-400 mt-0.5">
-                                {client.telefono !== 'N/A' && <span>Tel: {client.telefono}</span>}
+                                {client.telefono !== 'N/A' && <span>{L('Tel:', 'Phone:')} {client.telefono}</span>}
                                 <span>•</span>
                                 <span className={client.saldo_actual > 0 ? 'text-amber-700 font-bold' : 'text-slate-500'}>
-                                  Saldo: Q {client.saldo_actual.toFixed(2)}
+                                  {L('Saldo:', 'Balance:')} {money(client.saldo_actual)}
                                 </span>
                                 <span>•</span>
                                 <span className="text-emerald-700 font-semibold">
-                                  Límite: Q {client.limite_credito.toFixed(2)}
+                                  {L('Límite:', 'Limit:')} {money(client.limite_credito)}
                                 </span>
                               </div>
                             </div>
@@ -2349,7 +2425,7 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
                                 : 'bg-slate-100 hover:bg-indigo-600 hover:text-white text-slate-700'
                             }`}
                           >
-                            {isSelected ? 'Seleccionado' : 'Elegir'}
+                            {isSelected ? L('Seleccionado', 'Selected') : L('Elegir', 'Select')}
                           </button>
                         </div>
                       );
@@ -2362,14 +2438,17 @@ export default function PosTerminal({ currentEmpresa }: PosTerminalProps = {}) {
             {/* Pie del Modal */}
             <div className="p-3 bg-slate-50 border-t border-slate-100 flex items-center justify-between text-xs">
               <span className="text-[10px] text-slate-500">
-                Mostrando {filteredClients.length} de {totalClientsCount > 0 ? totalClientsCount : clientsList.length} clientes {clientSearchTerm ? 'encontrados' : 'disponibles'}
+                {L(
+                  `Mostrando ${filteredClients.length} de ${totalClientsCount > 0 ? totalClientsCount : clientsList.length} clientes ${clientSearchTerm ? 'encontrados' : 'disponibles'}`,
+                  `Showing ${filteredClients.length} of ${totalClientsCount > 0 ? totalClientsCount : clientsList.length} ${clientSearchTerm ? 'matching' : 'available'} customers`
+                )}
               </span>
               <button
                 type="button"
                 onClick={() => setClientModalOpen(false)}
                 className="px-3 py-1.5 bg-white border border-slate-200 text-slate-700 font-bold text-xs rounded-xl hover:bg-slate-100 transition-colors cursor-pointer"
               >
-                Cerrar
+                {L('Cerrar', 'Close')}
               </button>
             </div>
           </div>

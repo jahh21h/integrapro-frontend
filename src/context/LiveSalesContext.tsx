@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { LiveCustomerBag, LiveSession, LiveCartItem } from '../types';
+import { useLanguage, getCurrentLang, tLang, getAppLocale } from './LanguageContext';
 
 export interface BoutiqueLivePolicy {
   tipo: 'quincenal' | '24_horas' | 'horas' | 'dias';
@@ -25,21 +26,21 @@ export function getLiveDueDate(
 
   if (customDueDateStr) {
     dueDate = new Date(customDueDateStr);
-    cycleName = 'Plazo Ajustado';
+    cycleName = tLang('Plazo Ajustado', 'Custom Deadline');
   } else if (policy?.tipo === '24_horas') {
     const created = new Date(createdDateStr);
     dueDate = new Date(created.getTime() + 24 * 60 * 60 * 1000);
-    cycleName = 'Plazo 24 Horas';
+    cycleName = tLang('Plazo 24 Horas', '24-Hour Window');
   } else if (policy?.tipo === 'horas') {
     const created = new Date(createdDateStr);
     const h = policy.horas && policy.horas > 0 ? policy.horas : 24;
     dueDate = new Date(created.getTime() + h * 60 * 60 * 1000);
-    cycleName = `Plazo ${h} Horas`;
+    cycleName = tLang(`Plazo ${h} Horas`, `${h}-Hour Window`);
   } else if (policy?.tipo === 'dias') {
     const created = new Date(createdDateStr);
     const d = policy.dias && policy.dias > 0 ? policy.dias : 2;
     dueDate = new Date(created.getTime() + d * 24 * 60 * 60 * 1000);
-    cycleName = `Plazo ${d} Días`;
+    cycleName = tLang(`Plazo ${d} Días`, `${d}-Day Window`);
   } else {
     // Por defecto: Quincenal y Fin de Mes (+5 días de gracia)
     const created = new Date(createdDateStr);
@@ -49,10 +50,10 @@ export function getLiveDueDate(
 
     if (day <= 15) {
       dueDate = new Date(year, month, 20, 23, 59, 59);
-      cycleName = 'Corte Quincena (Día 20)';
+      cycleName = tLang('Corte Quincena (Día 20)', 'Mid-Month Cutoff (Day 20)');
     } else {
       dueDate = new Date(year, month + 1, 5, 23, 59, 59);
-      cycleName = 'Corte Fin de Mes (Día 5)';
+      cycleName = tLang('Corte Fin de Mes (Día 5)', 'End-of-Month Cutoff (Day 5)');
     }
   }
 
@@ -61,16 +62,22 @@ export function getLiveDueDate(
   const daysRemaining = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
   const isExpired = diffTime < 0;
 
-  const monthNames = [
+  const lang = getCurrentLang();
+  const monthNamesEs = [
     'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
     'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
   ];
-  
+  const monthNamesEn = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'
+  ];
+
   const isShortTime = policy?.tipo === '24_horas' || policy?.tipo === 'horas';
-  const hoursStr = dueDate.toLocaleTimeString('es-GT', { hour: '2-digit', minute: '2-digit', hour12: true });
-  const formattedDate = isShortTime
-    ? `${dueDate.getDate()} de ${monthNames[dueDate.getMonth()]} (${hoursStr})`
-    : `${dueDate.getDate()} de ${monthNames[dueDate.getMonth()]}`;
+  const hoursStr = dueDate.toLocaleTimeString(getAppLocale(lang), { hour: '2-digit', minute: '2-digit', hour12: true });
+  const datePart = lang === 'en'
+    ? `${monthNamesEn[dueDate.getMonth()]} ${dueDate.getDate()}`
+    : `${dueDate.getDate()} de ${monthNamesEs[dueDate.getMonth()]}`;
+  const formattedDate = isShortTime ? `${datePart} (${hoursStr})` : datePart;
 
   return { dueDate, formattedDate, daysRemaining, isExpired, cycleName };
 }
@@ -249,6 +256,7 @@ const DEFAULT_BAGS: LiveCustomerBag[] = [
 ];
 
 export const LiveSalesProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { L, isEn, locale, money } = useLanguage();
   const [currentSession, setCurrentSession] = useState<LiveSession | null>(() => {
     const saved = localStorage.getItem('integrapro_live_session');
     if (saved) {
@@ -294,7 +302,7 @@ export const LiveSalesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const startLiveSession = (titulo: string, empresaId: number) => {
     const newSession: LiveSession = {
       id: 'LIVE-' + Date.now().toString().slice(-6),
-      titulo: titulo || 'TikTok Live ' + new Date().toLocaleDateString('es-GT'),
+      titulo: titulo || 'TikTok Live ' + new Date().toLocaleDateString(locale),
       empresa_id: empresaId,
       iniciado_en: new Date().toISOString(),
       activa: true,
@@ -390,7 +398,7 @@ export const LiveSalesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         precio_final: precioFinal,
         descuento,
         es_remate: esRemate,
-        talla: talla || 'Estándar',
+        talla: talla || L('Estándar', 'Standard'),
         color: color || '',
         cantidad: 1,
         apartado_en: new Date().toISOString()
@@ -565,7 +573,7 @@ export const LiveSalesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
             items: [], // vacía las prendas para liberar el stock de inmediato
             subtotal: 0,
             total: 0,
-            notas: (bag.notas ? bag.notas + ' | ' : '') + 'Vencida - Prendas devueltas al stock por corte de quincena/mes.',
+            notas: (bag.notas ? bag.notas + ' | ' : '') + L('Vencida - Prendas devueltas al stock por corte de quincena/mes.', 'Expired - Items returned to stock due to billing cutoff.'),
             actualizado_en: new Date().toISOString()
           };
         }
@@ -603,7 +611,7 @@ export const LiveSalesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         items: [], // Vaciamos para que el stock se libere de inmediato
         subtotal: 0,
         total: 0,
-        notas: (bag.notas ? bag.notas + ' | ' : '') + 'Canasta cancelada - Prendas devueltas al inventario.',
+        notas: (bag.notas ? bag.notas + ' | ' : '') + L('Canasta cancelada - Prendas devueltas al inventario.', 'Bag canceled - Items returned to inventory.'),
         actualizado_en: new Date().toISOString()
       };
     }));
@@ -640,7 +648,7 @@ export const LiveSalesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       if (raw) boutiqueConfig = JSON.parse(raw);
     } catch {}
 
-    const storeName = boutiqueConfig?.nombre || (bag.empresa_id === 99 ? 'Boutique Chic Live' : bag.empresa_id === 1 ? 'Fashion Styles' : 'Mi Tienda');
+    const storeName = boutiqueConfig?.nombre || (bag.empresa_id === 99 ? 'Boutique Chic Live' : bag.empresa_id === 1 ? 'Fashion Styles' : L('Mi Tienda', 'My Store'));
     const biAcc = boutiqueConfig?.bi_cuenta || '025-014829-1';
     const biHolder = boutiqueConfig?.bi_titular || storeName;
     const banruralAcc = boutiqueConfig?.banrural_cuenta || '3402-09812-4';
@@ -652,68 +660,122 @@ export const LiveSalesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     const dueDate = getLiveDueDate(bag.creado_en, policy, bag.fecha_vencimiento);
     const esUnificada = Boolean(bag.es_unificada_shein && (bag.monto_shein || 0) > 0);
     const incluyeEnvio = bag.incluye_envio !== false && bag.costo_envio > 0;
+    const courierDisplay = !bag.empresa_envio
+      ? L('Guatex / Mensajería', 'Courier / Shipping')
+      : isEn
+        ? (bag.empresa_envio === 'Mensajero Local'
+            ? 'Local Courier'
+            : bag.empresa_envio === 'Recoge en Tienda'
+              ? 'Store Pickup'
+              : bag.empresa_envio === 'Entrega Personal / Cercana'
+                ? 'Local / Personal Delivery'
+                : bag.empresa_envio)
+        : bag.empresa_envio;
 
-    let message = `*🌸 ¡HOLA ${bag.cliente_nombre.toUpperCase()}! GRACIAS POR TUS COMPRAS EN ${storeName.toUpperCase()} 🛍️*\n\n`;
+    let message = L(
+      `*🌸 ¡HOLA ${bag.cliente_nombre.toUpperCase()}! GRACIAS POR TUS COMPRAS EN ${storeName.toUpperCase()} 🛍️*\n\n`,
+      `*🌸 HI ${bag.cliente_nombre.toUpperCase()}! THANK YOU FOR SHOPPING AT ${storeName.toUpperCase()} 🛍️*\n\n`
+    );
 
     if (esUnificada) {
-      message += `Te compartimos tu *CUENTA UNIFICADA DE ENTREGA CONJUNTA (SHEIN + TIKTOK LIVE)*:\n`;
+      message += L(
+        `Te compartimos tu *CUENTA UNIFICADA DE ENTREGA CONJUNTA (SHEIN + TIKTOK LIVE)*:\n`,
+        `Here is your *COMBINED DELIVERY STATEMENT (SHEIN + TIKTOK LIVE)*:\n`
+      );
       message += `━━━━━━━━━━━━━━━━━━━━━\n`;
-      message += `📦 *1. PEDIDO SHEIN:*\n`;
-      message += `   • Saldo / Total: *Q ${(bag.monto_shein || 0).toFixed(2)}*\n`;
+      message += L(`📦 *1. PEDIDO SHEIN:*\n`, `📦 *1. SHEIN ORDER:*\n`);
+      message += L(
+        `   • Saldo / Total: *${money(bag.monto_shein || 0)}*\n`,
+        `   • Balance / Total: *${money(bag.monto_shein || 0)}*\n`
+      );
       if (bag.descripcion_shein) {
-        message += `   • Detalle: ${bag.descripcion_shein}\n`;
+        message += `   • ${L('Detalle', 'Details')}: ${bag.descripcion_shein}\n`;
       }
       message += `\n`;
-      message += `👗 *2. PRENDAS GANADAS EN TIKTOK LIVE (${bag.items.length} piezas):*\n`;
+      message += L(
+        `👗 *2. PRENDAS GANADAS EN TIKTOK LIVE (${bag.items.length} piezas):*\n`,
+        `👗 *2. TIKTOK LIVE ITEMS WON (${bag.items.length} pcs):*\n`
+      );
     } else {
-      message += `Te compartimos el detalle oficial de tu canasta del *TIKTOK LIVE*:\n`;
+      message += L(
+        `Te compartimos el detalle oficial de tu canasta del *TIKTOK LIVE*:\n`,
+        `Here is the official summary of your *TIKTOK LIVE* shopping bag:\n`
+      );
       message += `━━━━━━━━━━━━━━━━━━━━━\n`;
-      message += `👗 *PRENDAS GANADAS EN EL LIVE (${bag.items.length} piezas):*\n`;
+      message += L(
+        `👗 *PRENDAS GANADAS EN EL LIVE (${bag.items.length} piezas):*\n`,
+        `👗 *ITEMS WON ON LIVE (${bag.items.length} pcs):*\n`
+      );
     }
 
     bag.items.forEach((it, idx) => {
       message += `${idx + 1}. *${it.nombre}*\n`;
-      if (it.talla) message += `   • Talla: ${it.talla} ${it.color ? '• Color: ' + it.color : ''}\n`;
+      if (it.talla) message += `   • ${L('Talla', 'Size')}: ${it.talla} ${it.color ? '• Color: ' + it.color : ''}\n`;
       if (it.es_remate) {
-        message += `   • Precio Normal: ~Q ${it.precio_original.toFixed(2)}~\n`;
-        message += `   • *🔥 PRECIO REMATE: Q ${it.precio_final.toFixed(2)}* (¡Ahorraste Q ${it.descuento.toFixed(2)}!)\n`;
+        message += `   • ${L('Precio Normal', 'Regular Price')}: ~${money(it.precio_original)}~\n`;
+        message += L(
+          `   • *🔥 PRECIO REMATE: ${money(it.precio_final)}* (¡Ahorraste ${money(it.descuento)}!)\n`,
+          `   • *🔥 FLASH DEAL: ${money(it.precio_final)}* (You saved ${money(it.descuento)}!)\n`
+        );
       } else {
-        message += `   • Precio: Q ${it.precio_final.toFixed(2)}\n`;
+        message += `   • ${L('Precio', 'Price')}: ${money(it.precio_final)}\n`;
       }
       message += `\n`;
     });
 
     message += `━━━━━━━━━━━━━━━━━━━━━\n`;
     if (esUnificada) {
-      message += `*Subtotal Pedido SHEIN:* Q ${(bag.monto_shein || 0).toFixed(2)}\n`;
-      message += `*Subtotal Prendas Live:* Q ${bag.subtotal.toFixed(2)}\n`;
+      message += `*${L('Subtotal Pedido SHEIN', 'SHEIN Order Subtotal')}:* ${money(bag.monto_shein || 0)}\n`;
+      message += `*${L('Subtotal Prendas Live', 'Live Items Subtotal')}:* ${money(bag.subtotal)}\n`;
     } else {
-      message += `*Subtotal Prendas:* Q ${bag.subtotal.toFixed(2)}\n`;
+      message += `*${L('Subtotal Prendas', 'Items Subtotal')}:* ${money(bag.subtotal)}\n`;
     }
 
     if (incluyeEnvio) {
-      message += `*Envío (${bag.empresa_envio || 'Guatex / Mensajería'}):* Q ${bag.costo_envio.toFixed(2)}\n`;
+      message += `*${L('Envío', 'Shipping')} (${courierDisplay}):* ${money(bag.costo_envio)}\n`;
       if (esUnificada) {
-        message += `✨ *(¡Todo se entrega en un solo paquete para que no pagues doble flete!)*\n`;
+        message += L(
+          `✨ *(¡Todo se entrega en un solo paquete para que no pagues doble flete!)*\n`,
+          `✨ *(Everything ships in a single package so you don't pay double shipping!)*\n`
+        );
       }
     } else {
-      message += `*Entrega:* *Entrega Personal / Sin Costo de Envío (¡Q 0.00!)* ✨\n`;
+      message += L(
+        `*Entrega:* *Entrega Personal / Sin Costo de Envío (¡${money(0)}!)* ✨\n`,
+        `*Delivery:* *Personal / Local Delivery — Free Shipping (${money(0)}!)* ✨\n`
+      );
     }
 
-    message += `*💰 TOTAL A PAGAR:* *Q ${bag.total.toFixed(2)}*\n`;
-    message += `📅 *Fecha Límite de Pago:* *${dueDate.formattedDate}* (Plazo de 5 días de ${dueDate.cycleName.includes('Quincena') ? 'quincena' : 'inicio de mes'})\n\n`;
+    message += `*💰 ${L('TOTAL A PAGAR', 'TOTAL DUE')}:* *${money(bag.total)}*\n`;
+    const isMidMonth = dueDate.cycleName.includes('Quincena') || dueDate.cycleName.includes('Mid-Month');
+    message += L(
+      `📅 *Fecha Límite de Pago:* *${dueDate.formattedDate}* (Plazo de 5 días de ${isMidMonth ? 'quincena' : 'inicio de mes'})\n\n`,
+      `📅 *Payment Due Date:* *${dueDate.formattedDate}* (5-day ${isMidMonth ? 'mid-month' : 'start-of-month'} window)\n\n`
+    );
 
     if (bag.metodo_pago === 'contra_entrega') {
-      message += `📍 *Método de Pago:* Contra Entrega (Pagas al recibir tu paquete).\n`;
-      message += `🚚 *Dirección de Entrega:* ${bag.direccion_envio || 'Por confirmar'}\n\n`;
-      message += `¿Nos confirmas tu dirección para programar tu entrega conjunta? ✨`;
+      message += L(
+        `📍 *Método de Pago:* Contra Entrega (Pagas al recibir tu paquete).\n`,
+        `📍 *Payment Method:* Cash on Delivery (Pay upon receiving your package).\n`
+      );
+      message += `🚚 *${L('Dirección de Entrega', 'Delivery Address')}:* ${bag.direccion_envio || L('Por confirmar', 'To be confirmed')}\n\n`;
+      message += L(
+        `¿Nos confirmas tu dirección para programar tu entrega conjunta? ✨`,
+        `Could you please confirm your address so we can schedule your delivery? ✨`
+      );
     } else {
-      message += `💳 *Método de Pago:* Transferencia o Depósito Bancario.\n\n`;
-      message += `*Cuentas Monetarias Disponibles:*\n`;
+      message += L(
+        `💳 *Método de Pago:* Transferencia o Depósito Bancario.\n\n`,
+        `💳 *Payment Method:* Bank Transfer or Deposit.\n\n`
+      );
+      message += L(`*Cuentas Monetarias Disponibles:*\n`, `*Available Bank Accounts:*\n`);
       message += `🏦 *Banco Industrial (BI):* ${biAcc} (${biHolder})\n`;
       message += `🏦 *BANRURAL:* ${banruralAcc} (${banruralHolder})\n`;
       message += `🏦 *BAC Credomatic:* ${bacAcc} (${bacHolder})\n\n`;
-      message += `Por favor envíanos la foto de tu boleta o comprobante a este chat antes del *${dueDate.formattedDate}* para asegurar tu paquete. ¡Gracias por tu preferencia! 💖`;
+      message += L(
+        `Por favor envíanos la foto de tu boleta o comprobante a este chat antes del *${dueDate.formattedDate}* para asegurar tu paquete. ¡Gracias por tu preferencia! 💖`,
+        `Please send us a photo of your payment receipt in this chat before *${dueDate.formattedDate}* to secure your order. Thank you for your business! 💖`
+      );
     }
 
     const encoded = encodeURIComponent(message);

@@ -39,6 +39,7 @@ import { getTenantCatalog } from '../data/tenantProducts';
 import { scraperApi, inventoryApi } from '../api';
 import { filterRecordsByTenant, getStoredActiveEmpresaId } from '../utils/tenant';
 import { getLiveCache, setLiveCache } from '../utils/liveCache';
+import { useLanguage, tLang } from '../context/LanguageContext';
 
 function getProductPhotoUrl(foto?: string | null): string {
   if (!foto) return 'https://images.unsplash.com/photo-1542838132-92c53300491e?w=400&auto=format&fit=crop&q=80';
@@ -72,11 +73,11 @@ function mapApiProductToInventoryItem(p: any): InventoryItem {
     id: p.id_producto || p.id,
     sku: p.sku || `PROD-${p.id_producto || p.id}`,
     codigoBarras: p.codigo_barras || '',
-    nombre: p.nombre || 'Producto',
+    nombre: p.nombre || tLang('Producto', 'Product'),
     talla: p.talla || '',
     color: p.color || '',
     categoria: p.categoria?.nombre || p.categoria_nombre || 'General',
-    proveedor: p.proveedor?.nombre || p.proveedor_nombre || 'Distribuidor',
+    proveedor: p.proveedor?.nombre || p.proveedor_nombre || tLang('Distribuidor', 'Distributor'),
     precioCompra: parseFloat(p.precio_compra) || 0,
     precioVenta: parseFloat(p.precio_venta) || 0,
     stockTotal: stockTot,
@@ -116,6 +117,51 @@ interface InventoryProps {
 }
 
 export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
+  const { lang, L, money, currencySymbol, locale } = useLanguage();
+
+  const trBranch = (b?: string) => {
+    if (!b) return '';
+    if (b === 'Sucursal Central') return L('Sucursal Central', 'Central Branch');
+    if (b === 'Sucursal Norte') return L('Sucursal Norte', 'North Branch');
+    if (b === 'Sucursal Sur') return L('Sucursal Sur', 'South Branch');
+    if (b === 'Central') return L('Central', 'Central');
+    if (b === 'Norte') return L('Norte', 'North');
+    if (b === 'Sur') return L('Sur', 'South');
+    return b;
+  };
+
+  const trUnitName = (name?: string) => {
+    if (!name) return '';
+    const map: Record<string, string> = {
+      'Unidad Individual': L('Unidad Individual', 'Single Unit'),
+      'Caja Estándar (12/24 uds)': L('Caja Estándar (12/24 uds)', 'Standard Box (12/24 units)'),
+      'Fardo / Bulto': L('Fardo / Bulto', 'Bale / Bulk Pack'),
+      'Libra (Granos/Lácteos)': L('Libra (Granos/Lácteos)', 'Pound (Grains/Dairy)'),
+      'Quintal (100 lbs)': L('Quintal (100 lbs)', 'Hundredweight (100 lbs)'),
+      'Litro / Galón': L('Litro / Galón', 'Liter / Gallon'),
+      'Docena': L('Docena', 'Dozen'),
+    };
+    return map[name] ?? name;
+  };
+
+  const trLocText = (txt?: string) => {
+    if (!txt) return '';
+    const map: Record<string, string> = {
+      'Pasillo A (Abarrotes)': L('Pasillo A (Abarrotes)', 'Aisle A (Groceries)'),
+      'Pasillo B (Bebidas)': L('Pasillo B (Bebidas)', 'Aisle B (Beverages)'),
+      'Pasillo Principal': L('Pasillo Principal', 'Main Aisle'),
+      'Pasillo C (Cuidado)': L('Pasillo C (Cuidado)', 'Aisle C (Personal Care)'),
+      'Estantería 01': L('Estantería 01', 'Rack 01'),
+      'Estantería 02': L('Estantería 02', 'Rack 02'),
+      'Estantería 03': L('Estantería 03', 'Rack 03'),
+      'Nivel 1 (Inferior)': L('Nivel 1 (Inferior)', 'Level 1 (Bottom)'),
+      'Nivel 2 (Medio)': L('Nivel 2 (Medio)', 'Level 2 (Middle)'),
+      'Nivel 1': L('Nivel 1', 'Level 1'),
+      'Nivel 3 (Superior)': L('Nivel 3 (Superior)', 'Level 3 (Top)'),
+    };
+    return map[txt] ?? txt;
+  };
+
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('Todas');
   const [selectedBranch, setSelectedBranch] = useState('Todas');
@@ -186,7 +232,7 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
       const reader = new FileReader();
       reader.onloadend = () => {
         setNewProduct(prev => ({ ...prev, imagen: reader.result as string }));
-        showToast(`Fotografía de producto "${file.name}" cargada desde tu equipo.`);
+        showToast(L(`Fotografía de producto "${file.name}" cargada desde tu equipo.`, `Product photo "${file.name}" loaded from your device.`));
       };
       reader.readAsDataURL(file);
     }
@@ -195,7 +241,7 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
   const handleGenerateBarcode = () => {
     const generated = generateGuatemalaEan13(products.length + 1);
     setNewProduct(prev => ({ ...prev, codigoBarras: generated }));
-    showToast(`Código de barras EAN-13 generado: ${generated}`);
+    showToast(L(`Código de barras EAN-13 generado: ${generated}`, `EAN-13 barcode generated: ${generated}`));
   };
 
   // Modal y formulario de Edición de Producto
@@ -224,8 +270,17 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
     origen: 'Sucursal Central',
     destino: 'Sucursal Norte',
     cantidad: 5,
-    motivo: 'Reabastecimiento de stock bajo'
+    motivo: L('Reabastecimiento de stock bajo', 'Low stock replenishment')
   });
+
+  useEffect(() => {
+    setTransferData(prev => {
+      if (prev.motivo === 'Reabastecimiento de stock bajo' || prev.motivo === 'Low stock replenishment') {
+        return { ...prev, motivo: lang === 'en' ? 'Low stock replenishment' : 'Reabastecimiento de stock bajo' };
+      }
+      return prev;
+    });
+  }, [lang]);
 
   // Catálogo Multi-Tenant estrictamente aislado por empresa activa (con caché en vivo para cero saltos)
   const activeEmpresaId = Number(currentEmpresa?.id ?? getStoredActiveEmpresaId() ?? 0);
@@ -382,9 +437,9 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
       } catch (e) {}
 
       if (!data) {
-        const platform = isTemu ? 'Temu' : isShein ? 'Shein' : isAli ? 'AliExpress' : 'Importado';
+        const platform = isTemu ? 'Temu' : isShein ? 'Shein' : isAli ? 'AliExpress' : L('Importado', 'Imported');
         data = {
-          title: `${platform} - Calzado Deportivo Ergonómico Ultra Ligero`,
+          title: L(`${platform} - Calzado Deportivo Ergonómico Ultra Ligero`, `${platform} - Ultra-Light Ergonomic Running Shoes`),
           price: isTemu ? '135.00' : '16.50',
           sku: `${platform.toUpperCase()}-SH-${Math.floor(10000 + Math.random() * 90000)}`,
           image_url: 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=600&auto=format&fit=crop&q=80'
@@ -402,16 +457,16 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
         sku: data.sku || prev.sku,
         precioCompra: costoQ.toString(),
         precioVenta: ventaQ.toString(),
-        proveedor: isTemu ? 'TEMU Wholesale Direct' : isShein ? 'SHEIN Distribution Global' : 'Proveedor Importación',
+        proveedor: isTemu ? 'TEMU Wholesale Direct' : isShein ? 'SHEIN Distribution Global' : L('Proveedor Importación', 'Import Supplier'),
         categoria: 'Cuidado Personal',
         imagen: data.image_url || prev.imagen
       }));
 
-      showToast('¡Producto y fotografía extraídos con éxito por el Scraper!');
+      showToast(L('¡Producto y fotografía extraídos con éxito por el Scraper!', 'Product and photo extracted successfully by Scraper!'));
       setProductScraperUrl('');
       setShowProductScraper(false);
     } catch (e) {
-      showToast('Error al extraer datos con el scraper.');
+      showToast(L('Error al extraer datos con el scraper.', 'Failed to extract data with the scraper.'));
     } finally {
       setIsScrapingProduct(false);
     }
@@ -433,7 +488,7 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
 
       if (!extProduct) {
         extProduct = {
-          title: 'Shein - Blusa Floral Manga Abullonada con Botones',
+          title: L('Shein - Blusa Floral Manga Abullonada con Botones', 'Shein - Floral Puff-Sleeve Button Blouse'),
           price: '5.20',
           sku: 'SHEIN-TOP-5521',
           image_url: 'https://images.unsplash.com/photo-1572804013309-59a88b7e92f1?w=600&auto=format&fit=crop&q=80'
@@ -455,9 +510,9 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
         imagen: extProduct.image_url || prev.imagen
       }));
 
-      showToast('¡Datos y fotografía del producto cargados desde la extensión de Chrome!');
+      showToast(L('¡Datos y fotografía del producto cargados desde la extensión de Chrome!', 'Product data and photo loaded from Chrome extension!'));
     } catch (e) {
-      showToast('No se pudieron leer datos de la extensión.');
+      showToast(L('No se pudieron leer datos de la extensión.', 'Could not read data from the extension.'));
     } finally {
       setIsScrapingProduct(false);
     }
@@ -471,7 +526,7 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
   const handleCreateProduct = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newProduct.nombre.trim()) {
-      showToast('⚠️ El nombre del producto es obligatorio.');
+      showToast(L('⚠️ El nombre del producto es obligatorio.', '⚠️ Product name is required.'));
       return;
     }
 
@@ -513,7 +568,7 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
       console.error('Error creando producto:', err);
       const msg = err?.response?.data?.message
         || (err?.response?.data?.errors ? Object.values(err.response.data.errors).flat().join(', ') : null)
-        || 'No se pudo registrar el producto en el servidor.';
+        || L('No se pudo registrar el producto en el servidor.', 'Could not save the product on the server.');
       showToast(`⚠️ ${msg}`);
       return;
     }
@@ -521,7 +576,7 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
     await fetchLiveProducts();
     setShowNewProductModal(false);
     setNewImageFile(null);
-    showToast(`Producto "${newProduct.nombre.trim()}" registrado exitosamente.`);
+    showToast(L(`Producto "${newProduct.nombre.trim()}" registrado exitosamente.`, `Product "${newProduct.nombre.trim()}" registered successfully.`));
     setNewProduct({
       nombre: '',
       sku: '',
@@ -540,7 +595,7 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
 
   const handleTransfer = (e: React.FormEvent) => {
     e.preventDefault();
-    showToast(`Traslado de ${transferData.cantidad} unidades procesado exitosamente hacia ${transferData.destino}.`);
+    showToast(L(`Traslado de ${transferData.cantidad} unidades procesado exitosamente hacia ${transferData.destino}.`, `Transfer of ${transferData.cantidad} units processed successfully to ${trBranch(transferData.destino)}.`));
     setShowTransferModal(false);
   };
 
@@ -572,7 +627,7 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
       const reader = new FileReader();
       reader.onloadend = () => {
         setEditFormData(prev => ({ ...prev, imagen: reader.result as string }));
-        showToast(`Fotografía actualizada para "${file.name}". Guarda los cambios para subirla al servidor.`);
+        showToast(L(`Fotografía actualizada para "${file.name}". Guarda los cambios para subirla al servidor.`, `Photo updated for "${file.name}". Save changes to upload it to the server.`));
       };
       reader.readAsDataURL(file);
     }
@@ -582,7 +637,7 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
     if (!editingProduct) return;
     const generated = generateGuatemalaEan13(editingProduct.id + 100);
     setEditFormData(prev => ({ ...prev, codigoBarras: generated }));
-    showToast(`Nuevo código EAN-13 generado: ${generated}`);
+    showToast(L(`Nuevo código EAN-13 generado: ${generated}`, `New EAN-13 barcode generated: ${generated}`));
   };
 
   const handleUpdateProduct = async (e: React.FormEvent) => {
@@ -623,7 +678,7 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
       return p;
     }));
 
-    showToast(`Producto "${editFormData.nombre}" actualizado correctamente.`);
+    showToast(L(`Producto "${editFormData.nombre}" actualizado correctamente.`, `Product "${editFormData.nombre}" updated successfully.`));
     const prodIdToUpdate = editingProduct.id;
     setEditingProduct(null);
 
@@ -661,7 +716,7 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
       }
     } catch (err: any) {
       console.warn('Error al persistir actualización de producto en backend:', err);
-      showToast(`⚠️ ${err?.response?.data?.message || 'El producto NO se guardó en el servidor. Intenta de nuevo.'}`);
+      showToast(`⚠️ ${err?.response?.data?.message || L('El producto NO se guardó en el servidor. Intenta de nuevo.', 'The product was NOT saved on the server. Please try again.')}`);
     } finally {
       setEditImageFile(null);
     }
@@ -670,17 +725,17 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
   const [isDeletingProduct, setIsDeletingProduct] = useState<boolean>(false);
 
   const handleDeleteProduct = async (p: InventoryItem) => {
-    if (!window.confirm(`¿Estás seguro de que deseas eliminar o dar de baja el producto "${p.nombre}" (SKU: ${p.sku})?`)) {
+    if (!window.confirm(L(`¿Estás seguro de que deseas eliminar o dar de baja el producto "${p.nombre}" (SKU: ${p.sku})?`, `Are you sure you want to delete or deactivate "${p.nombre}" (SKU: ${p.sku})?`))) {
       return;
     }
     setIsDeletingProduct(true);
     try {
       await inventoryApi.delete(p.id);
       setProducts(prev => prev.filter(item => item.id !== p.id));
-      showToast(`Producto "${p.nombre}" eliminado del inventario.`);
+      showToast(L(`Producto "${p.nombre}" eliminado del inventario.`, `Product "${p.nombre}" removed from inventory.`));
     } catch (err: any) {
       const backendMsg = err?.response?.data?.message;
-      showToast(backendMsg || `No se pudo eliminar "${p.nombre}". Verifica tu conexión e intenta de nuevo.`);
+      showToast(backendMsg || L(`No se pudo eliminar "${p.nombre}". Verifica tu conexión e intenta de nuevo.`, `Could not delete "${p.nombre}". Check your connection and try again.`));
     } finally {
       setIsDeletingProduct(false);
     }
@@ -691,17 +746,17 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
     if (e) e.preventDefault();
     const trimmed = newCategoryName.trim();
     if (!trimmed) {
-      showToast('Por favor escribe un nombre para la categoría.');
+      showToast(L('Por favor escribe un nombre para la categoría.', 'Please enter a category name.'));
       return;
     }
     if (categories.some(c => c.toLowerCase() === trimmed.toLowerCase())) {
-      showToast(`La categoría "${trimmed}" ya existe en el catálogo.`);
+      showToast(L(`La categoría "${trimmed}" ya existe en el catálogo.`, `Category "${trimmed}" already exists in the catalog.`));
       return;
     }
 
     setCategories(prev => [...prev, trimmed]);
     setNewCategoryName('');
-    showToast(`Categoría "${trimmed}" creada exitosamente.`);
+    showToast(L(`Categoría "${trimmed}" creada exitosamente.`, `Category "${trimmed}" created successfully.`));
   };
 
   const handleStartEditCategory = (cat: string) => {
@@ -719,7 +774,7 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
     }
 
     if (categories.some(c => c.toLowerCase() === trimmed.toLowerCase() && c.toLowerCase() !== original.toLowerCase())) {
-      showToast(`Ya existe otra categoría llamada "${trimmed}".`);
+      showToast(L(`Ya existe otra categoría llamada "${trimmed}".`, `Another category named "${trimmed}" already exists.`));
       return;
     }
 
@@ -741,12 +796,12 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
     }
 
     setEditingCategory(null);
-    showToast(`Categoría "${original}" renombrada a "${trimmed}".`);
+    showToast(L(`Categoría "${original}" renombrada a "${trimmed}".`, `Category "${original}" renamed to "${trimmed}".`));
   };
 
   const handleDeleteCategory = (catToDelete: string) => {
     if (categories.length <= 1) {
-      showToast('Debe existir al menos una categoría en el catálogo.');
+      showToast(L('Debe existir al menos una categoría en el catálogo.', 'At least one category must exist in the catalog.'));
       return;
     }
 
@@ -756,14 +811,17 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
 
     if (productsInCat.length > 0) {
       const confirmDelete = window.confirm(
-        `La categoría "${catToDelete}" tiene ${productsInCat.length} producto(s) asignado(s).\n\n¿Deseas eliminarla y reasignar automáticamente esos productos a "${fallbackCategory}"?`
+        L(
+          `La categoría "${catToDelete}" tiene ${productsInCat.length} producto(s) asignado(s).\n\n¿Deseas eliminarla y reasignar automáticamente esos productos a "${fallbackCategory}"?`,
+          `Category "${catToDelete}" has ${productsInCat.length} assigned product(s).\n\nDo you want to delete it and automatically reassign those products to "${fallbackCategory}"?`
+        )
       );
       if (!confirmDelete) return;
 
       // Reasignar productos a la categoría de respaldo
       setProducts(prev => prev.map(p => p.categoria.toLowerCase() === catToDelete.toLowerCase() ? { ...p, categoria: fallbackCategory } : p));
     } else {
-      const confirmDelete = window.confirm(`¿Estás seguro de que deseas eliminar la categoría "${catToDelete}"?`);
+      const confirmDelete = window.confirm(L(`¿Estás seguro de que deseas eliminar la categoría "${catToDelete}"?`, `Are you sure you want to delete category "${catToDelete}"?`));
       if (!confirmDelete) return;
     }
 
@@ -779,19 +837,29 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
       setEditFormData(prev => ({ ...prev, categoria: fallbackCategory }));
     }
 
-    showToast(`Categoría "${catToDelete}" eliminada del catálogo.`);
+    showToast(L(`Categoría "${catToDelete}" eliminada del catálogo.`, `Category "${catToDelete}" deleted from catalog.`));
   };
 
   const handleResetDefaultCategories = () => {
-    if (window.confirm('¿Deseas restablecer las categorías predeterminadas del sistema?')) {
+    if (window.confirm(L('¿Deseas restablecer las categorías predeterminadas del sistema?', 'Do you want to restore the default system categories?'))) {
       const defaultCats = getTenantCatalog(currentEmpresa?.id).categories;
       setCategories(defaultCats);
-      showToast('Categorías predeterminadas restablecidas.');
+      showToast(L('Categorías predeterminadas restablecidas.', 'Default categories restored.'));
     }
   };
 
   const handleExportInventory = () => {
-    const headers = ['SKU', 'Código Barras', 'Producto', 'Categoría', 'Proveedor', 'Precio Compra (Q)', 'Precio Venta (Q)', 'Stock Total', 'Stock Mínimo'];
+    const headers = [
+      'SKU',
+      L('Código Barras', 'Barcode'),
+      L('Producto', 'Product'),
+      L('Categoría', 'Category'),
+      L('Proveedor', 'Supplier'),
+      L(`Precio Compra (${currencySymbol})`, `Cost Price (${currencySymbol})`),
+      L(`Precio Venta (${currencySymbol})`, `Sale Price (${currencySymbol})`),
+      L('Stock Total', 'Total Stock'),
+      L('Stock Mínimo', 'Min Stock')
+    ];
     const rows = products.map(p => [
       p.sku,
       p.codigoBarras,
@@ -803,8 +871,8 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
       p.stockTotal,
       p.stockMinimo
     ]);
-    exportToExcelCsv('Inventario_IntegraPro', headers, rows);
-    showToast('📁 Catálogo de inventario exportado a Excel (.csv) exitosamente.');
+    exportToExcelCsv(L('Inventario_IntegraPro', 'Inventory_IntegraPro'), headers, rows);
+    showToast(L('📁 Catálogo de inventario exportado a Excel (.csv) exitosamente.', '📁 Inventory catalog exported to Excel (.csv) successfully.'));
   };
 
   const handleSaveUnidad = (e: React.FormEvent) => {
@@ -818,7 +886,7 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
     setUnidadesMedida([...unidadesMedida, nueva]);
     setShowNewUnidadModal(false);
     setNewUnidad({ nombre: '', abreviatura: '' });
-    showToast(`Unidad de medida "${nueva.nombre} (${nueva.abreviatura})" creada exitosamente.`);
+    showToast(L(`Unidad de medida "${nueva.nombre} (${nueva.abreviatura})" creada exitosamente.`, `Unit of measure "${nueva.nombre} (${nueva.abreviatura})" created successfully.`));
   };
 
   const handleSaveUbicacion = (e: React.FormEvent) => {
@@ -830,7 +898,7 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
       codigo_bodega: newUbicacion.codigo_bodega,
       pasillo: newUbicacion.pasillo,
       estante: newUbicacion.estante,
-      nivel: newUbicacion.nivel || 'Nivel 1',
+      nivel: newUbicacion.nivel || L('Nivel 1', 'Level 1'),
       bin: newUbicacion.bin || 'Bin 01'
     };
     setUbicacionesBodega([...ubicacionesBodega, nueva]);
@@ -843,7 +911,7 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
       nivel: '',
       bin: ''
     });
-    showToast(`Ubicación física "${nueva.pasillo} • ${nueva.estante}" registrada en ${nueva.sucursal_nombre}.`);
+    showToast(L(`Ubicación física "${nueva.pasillo} • ${nueva.estante}" registrada en ${nueva.sucursal_nombre}.`, `Warehouse location "${nueva.pasillo} • ${nueva.estante}" registered in ${trBranch(nueva.sucursal_nombre)}.`));
   };
 
   const filteredProducts = products.filter((p) => {
@@ -898,12 +966,12 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-slate-200">
         <div>
           <h1 className="text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2.5">
-            Gestión de Inventario & Stock
+            {L('Gestión de Inventario & Stock', 'Inventory & Stock Management')}
             <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">
-              {currentEmpresa ? currentEmpresa.nombre : 'Multi-Sucursal'}
+              {currentEmpresa ? currentEmpresa.nombre : L('Multi-Sucursal', 'Multi-Branch')}
             </span>
           </h1>
-          <p className="text-xs text-slate-500 font-medium">Control de existencias físicas, precios, márgenes y traslados de almacén</p>
+          <p className="text-xs text-slate-500 font-medium">{L('Control de existencias físicas, precios, márgenes y traslados de almacén', 'Physical stock control, pricing, margins, and warehouse transfers')}</p>
         </div>
 
         <div className="flex items-center gap-2">
@@ -913,7 +981,7 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
             className="px-3.5 py-2.5 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 shadow-sm transition-all flex items-center gap-2"
           >
             <ArrowLeftRight className="w-4 h-4 text-indigo-600" />
-            <span>Trasladar Stock</span>
+            <span>{L('Trasladar Stock', 'Transfer Stock')}</span>
           </button>
 
           <button 
@@ -922,7 +990,7 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
             className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-md shadow-indigo-600/25 transition-all flex items-center gap-2"
           >
             <Plus className="w-4 h-4" />
-            <span>Nuevo Producto</span>
+            <span>{L('Nuevo Producto', 'New Product')}</span>
           </button>
         </div>
       </div>
@@ -936,13 +1004,13 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
             </div>
             <div>
               <p className="text-xs font-black text-white flex items-center gap-2">
-                Inventario Propio de Fortexa Technologies
+                {L('Inventario Propio de Fortexa Technologies', 'Fortexa Technologies Proprietary Inventory')}
                 <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-purple-500/30 text-purple-300 border border-purple-400/30">
                   Tenant ID: 22
                 </span>
               </p>
               <p className="text-[11px] text-slate-300 mt-0.5">
-                Catálogo tecnológico de Fortexa: Licencias Quantum POS, hardware y suscripciones de RutaFuel Pro.
+                {L('Catálogo tecnológico de Fortexa: Licencias Quantum POS, hardware y suscripciones de RutaFuel Pro.', 'Fortexa tech catalog: Quantum POS licenses, hardware, and RutaFuel Pro subscriptions.')}
               </p>
             </div>
           </div>
@@ -953,9 +1021,9 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
           <div>
-            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Catálogo Total</span>
-            <p className="text-2xl font-black text-slate-900 mt-1">{totalItems} Ítems</p>
-            <span className="text-[11px] font-semibold text-slate-500">En {categories.length} categorías activas</span>
+            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">{L('Catálogo Total', 'Total Catalog')}</span>
+            <p className="text-2xl font-black text-slate-900 mt-1">{totalItems} {L('Ítems', 'Items')}</p>
+            <span className="text-[11px] font-semibold text-slate-500">{L(`En ${categories.length} categorías activas`, `Across ${categories.length} active categories`)}</span>
           </div>
           <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
             <Boxes className="w-5 h-5" />
@@ -964,9 +1032,9 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
 
         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
           <div>
-            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Valorización de Stock</span>
-            <p className="text-2xl font-black text-slate-900 mt-1">Q {valorInventario.toLocaleString('es-GT', { minimumFractionDigits: 2 })}</p>
-            <span className="text-[11px] font-semibold text-emerald-600">A costo de compra</span>
+            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">{L('Valorización de Stock', 'Inventory Valuation')}</span>
+            <p className="text-2xl font-black text-slate-900 mt-1">{money(valorInventario)}</p>
+            <span className="text-[11px] font-semibold text-emerald-600">{L('A costo de compra', 'At purchase cost')}</span>
           </div>
           <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
             <DollarSign className="w-5 h-5" />
@@ -975,9 +1043,9 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
 
         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
           <div>
-            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Stock Bajo / Crítico</span>
-            <p className="text-2xl font-black text-amber-600 mt-1">{itemsCriticos} Alertas</p>
-            <span className="text-[11px] font-semibold text-amber-700">Por debajo del mínimo</span>
+            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">{L('Stock Bajo / Crítico', 'Low / Critical Stock')}</span>
+            <p className="text-2xl font-black text-amber-600 mt-1">{itemsCriticos} {L('Alertas', 'Alerts')}</p>
+            <span className="text-[11px] font-semibold text-amber-700">{L('Por debajo del mínimo', 'Below minimum level')}</span>
           </div>
           <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
             <AlertTriangle className="w-5 h-5" />
@@ -986,9 +1054,9 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
 
         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
           <div>
-            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Sucursales Conectadas</span>
-            <p className="text-2xl font-black text-slate-900 mt-1">3 Puntos</p>
-            <span className="text-[11px] font-semibold text-slate-500">Central • Norte • Sur</span>
+            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">{L('Sucursales Conectadas', 'Connected Branches')}</span>
+            <p className="text-2xl font-black text-slate-900 mt-1">{L('3 Puntos', '3 Locations')}</p>
+            <span className="text-[11px] font-semibold text-slate-500">{L('Central • Norte • Sur', 'Central • North • South')}</span>
           </div>
           <div className="w-10 h-10 rounded-xl bg-sky-50 text-sky-600 flex items-center justify-center">
             <Building className="w-5 h-5" />
@@ -1010,7 +1078,7 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
                   : 'text-slate-500 hover:text-slate-800'
               }`}
             >
-              Catálogo General
+              {L('Catálogo General', 'General Catalog')}
             </button>
             <button
               onClick={() => setActiveTab('sucursales')}
@@ -1020,7 +1088,7 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
                   : 'text-slate-500 hover:text-slate-800'
               }`}
             >
-              Existencias por Sucursal
+              {L('Existencias por Sucursal', 'Stock by Branch')}
             </button>
             <button
               onClick={() => setActiveTab('alertas')}
@@ -1030,7 +1098,7 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
                   : 'text-slate-500 hover:text-slate-800'
               }`}
             >
-              <span>Alertas Críticas</span>
+              <span>{L('Alertas Críticas', 'Critical Alerts')}</span>
               <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-amber-100 text-amber-800">
                 {itemsCriticos}
               </span>
@@ -1044,7 +1112,7 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
               }`}
             >
               <Package className="w-3.5 h-3.5 text-indigo-600" />
-              <span>Bodega & Ubicaciones</span>
+              <span>{L('Bodega & Ubicaciones', 'Warehouse & Locations')}</span>
             </button>
           </div>
 
@@ -1053,7 +1121,7 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
               type="button" 
               onClick={handleExportInventory}
               className="p-2 hover:bg-slate-100 rounded-xl text-slate-500 hover:text-indigo-600 transition-colors cursor-pointer"
-              title="Exportar inventario completo a Excel (.csv)"
+              title={L('Exportar inventario completo a Excel (.csv)', 'Export full inventory to Excel (.csv)')}
             >
               <Download className="w-4 h-4" />
             </button>
@@ -1067,7 +1135,7 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
               <Search className="w-4 h-4 absolute left-3.5 top-3 text-slate-400" />
               <input
                 type="text"
-                placeholder="Buscar por nombre, código de barras o SKU..."
+                placeholder={L('Buscar por nombre, código de barras o SKU...', 'Search by name, barcode, or SKU...')}
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full pl-10 pr-9 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all font-medium"
@@ -1086,7 +1154,7 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
                 }}
                 className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 max-w-[220px] truncate"
               >
-                <option value="Todas">Todas las Categorías ({products.length})</option>
+                <option value="Todas">{L(`Todas las Categorías (${products.length})`, `All Categories (${products.length})`)}</option>
                 {categories.filter(c => c !== 'Todas').map((c) => (
                   <option key={c} value={c}>{c}</option>
                 ))}
@@ -1095,11 +1163,11 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
               <button
                 type="button"
                 onClick={() => setShowCategoryModal(true)}
-                title="Administrar Categorías de Catálogo"
+                title={L('Administrar Categorías de Catálogo', 'Manage Catalog Categories')}
                 className="px-3 py-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 flex items-center gap-1.5 transition-colors"
               >
                 <FolderTree className="w-3.5 h-3.5 text-indigo-600" />
-                <span className="hidden sm:inline">Categorías</span>
+                <span className="hidden sm:inline">{L('Categorías', 'Categories')}</span>
               </button>
 
               <select
@@ -1107,10 +1175,10 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
                 onChange={(e) => setSelectedBranch(e.target.value)}
                 className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
               >
-                <option value="Todas">Todas las Sucursales</option>
-                <option value="Central">Sucursal Central</option>
-                <option value="Norte">Sucursal Norte</option>
-                <option value="Sur">Sucursal Sur</option>
+                <option value="Todas">{L('Todas las Sucursales', 'All Branches')}</option>
+                <option value="Central">{L('Sucursal Central', 'Central Branch')}</option>
+                <option value="Norte">{L('Sucursal Norte', 'North Branch')}</option>
+                <option value="Sur">{L('Sucursal Sur', 'South Branch')}</option>
               </select>
             </div>
           </div>
@@ -1125,11 +1193,11 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
             <div className="space-y-1">
               <span className="text-[11px] font-bold text-indigo-300 uppercase tracking-wider flex items-center gap-1.5">
                 <Package className="w-4 h-4 text-indigo-400" />
-                Control de Almacenamiento & Estándares
+                {L('Control de Almacenamiento & Estándares', 'Storage Control & Standards')}
               </span>
-              <h2 className="text-lg font-black tracking-tight">Catálogo de Bodega, Pasillos y Unidades de Medida</h2>
+              <h2 className="text-lg font-black tracking-tight">{L('Catálogo de Bodega, Pasillos y Unidades de Medida', 'Warehouse Catalog, Aisles & Units of Measure')}</h2>
               <p className="text-xs text-slate-300 max-w-xl">
-                Estructura de estanterías físicas, niveles y casillas (bins) por sucursal, junto con las unidades métricas oficiales para inventario y compras.
+                {L('Estructura de estanterías físicas, niveles y casillas (bins) por sucursal, junto con las unidades métricas oficiales para inventario y compras.', 'Physical rack structure, levels, and bins per branch, along with official units of measure for inventory and purchasing.')}
               </p>
             </div>
 
@@ -1140,7 +1208,7 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
                 className="px-3.5 py-2.5 bg-white/10 hover:bg-white/20 border border-white/20 text-white text-xs font-bold rounded-xl transition-all flex items-center gap-1.5"
               >
                 <Plus className="w-3.5 h-3.5" />
-                <span>+ Nueva Unidad</span>
+                <span>{L('+ Nueva Unidad', '+ New Unit')}</span>
               </button>
 
               <button
@@ -1149,7 +1217,7 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
                 className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-black rounded-xl shadow-lg shadow-indigo-600/30 transition-all flex items-center gap-1.5"
               >
                 <MapPin className="w-3.5 h-3.5" />
-                <span>+ Nueva Ubicación</span>
+                <span>{L('+ Nueva Ubicación', '+ New Location')}</span>
               </button>
             </div>
           </div>
@@ -1163,7 +1231,7 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
                   <div className="flex items-center gap-2">
                     <MapPin className="w-4 h-4 text-indigo-600" />
                     <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider">
-                      Ubicaciones Físicas de Almacén ({ubicacionesBodega.length})
+                      {L('Ubicaciones Físicas de Almacén', 'Physical Warehouse Locations')} ({ubicacionesBodega.length})
                     </h3>
                   </div>
                   <button
@@ -1171,7 +1239,7 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
                     onClick={() => setShowNewUbicacionModal(true)}
                     className="text-xs font-bold text-indigo-600 hover:text-indigo-800"
                   >
-                    + Agregar Ubicación
+                    {L('+ Agregar Ubicación', '+ Add Location')}
                   </button>
                 </div>
 
@@ -1184,14 +1252,14 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
                             {ub.codigo_bodega}
                           </span>
                           <span className="text-[11px] font-bold text-slate-500">
-                            {ub.sucursal_nombre}
+                            {trBranch(ub.sucursal_nombre)}
                           </span>
                         </div>
                         <h4 className="text-xs font-black text-slate-900">
-                          {ub.pasillo} • {ub.estante}
+                          {trLocText(ub.pasillo)} • {trLocText(ub.estante)}
                         </h4>
                         <div className="flex items-center gap-2 text-[10px] text-slate-400">
-                          <span>{ub.nivel}</span>
+                          <span>{trLocText(ub.nivel)}</span>
                           <span>•</span>
                           <span className="font-bold text-purple-700">{ub.bin}</span>
                         </div>
@@ -1199,7 +1267,7 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
 
                       <div className="flex items-center gap-2">
                         <span className="px-3 py-1 rounded-xl text-[10px] font-mono font-bold bg-slate-100 text-slate-700 border border-slate-200">
-                          {ub.pasillo.slice(0, 10)}/{ub.estante.slice(0, 7)}
+                          {trLocText(ub.pasillo).slice(0, 10)}/{trLocText(ub.estante).slice(0, 7)}
                         </span>
                       </div>
                     </div>
@@ -1215,7 +1283,7 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
                   <div className="flex items-center gap-2">
                     <Layers className="w-4 h-4 text-emerald-600" />
                     <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider">
-                      Unidades de Medida ({unidadesMedida.length})
+                      {L('Unidades de Medida', 'Units of Measure')} ({unidadesMedida.length})
                     </h3>
                   </div>
                   <button
@@ -1223,7 +1291,7 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
                     onClick={() => setShowNewUnidadModal(true)}
                     className="text-xs font-bold text-emerald-600 hover:text-emerald-800"
                   >
-                    + Nueva
+                    {L('+ Nueva', '+ New')}
                   </button>
                 </div>
 
@@ -1231,8 +1299,8 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
                   {unidadesMedida.map((u) => (
                     <div key={u.id_unidad} className="p-3.5 hover:bg-slate-50 transition-colors flex items-center justify-between">
                       <div>
-                        <p className="text-xs font-bold text-slate-900">{u.nombre}</p>
-                        <span className="text-[10px] text-slate-400">Estándar de Inventario</span>
+                        <p className="text-xs font-bold text-slate-900">{trUnitName(u.nombre)}</p>
+                        <span className="text-[10px] text-slate-400">{L('Estándar de Inventario', 'Inventory Standard')}</span>
                       </div>
                       <span className="px-2.5 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg text-xs font-black font-mono">
                         {u.abreviatura}
@@ -1251,22 +1319,22 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
           <table className="w-full text-left text-xs">
             <thead className="bg-slate-50 text-slate-500 uppercase tracking-wider font-semibold border-b border-slate-200">
               <tr>
-                <th className="py-3.5 px-4">Producto</th>
-                <th className="py-3.5 px-4">Categoría / Proveedor</th>
-                <th className="py-3.5 px-4 text-right">P. Compra</th>
-                <th className="py-3.5 px-4 text-right">P. Venta</th>
-                <th className="py-3.5 px-4 text-center">Margen</th>
+                <th className="py-3.5 px-4">{L('Producto', 'Product')}</th>
+                <th className="py-3.5 px-4">{L('Categoría / Proveedor', 'Category / Supplier')}</th>
+                <th className="py-3.5 px-4 text-right">{L('P. Compra', 'Cost Price')}</th>
+                <th className="py-3.5 px-4 text-right">{L('P. Venta', 'Sale Price')}</th>
+                <th className="py-3.5 px-4 text-center">{L('Margen', 'Margin')}</th>
                 {activeTab === 'sucursales' ? (
                   <>
-                    <th className="py-3.5 px-3 text-center">Central</th>
-                    <th className="py-3.5 px-3 text-center">Norte</th>
-                    <th className="py-3.5 px-3 text-center">Sur</th>
+                    <th className="py-3.5 px-3 text-center">{L('Central', 'Central')}</th>
+                    <th className="py-3.5 px-3 text-center">{L('Norte', 'North')}</th>
+                    <th className="py-3.5 px-3 text-center">{L('Sur', 'South')}</th>
                   </>
                 ) : (
-                  <th className="py-3.5 px-4 text-center">Stock Total</th>
+                  <th className="py-3.5 px-4 text-center">{L('Stock Total', 'Total Stock')}</th>
                 )}
-                <th className="py-3.5 px-4 text-center">Estado</th>
-                <th className="py-3.5 px-4 text-right">Acciones</th>
+                <th className="py-3.5 px-4 text-center">{L('Estado', 'Status')}</th>
+                <th className="py-3.5 px-4 text-right">{L('Acciones', 'Actions')}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -1274,8 +1342,8 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
                 <tr>
                   <td colSpan={activeTab === 'sucursales' ? 9 : 7} className="py-12 text-center text-slate-400">
                     <Package className="w-10 h-10 mx-auto mb-2 text-slate-300" />
-                    <p className="font-semibold text-slate-600">No se encontraron productos</p>
-                    <p className="text-xs text-slate-400 mt-1">Prueba cambiando los filtros o el término de búsqueda.</p>
+                    <p className="font-semibold text-slate-600">{L('No se encontraron productos', 'No products found')}</p>
+                    <p className="text-xs text-slate-400 mt-1">{L('Prueba cambiando los filtros o el término de búsqueda.', 'Try changing the filters or search term.')}</p>
                   </td>
                 </tr>
               ) : (
@@ -1298,7 +1366,7 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
                           className={`w-12 h-12 rounded-xl bg-slate-100 overflow-hidden shrink-0 border border-slate-200 shadow-sm transition-all relative group/img ${
                             p.imagen ? 'cursor-zoom-in hover:ring-2 hover:ring-indigo-500 hover:scale-105' : 'cursor-default'
                           }`}
-                          title={p.imagen ? "Clic para ampliar imagen y comparar con producto físico" : "Sin fotografía asignada"}
+                          title={p.imagen ? L('Clic para ampliar imagen y comparar con producto físico', 'Click to zoom image and compare with physical item') : L('Sin fotografía asignada', 'No photo assigned')}
                         >
                           {p.imagen ? (
                             <>
@@ -1327,8 +1395,8 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
                               {p.sku}
                             </span>
                             {(p.talla || '').trim() && (
-                              <span className="text-[10px] font-extrabold text-purple-700 bg-purple-50 border border-purple-200 px-1.5 py-0.2 rounded" title={`Talla: ${p.talla}${(p.color || '').trim() ? ` • Color: ${p.color}` : ''}`}>
-                                Talla {p.talla}
+                              <span className="text-[10px] font-extrabold text-purple-700 bg-purple-50 border border-purple-200 px-1.5 py-0.2 rounded" title={`${L('Talla', 'Size')}: ${p.talla}${(p.color || '').trim() ? ` • Color: ${p.color}` : ''}`}>
+                                {L('Talla', 'Size')} {p.talla}
                               </span>
                             )}
                             <span className="text-[10px] text-slate-400">
@@ -1347,10 +1415,10 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
 
                     {/* Precios */}
                     <td className="py-3 px-4 text-right font-medium text-slate-600">
-                      Q {p.precioCompra.toFixed(2)}
+                      {money(p.precioCompra)}
                     </td>
                     <td className="py-3 px-4 text-right font-extrabold text-slate-900">
-                      Q {p.precioVenta.toFixed(2)}
+                      {money(p.precioVenta)}
                     </td>
 
                     {/* Margen */}
@@ -1368,7 +1436,7 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
                       ) : (
                         <span 
                           className="inline-flex items-center text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-500 border border-slate-200 whitespace-nowrap"
-                          title="Precio de venta no asignado (Q0.00)"
+                          title={L(`Precio de venta no asignado (${money(0)})`, `Sale price not set (${money(0)})`)}
                         >
                           0.0%
                         </span>
@@ -1385,7 +1453,7 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
                     ) : (
                       <td className="py-3 px-4 text-center">
                         <span className="text-xs font-black text-slate-900">{p.stockTotal}</span>
-                        <span className="text-[10px] text-slate-400 block">mín: {p.stockMinimo}</span>
+                        <span className="text-[10px] text-slate-400 block">{L('mín', 'min')}: {p.stockMinimo}</span>
                       </td>
                     )}
 
@@ -1396,7 +1464,7 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
                           ? 'bg-rose-50 text-rose-700 border border-rose-200' 
                           : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                       }`}>
-                        {isLowStock ? 'Bajo Stock' : 'Disponible'}
+                        {isLowStock ? L('Bajo Stock', 'Low Stock') : L('Disponible', 'In Stock')}
                       </span>
                     </td>
 
@@ -1407,7 +1475,7 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
                           type="button" 
                           onClick={() => setLabelProduct(p)}
                           className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
-                          title="Imprimir etiquetas de código de barras"
+                          title={L('Imprimir etiquetas de código de barras', 'Print barcode labels')}
                         >
                           <Barcode className="w-4 h-4" />
                         </button>
@@ -1418,7 +1486,7 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
                             setShowTransferModal(true);
                           }}
                           className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors cursor-pointer"
-                          title="Trasladar entre sucursales"
+                          title={L('Trasladar entre sucursales', 'Transfer between branches')}
                         >
                           <ArrowLeftRight className="w-4 h-4" />
                         </button>
@@ -1426,7 +1494,7 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
                           type="button" 
                           onClick={() => handleOpenEditModal(p)}
                           className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors cursor-pointer"
-                          title="Editar producto"
+                          title={L('Editar producto', 'Edit product')}
                         >
                           <Edit3 className="w-4 h-4" />
                         </button>
@@ -1435,7 +1503,7 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
                           onClick={() => handleDeleteProduct(p)}
                           disabled={isDeletingProduct}
                           className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-                          title="Desactivar / Eliminar producto"
+                          title={L('Desactivar / Eliminar producto', 'Deactivate / Delete product')}
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>
@@ -1452,7 +1520,7 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
         {totalPages > 1 && (
           <div className="p-4 border-t border-slate-100 bg-slate-50/50 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
             <span className="text-slate-500 font-medium">
-              Mostrando <strong className="text-slate-800">{filteredProducts.length === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1}</strong> a <strong className="text-slate-800">{Math.min(currentPage * itemsPerPage, filteredProducts.length)}</strong> de <strong className="text-slate-800">{filteredProducts.length.toLocaleString()}</strong> productos
+              {L('Mostrando', 'Showing')} <strong className="text-slate-800">{filteredProducts.length === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1}</strong> {L('a', 'to')} <strong className="text-slate-800">{Math.min(currentPage * itemsPerPage, filteredProducts.length)}</strong> {L('de', 'of')} <strong className="text-slate-800">{filteredProducts.length.toLocaleString(locale)}</strong> {L('productos', 'products')}
             </span>
             <div className="flex items-center gap-2">
               <button
@@ -1461,10 +1529,10 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
                 onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
                 className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed shadow-sm transition-all cursor-pointer"
               >
-                Anterior
+                {L('Anterior', 'Previous')}
               </button>
               <span className="px-3 py-1.5 font-bold text-slate-700 bg-white border border-slate-200 rounded-lg">
-                Pág. {currentPage} de {totalPages}
+                {L(`Pág. ${currentPage} de ${totalPages}`, `Page ${currentPage} of ${totalPages}`)}
               </span>
               <button
                 type="button"
@@ -1472,7 +1540,7 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
                 onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
                 className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed shadow-sm transition-all cursor-pointer"
               >
-                Siguiente
+                {L('Siguiente', 'Next')}
               </button>
             </div>
           </div>
@@ -1486,8 +1554,8 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
           <div className="max-w-2xl w-full bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-hidden max-h-[85vh] flex flex-col animate-in fade-in zoom-in-95 duration-150">
             <div className="p-4 sm:p-5 border-b border-slate-100 flex items-center justify-between bg-white shrink-0">
               <div>
-                <h3 className="text-base font-black text-slate-900">Registrar Nuevo Producto en Catálogo</h3>
-                <p className="text-xs text-slate-400">Completa la ficha técnica para ingresarlo al inventario</p>
+                <h3 className="text-base font-black text-slate-900">{L('Registrar Nuevo Producto en Catálogo', 'Register New Catalog Product')}</h3>
+                <p className="text-xs text-slate-400">{L('Completa la ficha técnica para ingresarlo al inventario', 'Complete the product details to add it to inventory')}</p>
               </div>
               <button 
                 type="button" 
@@ -1508,8 +1576,8 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
                       <Sparkles className="w-4 h-4" />
                     </div>
                     <div>
-                      <span className="text-xs font-black text-slate-800">Scraper de Productos & Fotos</span>
-                      <p className="text-[10px] text-slate-500">Copia fotos y especificaciones desde Shein, Temu o AliExpress</p>
+                      <span className="text-xs font-black text-slate-800">{L('Scraper de Productos & Fotos', 'Product & Photo Scraper')}</span>
+                      <p className="text-[10px] text-slate-500">{L('Copia fotos y especificaciones desde Shein, Temu o AliExpress', 'Import photos and specs from Shein, Temu, or AliExpress')}</p>
                     </div>
                   </div>
 
@@ -1521,7 +1589,7 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
                       className="px-2.5 py-1.5 bg-white hover:bg-slate-50 text-slate-700 font-bold rounded-lg border border-slate-200 text-[11px] flex items-center gap-1 shadow-sm"
                     >
                       <ExternalLink className="w-3 h-3 text-indigo-600" />
-                      Pegar Link
+                      {L('Pegar Link', 'Paste Link')}
                     </button>
                     <button
                       type="button"
@@ -1532,12 +1600,12 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
                       {isScrapingProduct ? (
                         <>
                           <RefreshCw className="w-3 h-3 animate-spin" />
-                          <span>Extrayendo...</span>
+                          <span>{L('Extrayendo...', 'Extracting...')}</span>
                         </>
                       ) : (
                         <>
                           <ShoppingBag className="w-3 h-3" />
-                          <span>Traer de Extensión</span>
+                          <span>{L('Traer de Extensión', 'Import from Extension')}</span>
                         </>
                       )}
                     </button>
@@ -1545,10 +1613,10 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
                       type="button"
                       onClick={() => setShowTokenModal(true)}
                       className="px-2.5 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-800 font-bold rounded-lg border border-amber-200 text-[11px] flex items-center gap-1 shadow-sm cursor-pointer"
-                      title="Generar o configurar clave de API para la extensión de Chrome"
+                      title={L('Generar o configurar clave de API para la extensión de Chrome', 'Generate or configure API key for the Chrome extension')}
                     >
                       <Key className="w-3 h-3 text-amber-600" />
-                      <span>Token API</span>
+                      <span>{L('Token API', 'API Token')}</span>
                     </button>
                   </div>
                 </div>
@@ -1557,7 +1625,7 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
                   <div className="p-2.5 bg-white rounded-xl border border-indigo-200 flex items-center gap-2">
                     <input
                       type="url"
-                      placeholder="Pega la URL de Shein, Temu o AliExpress..."
+                      placeholder={L('Pega la URL de Shein, Temu o AliExpress...', 'Paste Shein, Temu, or AliExpress URL...')}
                       value={productScraperUrl}
                       onChange={(e) => setProductScraperUrl(e.target.value)}
                       className="flex-1 px-2.5 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
@@ -1568,7 +1636,7 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
                       onClick={() => handleScrapeProductLink(productScraperUrl)}
                       className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 text-white text-xs font-bold rounded-lg whitespace-nowrap"
                     >
-                      Extraer Datos & Foto
+                      {L('Extraer Datos & Foto', 'Extract Data & Photo')}
                     </button>
                   </div>
                 )}
@@ -1578,11 +1646,11 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
                 
                 {/* Nombre */}
                 <div className="sm:col-span-2">
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Nombre Comercial del Producto *</label>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">{L('Nombre Comercial del Producto *', 'Product Trade Name *')}</label>
                   <input
                     type="text"
                     required
-                    placeholder="Ej. Harina de Trigo Fortificada 5lb"
+                    placeholder={L('Ej. Harina de Trigo Fortificada 5lb', 'e.g. Enriched Wheat Flour 5lb')}
                     value={newProduct.nombre}
                     onChange={(e) => setNewProduct({ ...newProduct, nombre: e.target.value })}
                     className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium"
@@ -1591,10 +1659,10 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
 
                 {/* SKU & Código de Barras */}
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">SKU Interno</label>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">{L('SKU Interno', 'Internal SKU')}</label>
                   <input
                     type="text"
-                    placeholder="Ej. HAR-009"
+                    placeholder={L('Ej. HAR-009', 'e.g. FLR-009')}
                     value={newProduct.sku}
                     onChange={(e) => setNewProduct({ ...newProduct, sku: e.target.value })}
                     className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium"
@@ -1603,18 +1671,18 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
 
                 <div>
                   <div className="flex items-center justify-between mb-1">
-                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">Código de Barras (EAN-13)</label>
+                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">{L('Código de Barras (EAN-13)', 'Barcode (EAN-13)')}</label>
                     <button
                       type="button"
                       onClick={handleGenerateBarcode}
                       className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 bg-indigo-50 hover:bg-indigo-100 px-2 py-0.5 rounded-lg transition-colors cursor-pointer"
                     >
-                      <Sparkles className="w-3 h-3" /> Auto-Generar EAN
+                      <Sparkles className="w-3 h-3" /> {L('Auto-Generar EAN', 'Auto-Generate EAN')}
                     </button>
                   </div>
                   <input
                     type="text"
-                    placeholder="Ej. 7401004567891"
+                    placeholder={L('Ej. 7401004567891', 'e.g. 7401004567891')}
                     value={newProduct.codigoBarras}
                     onChange={(e) => setNewProduct({ ...newProduct, codigoBarras: e.target.value })}
                     className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono font-bold"
@@ -1629,15 +1697,15 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
                 {/* Categoría & Proveedor */}
                 <div>
                   <div className="flex items-center justify-between mb-1">
-                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">Categoría *</label>
+                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">{L('Categoría *', 'Category *')}</label>
                     <button
                       type="button"
                       onClick={() => setShowCategoryModal(true)}
                       className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1"
-                      title="Administrar o agregar nueva categoría"
+                      title={L('Administrar o agregar nueva categoría', 'Manage or add a new category')}
                     >
                       <Plus className="w-3 h-3" />
-                      <span>Nueva</span>
+                      <span>{L('Nueva', 'New')}</span>
                     </button>
                   </div>
                   <select
@@ -1646,16 +1714,16 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
                     className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   >
                     {categories.map((c) => (
-                      <option key={c} value={c}>{c}</option>
+                      <option key={c} value={c}>{c === 'Todas' ? L('Todas', 'All') : c}</option>
                     ))}
                   </select>
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Proveedor Principal</label>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">{L('Proveedor Principal', 'Primary Supplier')}</label>
                   <input
                     type="text"
-                    placeholder="Ej. Molinos Centrales S.A."
+                    placeholder={L('Ej. Molinos Centrales S.A.', 'e.g. Central Mills Corp.')}
                     value={newProduct.proveedor}
                     onChange={(e) => setNewProduct({ ...newProduct, proveedor: e.target.value })}
                     className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium"
@@ -1664,7 +1732,7 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
 
                 {/* Precios */}
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Precio de Compra (Q) *</label>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">{L(`Precio de Compra (${currencySymbol}) *`, `Cost Price (${currencySymbol}) *`)}</label>
                   <input
                     type="number"
                     step="0.01"
@@ -1677,7 +1745,7 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Precio de Venta (Q) *</label>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">{L(`Precio de Venta (${currencySymbol}) *`, `Sale Price (${currencySymbol}) *`)}</label>
                   <input
                     type="number"
                     step="0.01"
@@ -1691,7 +1759,7 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
 
                 {/* Stock Inicial & Mínimo */}
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Stock Inicial (Sucursal Central)</label>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">{L('Stock Inicial (Sucursal Central)', 'Initial Stock (Central Branch)')}</label>
                   <input
                     type="number"
                     required
@@ -1703,7 +1771,7 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Stock Mínimo de Alerta</label>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">{L('Stock Mínimo de Alerta', 'Low Stock Alert Threshold')}</label>
                   <input
                     type="number"
                     placeholder="10"
@@ -1716,7 +1784,7 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
                 {/* Unidad de Medida & Ubicación de Almacén (Laravel: UnidadMedida, Ubicacion) */}
                 <div>
                   <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                    Unidad de Medida *
+                    {L('Unidad de Medida *', 'Unit of Measure *')}
                   </label>
                   <select
                     value={newProduct.unidadMedida}
@@ -1725,7 +1793,7 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
                   >
                     {unidadesMedida.map((u) => (
                       <option key={u.id_unidad} value={u.nombre}>
-                        {u.nombre} ({u.abreviatura})
+                        {trUnitName(u.nombre)} ({u.abreviatura})
                       </option>
                     ))}
                   </select>
@@ -1733,7 +1801,7 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
 
                 <div>
                   <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                    Ubicación en Bodega
+                    {L('Ubicación en Bodega', 'Warehouse Location')}
                   </label>
                   <select
                     value={newProduct.ubicacion}
@@ -1742,7 +1810,7 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
                   >
                     {ubicacionesBodega.map((ub) => (
                       <option key={ub.id_ubicacion} value={`${ub.codigo_bodega}: ${ub.pasillo} • ${ub.estante}`}>
-                        {ub.sucursal_nombre} - {ub.pasillo} ({ub.estante})
+                        {trBranch(ub.sucursal_nombre)} - {trLocText(ub.pasillo)} ({trLocText(ub.estante)})
                       </option>
                     ))}
                   </select>
@@ -1751,13 +1819,13 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
                 {/* Fotografía de Producto con Carga desde Computadora */}
                 <div className="sm:col-span-2 p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-3">
                   <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
-                    Fotografía del Producto *
+                    {L('Fotografía del Producto *', 'Product Photo *')}
                   </label>
                   
                   <div className="flex items-center gap-4">
                     <div className="w-16 h-16 rounded-2xl bg-white border-2 border-indigo-200 overflow-hidden shrink-0 shadow-sm flex items-center justify-center">
                       {newProduct.imagen ? (
-                        <img src={newProduct.imagen} alt="Vista previa" className="w-full h-full object-cover" />
+                        <img src={newProduct.imagen} alt={L('Vista previa', 'Preview')} className="w-full h-full object-cover" />
                       ) : (
                         <ImageIcon className="w-6 h-6 text-slate-300" />
                       )}
@@ -1778,12 +1846,12 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
                           className="px-3.5 py-2 bg-white hover:bg-indigo-50 hover:border-indigo-300 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 transition-all flex items-center gap-2 shadow-sm cursor-pointer"
                         >
                           <Upload className="w-3.5 h-3.5 text-indigo-600" />
-                          <span>Subir Foto desde mi Computadora</span>
+                          <span>{L('Subir Foto desde mi Computadora', 'Upload Photo from Computer')}</span>
                         </button>
                       </div>
                       <input
                         type="url"
-                        placeholder="O pega un enlace web: https://ejemplo.com/foto.jpg"
+                        placeholder={L('O pega un enlace web: https://ejemplo.com/foto.jpg', 'Or paste an image URL: https://example.com/photo.jpg')}
                         value={newProduct.imagen}
                         onChange={(e) => {
                           setNewImageFile(null); // una URL manual anula cualquier archivo pendiente
@@ -1804,7 +1872,7 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
                 onClick={() => setShowNewProductModal(false)}
                 className="px-4 py-2.5 text-xs font-bold text-slate-600 hover:bg-slate-200 rounded-xl transition-colors cursor-pointer"
               >
-                Cancelar
+                {L('Cancelar', 'Cancel')}
               </button>
               <button
                 type="submit"
@@ -1812,7 +1880,7 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
                 className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white text-xs font-bold rounded-xl shadow-md shadow-indigo-600/25 transition-all cursor-pointer flex items-center gap-1.5"
               >
                 <Save className="w-3.5 h-3.5" />
-                <span>Guardar Producto</span>
+                <span>{L('Guardar Producto', 'Save Product')}</span>
               </button>
             </div>
           </div>
@@ -1830,9 +1898,9 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
                   <Edit3 className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-base font-black text-slate-900">Editar Producto del Catálogo</h3>
+                  <h3 className="text-base font-black text-slate-900">{L('Editar Producto del Catálogo', 'Edit Catalog Product')}</h3>
                   <p className="text-xs text-slate-500">
-                    Modificando ficha de <span className="font-semibold text-slate-700">{editingProduct.nombre}</span> (ID: #{editingProduct.id})
+                    {L('Modificando ficha de', 'Editing details for')} <span className="font-semibold text-slate-700">{editingProduct.nombre}</span> (ID: #{editingProduct.id})
                   </p>
                 </div>
               </div>
@@ -1852,7 +1920,7 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
                 {/* Nombre */}
                 <div className="sm:col-span-2">
                   <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                    Nombre Comercial del Producto *
+                    {L('Nombre Comercial del Producto *', 'Product Trade Name *')}
                   </label>
                   <input
                     type="text"
@@ -1860,14 +1928,14 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
                     value={editFormData.nombre}
                     onChange={(e) => setEditFormData({ ...editFormData, nombre: e.target.value })}
                     className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium"
-                    placeholder="Nombre del producto"
+                    placeholder={L('Nombre del producto', 'Product name')}
                   />
                 </div>
 
                 {/* SKU */}
                 <div>
                   <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                    SKU Interno *
+                    {L('SKU Interno *', 'Internal SKU *')}
                   </label>
                   <input
                     type="text"
@@ -1883,26 +1951,26 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                      Talla
+                      {L('Talla', 'Size')}
                     </label>
                     <input
                       type="text"
                       value={editFormData.talla}
                       onChange={(e) => setEditFormData({ ...editFormData, talla: e.target.value })}
                       className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium"
-                      placeholder="S, M, L, Única..."
+                      placeholder={L('S, M, L, Única...', 'S, M, L, One Size...')}
                     />
                   </div>
                   <div>
                     <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                      Color
+                      {L('Color', 'Color')}
                     </label>
                     <input
                       type="text"
                       value={editFormData.color}
                       onChange={(e) => setEditFormData({ ...editFormData, color: e.target.value })}
                       className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium"
-                      placeholder="Negro, Varios..."
+                      placeholder={L('Negro, Varios...', 'Black, Assorted...')}
                     />
                   </div>
                 </div>
@@ -1911,14 +1979,14 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
                 <div>
                   <div className="flex items-center justify-between mb-1">
                     <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
-                      Código de Barras (EAN-13)
+                      {L('Código de Barras (EAN-13)', 'Barcode (EAN-13)')}
                     </label>
                     <button
                       type="button"
                       onClick={handleGenerateEditBarcode}
                       className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 bg-indigo-50 hover:bg-indigo-100 px-2 py-0.5 rounded-lg transition-colors cursor-pointer"
                     >
-                      <Sparkles className="w-3 h-3" /> Re-Generar EAN
+                      <Sparkles className="w-3 h-3" /> {L('Re-Generar EAN', 'Regenerate EAN')}
                     </button>
                   </div>
                   <input
@@ -1926,7 +1994,7 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
                     value={editFormData.codigoBarras}
                     onChange={(e) => setEditFormData({ ...editFormData, codigoBarras: e.target.value })}
                     className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono font-bold"
-                    placeholder="Código de barras"
+                    placeholder={L('Código de barras', 'Barcode')}
                   />
                   {editFormData.codigoBarras && (
                     <div className="mt-2 p-2 bg-slate-50 rounded-xl border border-slate-200 flex justify-center">
@@ -1939,16 +2007,16 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
                 <div>
                   <div className="flex items-center justify-between mb-1">
                     <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
-                      Categoría *
+                      {L('Categoría *', 'Category *')}
                     </label>
                     <button
                       type="button"
                       onClick={() => setShowCategoryModal(true)}
                       className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1"
-                      title="Administrar o agregar nueva categoría"
+                      title={L('Administrar o agregar nueva categoría', 'Manage or add a new category')}
                     >
                       <Plus className="w-3 h-3" />
-                      <span>Nueva</span>
+                      <span>{L('Nueva', 'New')}</span>
                     </button>
                   </div>
                   <select
@@ -1957,7 +2025,7 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
                     className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   >
                     {categories.map((c) => (
-                      <option key={c} value={c}>{c}</option>
+                      <option key={c} value={c}>{c === 'Todas' ? L('Todas', 'All') : c}</option>
                     ))}
                   </select>
                 </div>
@@ -1965,21 +2033,21 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
                 {/* Proveedor */}
                 <div>
                   <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                    Proveedor Principal
+                    {L('Proveedor Principal', 'Primary Supplier')}
                   </label>
                   <input
                     type="text"
                     value={editFormData.proveedor}
                     onChange={(e) => setEditFormData({ ...editFormData, proveedor: e.target.value })}
                     className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium"
-                    placeholder="Proveedor"
+                    placeholder={L('Proveedor', 'Supplier')}
                   />
                 </div>
 
                 {/* Precios y Margen */}
                 <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
                   <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
-                    Precio de Compra (Costo Q) *
+                    {L(`Precio de Compra (Costo ${currencySymbol}) *`, `Purchase Price (Cost ${currencySymbol}) *`)}
                   </label>
                   <input
                     type="number"
@@ -1994,11 +2062,11 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
                 <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
                   <div className="flex items-center justify-between">
                     <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
-                      Precio de Venta (Q) *
+                      {L(`Precio de Venta (${currencySymbol}) *`, `Sale Price (${currencySymbol}) *`)}
                     </label>
                     {parseFloat(editFormData.precioVenta) > 0 && parseFloat(editFormData.precioCompra) > 0 && (
                       <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">
-                        Margen: {(((parseFloat(editFormData.precioVenta) - parseFloat(editFormData.precioCompra)) / parseFloat(editFormData.precioVenta)) * 100).toFixed(1)}%
+                        {L('Margen:', 'Margin:')} {(((parseFloat(editFormData.precioVenta) - parseFloat(editFormData.precioCompra)) / parseFloat(editFormData.precioVenta)) * 100).toFixed(1)}%
                       </span>
                     )}
                   </div>
@@ -2015,7 +2083,7 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
                 {/* Stock Mínimo de Alerta */}
                 <div className="sm:col-span-2">
                   <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                    Stock Mínimo de Alerta (Bajo Stock)
+                    {L('Stock Mínimo de Alerta (Bajo Stock)', 'Minimum Stock Alert (Low Stock)')}
                   </label>
                   <input
                     type="number"
@@ -2031,16 +2099,16 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
                   <div className="flex items-center justify-between">
                     <label className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
                       <Building className="w-3.5 h-3.5 text-indigo-600" />
-                      Existencias Distribuidas por Sucursal
+                      {L('Existencias Distribuidas por Sucursal', 'Stock Distributed by Branch')}
                     </label>
                     <span className="text-xs font-black text-slate-700 bg-white px-2.5 py-1 rounded-lg border border-slate-200">
-                      Stock Total: {(parseInt(editFormData.stockCentral) || 0) + (parseInt(editFormData.stockNorte) || 0) + (parseInt(editFormData.stockSur) || 0)} unidades
+                      {L('Stock Total:', 'Total Stock:')} {(parseInt(editFormData.stockCentral) || 0) + (parseInt(editFormData.stockNorte) || 0) + (parseInt(editFormData.stockSur) || 0)} {L('unidades', 'units')}
                     </span>
                   </div>
 
                   <div className="grid grid-cols-3 gap-3">
                     <div>
-                      <label className="block text-[11px] font-bold text-slate-600 mb-1">Sucursal Central</label>
+                      <label className="block text-[11px] font-bold text-slate-600 mb-1">{L('Sucursal Central', 'Central Branch')}</label>
                       <input
                         type="number"
                         min="0"
@@ -2050,7 +2118,7 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
                       />
                     </div>
                     <div>
-                      <label className="block text-[11px] font-bold text-slate-600 mb-1">Sucursal Norte</label>
+                      <label className="block text-[11px] font-bold text-slate-600 mb-1">{L('Sucursal Norte', 'North Branch')}</label>
                       <input
                         type="number"
                         min="0"
@@ -2060,7 +2128,7 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
                       />
                     </div>
                     <div>
-                      <label className="block text-[11px] font-bold text-slate-600 mb-1">Sucursal Sur</label>
+                      <label className="block text-[11px] font-bold text-slate-600 mb-1">{L('Sucursal Sur', 'South Branch')}</label>
                       <input
                         type="number"
                         min="0"
@@ -2075,13 +2143,13 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
                 {/* Fotografía del Producto */}
                 <div className="sm:col-span-2 p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-3">
                   <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
-                    Fotografía del Producto
+                    {L('Fotografía del Producto', 'Product Photo')}
                   </label>
                   
                   <div className="flex items-center gap-4">
                     <div className="w-16 h-16 rounded-2xl bg-white border-2 border-indigo-200 overflow-hidden shrink-0 shadow-sm flex items-center justify-center">
                       {editFormData.imagen ? (
-                        <img src={editFormData.imagen} alt="Vista previa" className="w-full h-full object-cover" />
+                        <img src={editFormData.imagen} alt={L('Vista previa', 'Preview')} className="w-full h-full object-cover" />
                       ) : (
                         <ImageIcon className="w-6 h-6 text-slate-300" />
                       )}
@@ -2101,11 +2169,11 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
                         className="px-3.5 py-2 bg-white hover:bg-indigo-50 hover:border-indigo-300 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 transition-all flex items-center gap-2 shadow-sm cursor-pointer"
                       >
                         <Upload className="w-3.5 h-3.5 text-indigo-600" />
-                        <span>Subir Nueva Foto desde Computadora</span>
+                        <span>{L('Subir Nueva Foto desde Computadora', 'Upload New Photo from Computer')}</span>
                       </button>
                       <input
                         type="url"
-                        placeholder="O pega un enlace web de la imagen: https://..."
+                        placeholder={L('O pega un enlace web de la imagen: https://...', 'Or paste an image URL: https://...')}
                         value={editFormData.imagen}
                         onChange={(e) => {
                           setEditImageFile(null); // una URL manual anula cualquier archivo pendiente
@@ -2127,7 +2195,7 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
                 onClick={() => setEditingProduct(null)}
                 className="px-4 py-2.5 text-xs font-bold text-slate-600 hover:bg-slate-200 rounded-xl transition-colors cursor-pointer"
               >
-                Cancelar
+                {L('Cancelar', 'Cancel')}
               </button>
               <button
                 type="submit"
@@ -2135,7 +2203,7 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
                 className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white text-xs font-bold rounded-xl shadow-md shadow-indigo-600/25 flex items-center gap-2 transition-all cursor-pointer"
               >
                 <Save className="w-4 h-4" />
-                <span>Guardar Cambios</span>
+                <span>{L('Guardar Cambios', 'Save Changes')}</span>
               </button>
             </div>
           </div>
@@ -2150,9 +2218,9 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
               <div>
                 <h3 className="text-base font-black text-slate-900 flex items-center gap-2">
                   <ArrowLeftRight className="w-4 h-4 text-indigo-600" />
-                  Traslado de Mercadería
+                  {L('Traslado de Mercadería', 'Merchandise Transfer')}
                 </h3>
-                <p className="text-xs text-slate-400">Movimiento de inventario entre sucursales autorizadas</p>
+                <p className="text-xs text-slate-400">{L('Movimiento de inventario entre sucursales autorizadas', 'Inventory movement between authorized branches')}</p>
               </div>
               <button 
                 type="button" 
@@ -2165,48 +2233,48 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
 
             <form onSubmit={handleTransfer} className="p-6 space-y-4">
               <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Producto a Mover</label>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">{L('Producto a Mover', 'Product to Transfer')}</label>
                 <select
                   value={transferData.productoId}
                   onChange={(e) => setTransferData({ ...transferData, productoId: parseInt(e.target.value) })}
                   className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 >
                   {products.map((p) => (
-                    <option key={p.id} value={p.id}>{p.nombre} (Disponibles: {p.stockTotal})</option>
+                    <option key={p.id} value={p.id}>{p.nombre} ({L('Disponibles', 'Available')}: {p.stockTotal})</option>
                   ))}
                 </select>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Sucursal Origen</label>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">{L('Sucursal Origen', 'Origin Branch')}</label>
                   <select
                     value={transferData.origen}
                     onChange={(e) => setTransferData({ ...transferData, origen: e.target.value })}
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   >
-                    <option value="Sucursal Central">Central</option>
-                    <option value="Sucursal Norte">Norte</option>
-                    <option value="Sucursal Sur">Sur</option>
+                    <option value="Sucursal Central">{L('Central', 'Central')}</option>
+                    <option value="Sucursal Norte">{L('Norte', 'North')}</option>
+                    <option value="Sucursal Sur">{L('Sur', 'South')}</option>
                   </select>
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Sucursal Destino</label>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">{L('Sucursal Destino', 'Destination Branch')}</label>
                   <select
                     value={transferData.destino}
                     onChange={(e) => setTransferData({ ...transferData, destino: e.target.value })}
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   >
-                    <option value="Sucursal Norte">Norte</option>
-                    <option value="Sucursal Sur">Sur</option>
-                    <option value="Sucursal Central">Central</option>
+                    <option value="Sucursal Norte">{L('Norte', 'North')}</option>
+                    <option value="Sucursal Sur">{L('Sur', 'South')}</option>
+                    <option value="Sucursal Central">{L('Central', 'Central')}</option>
                   </select>
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Cantidad de Unidades</label>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">{L('Cantidad de Unidades', 'Quantity of Units')}</label>
                 <input
                   type="number"
                   min="1"
@@ -2218,10 +2286,10 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Motivo / Justificación</label>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">{L('Motivo / Justificación', 'Reason / Justification')}</label>
                 <input
                   type="text"
-                  placeholder="Ej. Reabastecimiento por alerta de stock mínimo"
+                  placeholder={L('Ej. Reabastecimiento por alerta de stock mínimo', 'e.g. Replenishment due to low stock alert')}
                   value={transferData.motivo}
                   onChange={(e) => setTransferData({ ...transferData, motivo: e.target.value })}
                   className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium"
@@ -2234,13 +2302,13 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
                   onClick={() => setShowTransferModal(false)}
                   className="px-4 py-2.5 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors"
                 >
-                  Cancelar
+                  {L('Cancelar', 'Cancel')}
                 </button>
                 <button
                   type="submit"
                   className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-md shadow-indigo-600/25 transition-all"
                 >
-                  Emitir Orden de Traslado
+                  {L('Emitir Orden de Traslado', 'Issue Transfer Order')}
                 </button>
               </div>
             </form>
@@ -2271,7 +2339,7 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
                       {enlargedImageItem.sku}
                     </span>
                     <span className="text-[10px] text-slate-400">
-                      Código EAN: {enlargedImageItem.codigoBarras}
+                      {L('Código EAN:', 'EAN Code:')} {enlargedImageItem.codigoBarras}
                     </span>
                     <span className="text-[10px] font-semibold text-slate-500">
                       • {enlargedImageItem.categoria}
@@ -2284,7 +2352,7 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
                 type="button" 
                 onClick={() => setEnlargedImageItem(null)}
                 className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 rounded-xl transition-colors"
-                title="Cerrar imagen"
+                title={L('Cerrar imagen', 'Close image')}
               >
                 <X className="w-5 h-5" />
               </button>
@@ -2302,16 +2370,16 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
             {/* Pie con Información Clave de Verificación */}
             <div className="p-4 bg-slate-50 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
               <div className="flex items-center gap-4 text-slate-600">
-                <span>Precio Venta: <strong className="text-slate-900">Q {enlargedImageItem.precioVenta.toFixed(2)}</strong></span>
-                <span>Stock Total: <strong className="text-indigo-600">{enlargedImageItem.stockTotal} unidades</strong></span>
-                <span>Proveedor: <strong className="text-slate-800">{enlargedImageItem.proveedor}</strong></span>
+                <span>{L('Precio Venta:', 'Sale Price:')} <strong className="text-slate-900">{money(enlargedImageItem.precioVenta)}</strong></span>
+                <span>{L('Stock Total:', 'Total Stock:')} <strong className="text-indigo-600">{enlargedImageItem.stockTotal} {L('unidades', 'units')}</strong></span>
+                <span>{L('Proveedor:', 'Supplier:')} <strong className="text-slate-800">{enlargedImageItem.proveedor}</strong></span>
               </div>
               <button
                 type="button"
                 onClick={() => setEnlargedImageItem(null)}
                 className="w-full sm:w-auto px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition-all shadow-sm"
               >
-                Cerrar Comparador
+                {L('Cerrar Comparador', 'Close Viewer')}
               </button>
             </div>
           </div>
@@ -2327,9 +2395,9 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
               <div>
                 <h3 className="text-base font-black text-slate-900 flex items-center gap-2">
                   <Barcode className="w-5 h-5 text-indigo-600" />
-                  Impresor de Etiquetas Adhesivas
+                  {L('Impresor de Etiquetas Adhesivas', 'Adhesive Label Printer')}
                 </h3>
-                <p className="text-xs text-slate-400">Etiqueta con código EAN-13 oficial para estanterías o productos</p>
+                <p className="text-xs text-slate-400">{L('Etiqueta con código EAN-13 oficial para estanterías o productos', 'Official EAN-13 barcode label for shelves or products')}</p>
               </div>
               <button 
                 type="button" 
@@ -2346,7 +2414,7 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
                 {/* Cabecera de la etiqueta */}
                 <div className="w-full flex items-center justify-between pb-1.5 border-b border-slate-100 text-[10px] text-slate-500 font-bold uppercase tracking-wider">
                   <span>INTEGRAPRO RETAIL</span>
-                  <span className="text-indigo-600">SUCURSAL CENTRAL</span>
+                  <span className="text-indigo-600">{L('SUCURSAL CENTRAL', 'CENTRAL BRANCH')}</span>
                 </div>
 
                 {/* Nombre del Producto */}
@@ -2364,7 +2432,7 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
                   />
                 </div>
 
-                {/* Pie de etiqueta con SKU y Precio Grande en Quetzales */}
+                {/* Pie de etiqueta con SKU y Precio */}
                 <div className="w-full pt-2 border-t border-slate-100 flex items-center justify-between">
                   <div className="text-left">
                     <span className="text-[10px] font-extrabold text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded">
@@ -2373,16 +2441,16 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
                     <span className="text-[10px] text-slate-400 block mt-0.5">{labelProduct.categoria}</span>
                   </div>
                   <div className="text-right">
-                    <span className="text-[9px] uppercase tracking-wider text-slate-400 font-bold block">Precio Venta</span>
+                    <span className="text-[9px] uppercase tracking-wider text-slate-400 font-bold block">{L('Precio Venta', 'Sale Price')}</span>
                     <span className="text-lg font-black text-slate-900">
-                      Q {labelProduct.precioVenta.toFixed(2)}
+                      {money(labelProduct.precioVenta)}
                     </span>
                   </div>
                 </div>
               </div>
 
               <p className="text-[11px] text-slate-500 mt-3 text-center">
-                Formato compatible con impresoras térmicas de rollos (Zebra, Xprinter, Dymo 58mm/80mm).
+                {L('Formato compatible con impresoras térmicas de rollos (Zebra, Xprinter, Dymo 58mm/80mm).', 'Compatible with thermal roll printers (Zebra, Xprinter, Dymo 58mm/80mm).')}
               </p>
             </div>
 
@@ -2391,9 +2459,9 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
               <div className="flex items-center justify-between">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
-                    Cantidad de Etiquetas a Imprimir
+                    {L('Cantidad de Etiquetas a Imprimir', 'Number of Labels to Print')}
                   </label>
-                  <p className="text-[11px] text-slate-400">Genera lote de stickers listos para etiquetar</p>
+                  <p className="text-[11px] text-slate-400">{L('Genera lote de stickers listos para etiquetar', 'Generates a batch of ready-to-apply stickers')}</p>
                 </div>
                 <div className="flex items-center gap-1.5">
                   {[1, 5, 10, 25].map((qty) => (
@@ -2419,19 +2487,19 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
                   onClick={() => setLabelProduct(null)}
                   className="px-4 py-2.5 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors"
                 >
-                  Cerrar
+                  {L('Cerrar', 'Close')}
                 </button>
                 <button
                   type="button"
                   onClick={() => {
                     window.print();
                     setLabelProduct(null);
-                    showToast(`Orden de impresión enviada: ${labelQuantity} etiquetas para "${labelProduct.nombre}"`);
+                    showToast(L(`Orden de impresión enviada: ${labelQuantity} etiquetas para "${labelProduct.nombre}"`, `Print job sent: ${labelQuantity} labels for "${labelProduct.nombre}"`));
                   }}
                   className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-md shadow-indigo-600/25 transition-all flex items-center gap-2"
                 >
                   <Printer className="w-4 h-4" />
-                  <span>Imprimir {labelQuantity} Etiquetas</span>
+                  <span>{L(`Imprimir ${labelQuantity} Etiquetas`, `Print ${labelQuantity} Labels`)}</span>
                 </button>
               </div>
             </div>
@@ -2445,7 +2513,7 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
             <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
               <div className="flex items-center gap-2">
                 <Layers className="w-4 h-4 text-emerald-600" />
-                <h3 className="text-xs font-black text-slate-900">Registrar Unidad de Medida</h3>
+                <h3 className="text-xs font-black text-slate-900">{L('Registrar Unidad de Medida', 'Register Unit of Measure')}</h3>
               </div>
               <button
                 type="button"
@@ -2459,12 +2527,12 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
             <form onSubmit={handleSaveUnidad} className="p-5 space-y-3.5 text-xs">
               <div>
                 <label className="block font-bold text-slate-700 uppercase tracking-wider mb-1">
-                  Nombre de la Unidad *
+                  {L('Nombre de la Unidad *', 'Unit Name *')}
                 </label>
                 <input
                   type="text"
                   required
-                  placeholder="Ej. Galón, Docena, Quintal..."
+                  placeholder={L('Ej. Galón, Docena, Quintal...', 'e.g. Gallon, Dozen, Case...')}
                   value={newUnidad.nombre}
                   onChange={(e) => setNewUnidad({ ...newUnidad, nombre: e.target.value })}
                   className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium"
@@ -2473,12 +2541,12 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
 
               <div>
                 <label className="block font-bold text-slate-700 uppercase tracking-wider mb-1">
-                  Abreviatura / Símbolo *
+                  {L('Abreviatura / Símbolo *', 'Abbreviation / Symbol *')}
                 </label>
                 <input
                   type="text"
                   required
-                  placeholder="Ej. GL, DOC, QQ..."
+                  placeholder={L('Ej. GL, DOC, QQ...', 'e.g. GAL, DOZ, CS...')}
                   value={newUnidad.abreviatura}
                   onChange={(e) => setNewUnidad({ ...newUnidad, abreviatura: e.target.value.toUpperCase() })}
                   className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 font-mono font-black uppercase"
@@ -2491,13 +2559,13 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
                   onClick={() => setShowNewUnidadModal(false)}
                   className="px-3.5 py-2 text-slate-500 font-bold hover:bg-slate-100 rounded-xl"
                 >
-                  Cancelar
+                  {L('Cancelar', 'Cancel')}
                 </button>
                 <button
                   type="submit"
                   className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-xl shadow-sm"
                 >
-                  Guardar Unidad
+                  {L('Guardar Unidad', 'Save Unit')}
                 </button>
               </div>
             </form>
@@ -2512,7 +2580,7 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
             <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
               <div className="flex items-center gap-2">
                 <MapPin className="w-4 h-4 text-indigo-600" />
-                <h3 className="text-xs font-black text-slate-900">Registrar Ubicación en Almacén</h3>
+                <h3 className="text-xs font-black text-slate-900">{L('Registrar Ubicación en Almacén', 'Register Warehouse Location')}</h3>
               </div>
               <button
                 type="button"
@@ -2526,7 +2594,7 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
             <form onSubmit={handleSaveUbicacion} className="p-5 space-y-3 text-xs">
               <div>
                 <label className="block font-bold text-slate-700 uppercase tracking-wider mb-1">
-                  Sucursal Destino *
+                  {L('Sucursal Destino *', 'Destination Branch *')}
                 </label>
                 <select
                   value={newUbicacion.sucursal_nombre}
@@ -2537,15 +2605,15 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
                   }}
                   className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 font-bold"
                 >
-                  <option value="Sucursal Central">Sucursal Central</option>
-                  <option value="Sucursal Norte">Sucursal Norte</option>
-                  <option value="Sucursal Sur">Sucursal Sur</option>
+                  <option value="Sucursal Central">{L('Sucursal Central', 'Central Branch')}</option>
+                  <option value="Sucursal Norte">{L('Sucursal Norte', 'North Branch')}</option>
+                  <option value="Sucursal Sur">{L('Sucursal Sur', 'South Branch')}</option>
                 </select>
               </div>
 
               <div>
                 <label className="block font-bold text-slate-700 uppercase tracking-wider mb-1">
-                  Código de Bodega
+                  {L('Código de Bodega', 'Warehouse Code')}
                 </label>
                 <input
                   type="text"
@@ -2558,12 +2626,12 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="block font-bold text-slate-700 uppercase tracking-wider mb-1">
-                    Pasillo *
+                    {L('Pasillo *', 'Aisle *')}
                   </label>
                   <input
                     type="text"
                     required
-                    placeholder="Ej. Pasillo A, Sector 2..."
+                    placeholder={L('Ej. Pasillo A, Sector 2...', 'e.g. Aisle A, Zone 2...')}
                     value={newUbicacion.pasillo}
                     onChange={(e) => setNewUbicacion({ ...newUbicacion, pasillo: e.target.value })}
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-medium"
@@ -2572,12 +2640,12 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
 
                 <div>
                   <label className="block font-bold text-slate-700 uppercase tracking-wider mb-1">
-                    Estantería *
+                    {L('Estantería *', 'Rack / Shelf *')}
                   </label>
                   <input
                     type="text"
                     required
-                    placeholder="Ej. Estante 03..."
+                    placeholder={L('Ej. Estante 03...', 'e.g. Rack 03...')}
                     value={newUbicacion.estante}
                     onChange={(e) => setNewUbicacion({ ...newUbicacion, estante: e.target.value })}
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-medium"
@@ -2588,11 +2656,11 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="block font-bold text-slate-700 uppercase tracking-wider mb-1">
-                    Nivel de Altura
+                    {L('Nivel de Altura', 'Height Level')}
                   </label>
                   <input
                     type="text"
-                    placeholder="Ej. Nivel 1 (Piso)..."
+                    placeholder={L('Ej. Nivel 1 (Piso)...', 'e.g. Level 1 (Floor)...')}
                     value={newUbicacion.nivel}
                     onChange={(e) => setNewUbicacion({ ...newUbicacion, nivel: e.target.value })}
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-medium"
@@ -2601,11 +2669,11 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
 
                 <div>
                   <label className="block font-bold text-slate-700 uppercase tracking-wider mb-1">
-                    Bin / Casilla
+                    {L('Bin / Casilla', 'Bin / Slot')}
                   </label>
                   <input
                     type="text"
-                    placeholder="Ej. Bin A-12..."
+                    placeholder={L('Ej. Bin A-12...', 'e.g. Bin A-12...')}
                     value={newUbicacion.bin}
                     onChange={(e) => setNewUbicacion({ ...newUbicacion, bin: e.target.value })}
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-medium"
@@ -2619,13 +2687,13 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
                   onClick={() => setShowNewUbicacionModal(false)}
                   className="px-3.5 py-2 text-slate-500 font-bold hover:bg-slate-100 rounded-xl"
                 >
-                  Cancelar
+                  {L('Cancelar', 'Cancel')}
                 </button>
                 <button
                   type="submit"
                   className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-black rounded-xl shadow-sm"
                 >
-                  Guardar Ubicación
+                  {L('Guardar Ubicación', 'Save Location')}
                 </button>
               </div>
             </form>
@@ -2643,8 +2711,8 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
                   <FolderTree className="w-4 h-4" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-black text-white">Gestión de Categorías</h3>
-                  <p className="text-[10px] text-slate-400 font-medium">Catálogo dinámico de inventario</p>
+                  <h3 className="text-sm font-black text-white">{L('Gestión de Categorías', 'Category Management')}</h3>
+                  <p className="text-[10px] text-slate-400 font-medium">{L('Catálogo dinámico de inventario', 'Dynamic inventory catalog')}</p>
                 </div>
               </div>
               <button
@@ -2663,7 +2731,7 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
                   <Tag className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
                   <input
                     type="text"
-                    placeholder="Nueva categoría (ej. Limpieza, Repuestos)..."
+                    placeholder={L('Nueva categoría (ej. Limpieza, Repuestos)...', 'New category (e.g. Cleaning, Parts)...')}
                     value={newCategoryName}
                     onChange={(e) => setNewCategoryName(e.target.value)}
                     className="w-full pl-9 pr-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium"
@@ -2674,7 +2742,7 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
                   className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 transition-colors shadow-sm shrink-0"
                 >
                   <FolderPlus className="w-3.5 h-3.5" />
-                  <span>Agregar</span>
+                  <span>{L('Agregar', 'Add')}</span>
                 </button>
               </form>
 
@@ -2703,7 +2771,7 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
                             type="button"
                             onClick={handleSaveEditCategory}
                             className="p-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg"
-                            title="Guardar nombre"
+                            title={L('Guardar nombre', 'Save name')}
                           >
                             <Check className="w-3.5 h-3.5" />
                           </button>
@@ -2711,7 +2779,7 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
                             type="button"
                             onClick={() => setEditingCategory(null)}
                             className="p-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg"
-                            title="Cancelar"
+                            title={L('Cancelar', 'Cancel')}
                           >
                             <X className="w-3.5 h-3.5" />
                           </button>
@@ -2720,9 +2788,9 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
                         <>
                           <div className="flex items-center gap-2">
                             <Tag className="w-3.5 h-3.5 text-indigo-500" />
-                            <span className="font-bold text-slate-800">{cat}</span>
+                            <span className="font-bold text-slate-800">{cat === 'Todas' ? L('Todas', 'All') : cat}</span>
                             <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-200/70 text-slate-600">
-                              {count} {count === 1 ? 'producto' : 'productos'}
+                              {count} {count === 1 ? L('producto', 'product') : L('productos', 'products')}
                             </span>
                           </div>
                           <div className="flex items-center gap-1">
@@ -2730,7 +2798,7 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
                               type="button"
                               onClick={() => handleStartEditCategory(cat)}
                               className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
-                              title="Editar nombre"
+                              title={L('Editar nombre', 'Edit name')}
                             >
                               <Edit3 className="w-3.5 h-3.5" />
                             </button>
@@ -2738,7 +2806,7 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
                               type="button"
                               onClick={() => handleDeleteCategory(cat)}
                               className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
-                              title="Eliminar categoría"
+                              title={L('Eliminar categoría', 'Delete category')}
                             >
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>
@@ -2757,14 +2825,14 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
                   onClick={handleResetDefaultCategories}
                   className="text-[11px] font-bold text-slate-400 hover:text-slate-600 underline"
                 >
-                  Restablecer predeterminadas
+                  {L('Restablecer predeterminadas', 'Restore defaults')}
                 </button>
                 <button
                   type="button"
                   onClick={() => setShowCategoryModal(false)}
                   className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl"
                 >
-                  Cerrar
+                  {L('Cerrar', 'Close')}
                 </button>
               </div>
             </div>
@@ -2779,7 +2847,7 @@ export default function Inventory({ currentEmpresa }: InventoryProps = {}) {
               type="button"
               onClick={() => setShowTokenModal(false)}
               className="absolute top-5 right-5 p-2 text-slate-400 hover:text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition-all cursor-pointer z-10"
-              title="Cerrar"
+              title={L('Cerrar', 'Close')}
             >
               <X className="w-5 h-5" />
             </button>

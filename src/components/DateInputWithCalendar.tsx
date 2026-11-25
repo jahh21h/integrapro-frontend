@@ -1,5 +1,6 @@
 import React, { useRef } from 'react';
 import { Calendar as CalendarIcon } from 'lucide-react';
+import { useLanguage } from '../context/LanguageContext';
 
 interface DateInputWithCalendarProps {
   label: string;
@@ -57,11 +58,13 @@ export default function DateInputWithCalendar({
   value,
   onChange,
   required = false,
-  placeholder = 'DD/MM/AAAA',
+  placeholder,
   helperText,
   allowClear = false,
   className = ''
 }: DateInputWithCalendarProps) {
+  const { L } = useLanguage();
+  const effectivePlaceholder = placeholder ?? L('DD/MM/AAAA', 'DD/MM/YYYY');
   const hiddenDateInputRef = useRef<HTMLInputElement>(null);
 
   // Maneja la digitación del usuario insertando las diagonales automáticamente
@@ -112,7 +115,7 @@ export default function DateInputWithCalendar({
             onClick={handleSetToday}
             className="text-purple-600 hover:text-purple-800 font-bold hover:underline cursor-pointer"
           >
-            Hoy
+            {L('Hoy', 'Today')}
           </button>
           {allowClear && value && (
             <>
@@ -122,7 +125,7 @@ export default function DateInputWithCalendar({
                 onClick={handleClear}
                 className="text-slate-400 hover:text-rose-600 font-medium cursor-pointer"
               >
-                Limpiar
+                {L('Limpiar', 'Clear')}
               </button>
             </>
           )}
@@ -134,7 +137,7 @@ export default function DateInputWithCalendar({
         <input
           type="text"
           required={required}
-          placeholder={placeholder}
+          placeholder={effectivePlaceholder}
           maxLength={10}
           value={value}
           onChange={handleTextChange}
@@ -147,7 +150,7 @@ export default function DateInputWithCalendar({
             type="button"
             onClick={openCalendar}
             className="p-1.5 rounded-lg text-slate-400 hover:text-purple-600 hover:bg-purple-50 transition-colors cursor-pointer relative"
-            title="Abrir calendario para seleccionar fecha"
+            title={L('Abrir calendario para seleccionar fecha', 'Open calendar to pick a date')}
           >
             <CalendarIcon className="w-4 h-4 text-purple-600" />
             
@@ -159,7 +162,7 @@ export default function DateInputWithCalendar({
               value={maskToIsoDate(value)}
               onChange={handleCalendarChange}
               className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
-              aria-label={`Seleccionar ${label} en calendario`}
+              aria-label={L(`Seleccionar ${label} en calendario`, `Select ${label} from calendar`)}
             />
           </button>
         </div>
@@ -169,7 +172,7 @@ export default function DateInputWithCalendar({
         <p className="text-[11px] text-slate-400 font-medium">{helperText}</p>
       ) : (
         <p className="text-[10px] text-slate-400 font-medium flex items-center gap-1">
-          <span>Escribe solo los números (las diagonales se insertan solas) o pulsa el icono</span>
+          <span>{L('Escribe solo los números (las diagonales se insertan solas) o pulsa el icono', 'Type digits only (slashes are inserted automatically) or click the icon')}</span>
           <CalendarIcon className="w-2.5 h-2.5 inline text-purple-500" />
         </p>
       )}

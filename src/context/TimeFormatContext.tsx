@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState } from 'react';
 import { TimeFormat } from '../types';
+import { useLanguage } from './LanguageContext';
 
 interface TimeFormatContextType {
   timeFormat: TimeFormat;
@@ -14,6 +15,7 @@ interface TimeFormatContextType {
 const TimeFormatContext = createContext<TimeFormatContextType | undefined>(undefined);
 
 export function TimeFormatProvider({ children }: { children: React.ReactNode }) {
+  const { locale, isEn } = useLanguage();
   const [timeFormat, setTimeFormatState] = useState<TimeFormat>(() => {
     try {
       const saved = localStorage.getItem('integrapro_time_format');
@@ -42,7 +44,19 @@ export function TimeFormatProvider({ children }: { children: React.ReactNode }) 
     if (typeof time === 'string') {
       const trimmed = time.trim();
       if (trimmed === '---' || trimmed === '') return '---';
-      if (trimmed.startsWith('Hace ')) return trimmed;
+      if (trimmed.startsWith('Hace ')) {
+        if (isEn) {
+          return trimmed
+            .replace(/^Hace\s+(.+?)\s+minutos?$/i, '$1 min ago')
+            .replace(/^Hace\s+(.+?)\s+min$/i, '$1 min ago')
+            .replace(/^Hace\s+(.+?)\s+horas?$/i, '$1 hr ago')
+            .replace(/^Hace\s+(.+?)\s+d[ií]as?$/i, '$1d ago')
+            .replace(/^Hace\s+(.+?)\s+segundos?$/i, '$1s ago')
+            .replace(/^Hace\s+(.+)$/i, '$1 ago');
+        }
+        return trimmed;
+      }
+      if (/\bago$/i.test(trimmed)) return trimmed;
 
       // Detectar formato HH:MM o HH:MM:SS con o sin AM/PM
       const match = trimmed.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM|am|pm)?$/i);
@@ -76,7 +90,7 @@ export function TimeFormatProvider({ children }: { children: React.ReactNode }) 
     // Si es un objeto Date
     if (time instanceof Date) {
       if (isNaN(time.getTime())) return '---';
-      return time.toLocaleTimeString('es-GT', {
+      return time.toLocaleTimeString(locale, {
         hour: '2-digit',
         minute: '2-digit',
         second: includeSeconds ? '2-digit' : undefined,
@@ -90,9 +104,34 @@ export function TimeFormatProvider({ children }: { children: React.ReactNode }) 
   // Función para formatear intervalos de horarios en texto (ej. "Lunes a Sábado: 7:00 AM - 8:00 PM")
   const formatSchedule = (text: string | null | undefined): string => {
     if (!text) return '';
-    return text.replace(/(\d{1,2}:\d{2}(?::\d{2})?\s*(?:AM|PM|am|pm)?)/gi, (m) => {
+    let result = text.replace(/(\d{1,2}:\d{2}(?::\d{2})?\s*(?:AM|PM|am|pm)?)/gi, (m) => {
       return formatTime(m.trim());
     });
+    if (isEn) {
+      const dayMap: [RegExp, string][] = [
+        [/\bTodos los d[ií]as\b/gi, 'Every day'],
+        [/\bLunes\b/gi, 'Monday'],
+        [/\bMartes\b/gi, 'Tuesday'],
+        [/\bMi[eé]rcoles\b/gi, 'Wednesday'],
+        [/\bJueves\b/gi, 'Thursday'],
+        [/\bViernes\b/gi, 'Friday'],
+        [/\bS[aá]bado\b/gi, 'Saturday'],
+        [/\bDomingo\b/gi, 'Sunday'],
+        [/\bLun\b/gi, 'Mon'],
+        [/\bMi[eé]\b/gi, 'Wed'],
+        [/\bJue\b/gi, 'Thu'],
+        [/\bVie\b/gi, 'Fri'],
+        [/\bS[aá]b\b/gi, 'Sat'],
+        [/\bDom\b/gi, 'Sun'],
+        [/\bCerrado\b/gi, 'Closed'],
+        [/\bAbierto\b/gi, 'Open'],
+        [/\b(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday|Mon|Tue|Wed|Thu|Fri|Sat|Sun)\s+a\s+(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday|Mon|Tue|Wed|Thu|Fri|Sat|Sun)\b/gi, '$1 to $2'],
+      ];
+      for (const [pattern, replacement] of dayMap) {
+        result = result.replace(pattern, replacement);
+      }
+    }
+    return result;
   };
 
   return (

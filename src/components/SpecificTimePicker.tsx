@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Clock, ChevronUp, ChevronDown, Check, Sun, Moon, Sparkles } from 'lucide-react';
 import { useTimeFormat } from '../context/TimeFormatContext';
+import { useLanguage } from '../context/LanguageContext';
 
 export interface SpecificTimePickerProps {
   label: string;
@@ -89,11 +90,13 @@ export default function SpecificTimePicker({
   onChange,
   required = false,
   helperText,
-  placeholder = 'Seleccionar hora',
+  placeholder,
   className = '',
   quickPresets
 }: SpecificTimePickerProps) {
   const { timeFormat } = useTimeFormat();
+  const { L } = useLanguage();
+  const effectivePlaceholder = placeholder ?? L('Seleccionar hora', 'Select time');
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -194,14 +197,14 @@ export default function SpecificTimePicker({
 
   // Presets predeterminados para turnos de trabajo
   const defaultPresets = quickPresets || [
-    { label: '06:00 AM (Bodega)', time: '06:00' },
-    { label: '08:00 AM (Oficina)', time: '08:00' },
-    { label: '08:30 AM (Tienda)', time: '08:30' },
-    { label: '12:00 PM (Medio Día)', time: '12:00' },
-    { label: '01:00 PM (Tarde)', time: '13:00' },
-    { label: '05:00 PM (Salida)', time: '17:00' },
-    { label: '06:30 PM (Cierre Tienda)', time: '18:30' },
-    { label: '08:00 PM (Cierre Nocturno)', time: '20:00' }
+    { label: L('06:00 AM (Bodega)', '06:00 AM (Warehouse)'), time: '06:00' },
+    { label: L('08:00 AM (Oficina)', '08:00 AM (Office)'), time: '08:00' },
+    { label: L('08:30 AM (Tienda)', '08:30 AM (Store)'), time: '08:30' },
+    { label: L('12:00 PM (Medio Día)', '12:00 PM (Noon)'), time: '12:00' },
+    { label: L('01:00 PM (Tarde)', '01:00 PM (Afternoon)'), time: '13:00' },
+    { label: L('05:00 PM (Salida)', '05:00 PM (Clock Out)'), time: '17:00' },
+    { label: L('06:30 PM (Cierre Tienda)', '06:30 PM (Store Close)'), time: '18:30' },
+    { label: L('08:00 PM (Cierre Nocturno)', '08:00 PM (Night Close)'), time: '20:00' }
   ];
 
   return (
@@ -233,10 +236,10 @@ export default function SpecificTimePicker({
             </div>
             <div>
               <span className="text-sm font-black font-mono text-slate-900 tracking-wide">
-                {value ? mainDisplay : placeholder}
+                {value ? mainDisplay : effectivePlaceholder}
               </span>
               <span className="text-[10px] text-slate-400 block font-medium">
-                {timeFormat === '12h' ? 'Formato 12 Horas' : 'Formato 24 Horas'}
+                {timeFormat === '12h' ? L('Formato 12 Horas', '12-Hour Format') : L('Formato 24 Horas', '24-Hour Format')}
               </span>
             </div>
           </div>
@@ -252,7 +255,7 @@ export default function SpecificTimePicker({
         <div className="flex flex-col gap-0.5">
           <button
             type="button"
-            title="Adelantar 15 minutos"
+            title={L('Adelantar 15 minutos', 'Forward 15 minutes')}
             onClick={(e) => handleStepMinutes(15, e)}
             className="p-1.5 rounded-lg bg-slate-100 hover:bg-indigo-100 hover:text-indigo-700 text-slate-500 transition-colors cursor-pointer"
           >
@@ -260,7 +263,7 @@ export default function SpecificTimePicker({
           </button>
           <button
             type="button"
-            title="Retrasar 15 minutos"
+            title={L('Retrasar 15 minutos', 'Back 15 minutes')}
             onClick={(e) => handleStepMinutes(-15, e)}
             className="p-1.5 rounded-lg bg-slate-100 hover:bg-indigo-100 hover:text-indigo-700 text-slate-500 transition-colors cursor-pointer"
           >
@@ -283,7 +286,7 @@ export default function SpecificTimePicker({
                 {pickerMode === '12h' ? displayFormatted12h : displayFormatted24h}
               </span>
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                {pickerMode === '12h' ? '12 Horas' : '24 Horas'}
+                {pickerMode === '12h' ? L('12 Horas', '12-Hour') : L('24 Horas', '24-Hour')}
               </span>
             </div>
 
@@ -292,19 +295,19 @@ export default function SpecificTimePicker({
                 type="button"
                 onClick={handleSetCurrentTime}
                 className="text-[10px] font-bold px-2 py-1 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded-lg flex items-center gap-1 transition-colors cursor-pointer"
-                title="Poner hora actual del sistema"
+                title={L('Poner hora actual del sistema', 'Set current system time')}
               >
                 <Sparkles className="w-3 h-3" />
-                Ahora
+                {L('Ahora', 'Now')}
               </button>
 
               <button
                 type="button"
                 onClick={() => setPickerMode(pickerMode === '12h' ? '24h' : '12h')}
                 className="text-[10px] font-bold px-2 py-1 bg-slate-100 text-slate-600 hover:bg-slate-200 rounded-lg transition-colors cursor-pointer"
-                title="Cambiar formato en este selector"
+                title={L('Cambiar formato en este selector', 'Switch format in this picker')}
               >
-                Modo: {pickerMode.toUpperCase()}
+                {L('Modo:', 'Mode:')} {pickerMode.toUpperCase()}
               </button>
             </div>
           </div>
@@ -322,7 +325,7 @@ export default function SpecificTimePicker({
                 }`}
               >
                 <Sun className="w-3.5 h-3.5" />
-                AM (Mañana)
+                {L('AM (Mañana)', 'AM (Morning)')}
               </button>
               <button
                 type="button"
@@ -334,7 +337,7 @@ export default function SpecificTimePicker({
                 }`}
               >
                 <Moon className="w-3.5 h-3.5" />
-                PM (Tarde / Noche)
+                {L('PM (Tarde / Noche)', 'PM (Afternoon / Night)')}
               </button>
             </div>
           )}
@@ -342,7 +345,7 @@ export default function SpecificTimePicker({
           {/* SECCIÓN 1: Cuadrícula Específica de Horas */}
           <div className="space-y-1.5">
             <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
-              1. Selecciona la Hora:
+              {L('1. Selecciona la Hora:', '1. Select Hour:')}
             </span>
 
             {pickerMode === '12h' ? (
@@ -392,11 +395,11 @@ export default function SpecificTimePicker({
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
               <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
-                2. Selecciona los Minutos:
+                {L('2. Selecciona los Minutos:', '2. Select Minutes:')}
               </span>
               {/* Selector de Minuto Exacto manual */}
               <div className="flex items-center gap-1">
-                <span className="text-[10px] text-slate-400 font-medium">Exacto:</span>
+                <span className="text-[10px] text-slate-400 font-medium">{L('Exacto:', 'Exact:')}</span>
                 <input
                   type="number"
                   min="0"
@@ -435,7 +438,7 @@ export default function SpecificTimePicker({
           {/* SECCIÓN 3: Turnos y Horarios Habituales (Presets Rápidos) */}
           <div className="space-y-1.5 pt-2 border-t border-slate-100">
             <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
-              Horarios Habituales de Turno:
+              {L('Horarios Habituales de Turno:', 'Common Shift Times:')}
             </span>
             <div className="flex flex-wrap gap-1.5">
               {defaultPresets.map((preset) => {
@@ -463,7 +466,7 @@ export default function SpecificTimePicker({
           {/* Botón de Confirmación y Cierre */}
           <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
             <span className="text-[11px] font-bold text-slate-500">
-              Hora: <span className="text-slate-900 font-mono font-black">{mainDisplay}</span>
+              {L('Hora:', 'Time:')} <span className="text-slate-900 font-mono font-black">{mainDisplay}</span>
             </span>
 
             <button
@@ -472,7 +475,7 @@ export default function SpecificTimePicker({
               className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-md shadow-indigo-600/20 flex items-center gap-1.5 transition-all cursor-pointer"
             >
               <Check className="w-3.5 h-3.5" />
-              Listo
+              {L('Listo', 'Done')}
             </button>
           </div>
         </div>

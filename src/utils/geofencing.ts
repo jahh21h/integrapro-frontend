@@ -2,6 +2,7 @@
  * Utilidades de Geolocalización y Geocerca (Geofencing) para Control de Asistencias
  * Sincronizado exactamente con App\Filament\Pages\MarcarAsistencia.php y App\Models\Sucursal.php de Laravel
  */
+import { getCurrentLang, tLang } from '../context/LanguageContext';
 
 export interface BranchLocation {
   id: number;
@@ -86,10 +87,22 @@ export function validarUbicacionMarcaje(
   userLng: number,
   sucursalNombre: string
 ): GeofenceValidationResult {
-  const cleanName = sucursalNombre.replace('Sucursal ', '');
-  const sucursal = 
-    BRANCH_LOCATIONS[sucursalNombre] || 
-    BRANCH_LOCATIONS[`Sucursal ${cleanName}`] || 
+  const cleanName = sucursalNombre.replace(/^(Sucursal|Branch)\s+/i, '').trim();
+  const aliasMap: Record<string, string> = {
+    'Central Branch': 'Sucursal Central',
+    'North Branch': 'Sucursal Norte',
+    'South Branch': 'Sucursal Sur',
+    'Central': 'Sucursal Central',
+    'Norte': 'Sucursal Norte',
+    'North': 'Sucursal Norte',
+    'Sur': 'Sucursal Sur',
+    'South': 'Sucursal Sur',
+  };
+  const sucursal =
+    BRANCH_LOCATIONS[sucursalNombre] ||
+    BRANCH_LOCATIONS[aliasMap[sucursalNombre] || ''] ||
+    BRANCH_LOCATIONS[aliasMap[cleanName] || ''] ||
+    BRANCH_LOCATIONS[`Sucursal ${cleanName}`] ||
     BRANCH_LOCATIONS['Sucursal Central'];
 
   const distancia = Math.round(
@@ -98,15 +111,31 @@ export function validarUbicacionMarcaje(
 
   const permitido = distancia <= sucursal.radioPermitidoMetros;
 
+  const displayBranchName = getCurrentLang() === 'en'
+    ? (sucursal.id === 1
+        ? 'Central Branch - Downtown'
+        : sucursal.id === 2
+        ? 'North Branch - Atlantic Highway'
+        : sucursal.id === 3
+        ? 'South Branch - Villa Nueva'
+        : sucursal.nombre.replace(/^Sucursal\b/i, 'Branch'))
+    : sucursal.nombre;
+
   const mensaje = permitido
-    ? `Ubicación autorizada: Te encuentras a ${distancia}m de ${sucursal.nombre} (dentro del perímetro de ${sucursal.radioPermitidoMetros}m).`
-    : `Acceso restringido: Te encuentras a ${distancia}m de tu lugar de trabajo (${sucursal.nombre}). El radio permitido es de ${sucursal.radioPermitidoMetros}m.`;
+    ? tLang(
+        `Ubicación autorizada: Te encuentras a ${distancia}m de ${displayBranchName} (dentro del perímetro de ${sucursal.radioPermitidoMetros}m).`,
+        `Location authorized: You are ${distancia}m from ${displayBranchName} (within the ${sucursal.radioPermitidoMetros}m geofence).`
+      )
+    : tLang(
+        `Acceso restringido: Te encuentras a ${distancia}m de tu lugar de trabajo (${displayBranchName}). El radio permitido es de ${sucursal.radioPermitidoMetros}m.`,
+        `Access restricted: You are ${distancia}m from your workplace (${displayBranchName}). The allowed radius is ${sucursal.radioPermitidoMetros}m.`
+      );
 
   return {
     permitido,
     distanciaMetros: distancia,
     radioPermitido: sucursal.radioPermitidoMetros,
-    sucursalNombre: sucursal.nombre,
+    sucursalNombre: displayBranchName,
     latitudUsuario: userLat,
     longitudUsuario: userLng,
     latitudSucursal: sucursal.latitud,

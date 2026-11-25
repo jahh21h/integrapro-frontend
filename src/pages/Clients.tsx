@@ -26,6 +26,7 @@ import { getTenantClients } from '../data/realClients';
 import { salesApi } from '../api';
 import { filterRecordsByTenant, getStoredActiveEmpresaId } from '../utils/tenant';
 import { getLiveCache, setLiveCache } from '../utils/liveCache';
+import { useLanguage } from '../context/LanguageContext';
 
 interface ClientsProps {
   currentEmpresa?: EmpresaSaaS;
@@ -61,6 +62,40 @@ interface CreditSaleItem {
 }
 
 export default function Clients({ currentEmpresa }: ClientsProps) {
+  const {
+    L,
+    isEn,
+    money,
+    currencySymbol,
+    locale,
+    taxIdLabel,
+    trPayment,
+    trStatus,
+    trClient,
+    trTaxId,
+  } = useLanguage();
+
+  const formatClient = (raw?: string | null) => {
+    const clean = String(raw || '').trim();
+    if (clean === 'Cliente') return L('Cliente', 'Customer');
+    return trClient(clean);
+  };
+
+  const trClientType = (raw?: string | null) => {
+    const low = String(raw || '').toLowerCase();
+    if (low === 'vip') return 'VIP';
+    if (low === 'mayorista') return L('Mayorista', 'Wholesale');
+    if (low === 'especial') return L('Especial', 'Special');
+    if (low === 'normal') return L('Normal', 'Standard');
+    return String(raw || '');
+  };
+
+  const trAddress = (raw?: string | null) => {
+    const clean = String(raw || '').trim();
+    if (!clean || clean === 'Ciudad') return L('Ciudad', 'City');
+    return clean;
+  };
+
   const [activeTab, setActiveTab] = useState<'directorio' | 'cxc'>('directorio');
   const [searchTerm, setSearchTerm] = useState('');
   const [showNewClienteModal, setShowNewClienteModal] = useState(false);
@@ -150,12 +185,12 @@ export default function Clients({ currentEmpresa }: ClientsProps) {
             'Cliente';
           const pagosArr: CreditPagoItem[] = Array.isArray(item.pagos)
             ? item.pagos.map((p: any) => ({
-                id_pago: Number(p.id_pago || p.id || 0),
-                fecha_pago: String(p.fecha_pago || p.created_at || '').slice(0, 16).replace('T', ' '),
-                metodo_pago: String(p.metodo_pago || 'efectivo'),
-                referencia_interna: p.referencia_interna || p.transaction_id || null,
-                monto: Number(p.monto) || 0
-              }))
+              id_pago: Number(p.id_pago || p.id || 0),
+              fecha_pago: String(p.fecha_pago || p.created_at || '').slice(0, 16).replace('T', ' '),
+              metodo_pago: String(p.metodo_pago || 'efectivo'),
+              referencia_interna: p.referencia_interna || p.transaction_id || null,
+              monto: Number(p.monto) || 0
+            }))
             : [];
 
           return {
@@ -313,9 +348,19 @@ export default function Clients({ currentEmpresa }: ClientsProps) {
         dias_credito: 30,
         limite_credito: 5000
       });
-      showToast(`Cliente "${creado.nombre_completo}" registrado en MySQL.`);
+      showToast(
+        L(
+          `Cliente "${creado.nombre_completo}" registrado en MySQL.`,
+          `Customer "${creado.nombre_completo}" registered in MySQL.`
+        )
+      );
     } catch (err: any) {
-      alert(`No se pudo guardar el cliente: ${err?.response?.data?.message || err?.message || 'Error de servidor'}`);
+      alert(
+        L(
+          `No se pudo guardar el cliente: ${err?.response?.data?.message || err?.message || 'Error de servidor'}`,
+          `Could not save customer: ${err?.response?.data?.message || err?.message || 'Server error'}`
+        )
+      );
     } finally {
       setIsSavingCliente(false);
     }
@@ -335,11 +380,21 @@ export default function Clients({ currentEmpresa }: ClientsProps) {
     if (!selectedCredit || isSavingAbono) return;
     const abono = parseFloat(montoAbono);
     if (isNaN(abono) || abono <= 0) {
-      setAbonoError('Ingresa un monto de abono mayor a Q 0.00.');
+      setAbonoError(
+        L(
+          `Ingresa un monto de abono mayor a ${money(0)}.`,
+          `Enter a payment amount greater than ${money(0)}.`
+        )
+      );
       return;
     }
     if (abono > selectedCredit.saldo_pendiente + 0.01) {
-      setAbonoError(`El abono no puede exceder el saldo pendiente (Q ${selectedCredit.saldo_pendiente.toFixed(2)}).`);
+      setAbonoError(
+        L(
+          `El abono no puede exceder el saldo pendiente (${money(selectedCredit.saldo_pendiente)}).`,
+          `Payment cannot exceed the pending balance (${money(selectedCredit.saldo_pendiente)}).`
+        )
+      );
       return;
     }
 
@@ -360,12 +415,18 @@ export default function Clients({ currentEmpresa }: ClientsProps) {
       await fetchCreditsLive();
       showToast(
         nuevoSaldo <= 0.01
-          ? `Abono de Q ${abono.toFixed(2)} registrado. Venta #${saleId} liquidada completamente.`
-          : `Abono parcial de Q ${abono.toFixed(2)} registrado en Venta #${saleId}. Nuevo saldo: Q ${nuevoSaldo.toFixed(2)}.`,
+          ? L(
+              `Abono de ${money(abono)} registrado. Venta #${saleId} liquidada completamente.`,
+              `Payment of ${money(abono)} recorded. Sale #${saleId} paid in full.`
+            )
+          : L(
+              `Abono parcial de ${money(abono)} registrado en Venta #${saleId}. Nuevo saldo: ${money(nuevoSaldo)}.`,
+              `Partial payment of ${money(abono)} recorded on Sale #${saleId}. New balance: ${money(nuevoSaldo)}.`
+            ),
         saleId
       );
     } catch (err: any) {
-      const msg = err?.response?.data?.message || err?.message || 'Error al registrar el abono en MySQL.';
+      const msg = err?.response?.data?.message || err?.message || L('Error al registrar el abono en MySQL.', 'Error recording payment in MySQL.');
       setAbonoError(msg);
     } finally {
       setIsSavingAbono(false);
@@ -378,7 +439,12 @@ export default function Clients({ currentEmpresa }: ClientsProps) {
     try {
       await salesApi.downloadSalePdf(saleId);
     } catch (err: any) {
-      alert(`No se pudo generar el PDF de la venta #${saleId}: ${err?.response?.data?.message || err?.message}`);
+      alert(
+        L(
+          `No se pudo generar el PDF de la venta #${saleId}: ${err?.response?.data?.message || err?.message}`,
+          `Could not generate PDF for sale #${saleId}: ${err?.response?.data?.message || err?.message}`
+        )
+      );
     } finally {
       setDownloadingPdfId(null);
     }
@@ -401,7 +467,7 @@ export default function Clients({ currentEmpresa }: ClientsProps) {
               className="px-2.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-black flex items-center gap-1 shrink-0 cursor-pointer"
             >
               <FileText className="w-3.5 h-3.5" />
-              <span>Ver PDF</span>
+              <span>{L('Ver PDF', 'View PDF')}</span>
             </button>
           )}
           <button
@@ -422,11 +488,14 @@ export default function Clients({ currentEmpresa }: ClientsProps) {
               <Users className="w-5 h-5" />
             </span>
             <h1 className="text-xl font-bold text-slate-800 tracking-tight">
-              Clientes & Cuentas por Cobrar (CXC)
+              {L('Clientes & Cuentas por Cobrar (CXC)', 'Customers & Accounts Receivable (A/R)')}
             </h1>
           </div>
           <p className="text-xs text-slate-500 mt-1">
-            Directorio de clientes, control de ventas al crédito, registro de abonos parciales en vivo y estados de cuenta PDF.
+            {L(
+              'Directorio de clientes, control de ventas al crédito, registro de abonos parciales en vivo y estados de cuenta PDF.',
+              'Customer directory, credit sales tracking, live partial payments, and PDF account statements.'
+            )}
           </p>
         </div>
 
@@ -438,10 +507,10 @@ export default function Clients({ currentEmpresa }: ClientsProps) {
               fetchCreditsLive();
             }}
             className="px-3 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer"
-            title="Sincronizar clientes y cuentas por cobrar desde MySQL"
+            title={L('Sincronizar clientes y cuentas por cobrar desde MySQL', 'Sync customers and accounts receivable from MySQL')}
           >
             <RefreshCw className={`w-3.5 h-3.5 ${loadingCredits ? 'animate-spin' : ''}`} />
-            <span>Actualizar</span>
+            <span>{L('Actualizar', 'Refresh')}</span>
           </button>
           <button
             type="button"
@@ -449,7 +518,7 @@ export default function Clients({ currentEmpresa }: ClientsProps) {
             className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-xl flex items-center gap-2 shadow-sm transition-colors cursor-pointer"
           >
             <Plus className="w-4 h-4" />
-            Registrar Nuevo Cliente
+            {L('Registrar Nuevo Cliente', 'Register New Customer')}
           </button>
         </div>
       </div>
@@ -458,10 +527,10 @@ export default function Clients({ currentEmpresa }: ClientsProps) {
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm flex items-center justify-between">
           <div>
-            <p className="text-xs font-semibold text-slate-400">Total Clientes Registrados</p>
+            <p className="text-xs font-semibold text-slate-400">{L('Total Clientes Registrados', 'Total Registered Customers')}</p>
             <p className="text-2xl font-black text-slate-800 mt-1">{clientes.length}</p>
             <span className="text-[11px] text-emerald-600 font-medium flex items-center gap-1 mt-1">
-              <CheckCircle2 className="w-3.5 h-3.5" /> Aislados en {currentEmpresa?.nombre || 'tu empresa'}
+              <CheckCircle2 className="w-3.5 h-3.5" /> {L('Aislados en', 'Scoped to')} {currentEmpresa?.nombre || L('tu empresa', 'your company')}
             </span>
           </div>
           <div className="w-11 h-11 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold">
@@ -471,12 +540,12 @@ export default function Clients({ currentEmpresa }: ClientsProps) {
 
         <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm flex items-center justify-between">
           <div>
-            <p className="text-xs font-semibold text-slate-400">Saldo Pendiente por Cobrar (CXC)</p>
+            <p className="text-xs font-semibold text-slate-400">{L('Saldo Pendiente por Cobrar (CXC)', 'Pending Receivable Balance (A/R)')}</p>
             <p className="text-2xl font-black text-amber-600 mt-1">
-              Q {totalCarteraCredito.toLocaleString('es-GT', { minimumFractionDigits: 2 })}
+              {money(totalCarteraCredito)}
             </p>
             <span className="text-[11px] text-amber-600 font-medium flex items-center gap-1 mt-1">
-              <AlertCircle className="w-3.5 h-3.5" /> {creditSales.length} venta(s) pendiente(s) o con abono parcial
+              <AlertCircle className="w-3.5 h-3.5" /> {creditSales.length} {L('venta(s) pendiente(s) o con abono parcial', 'pending or partially paid sale(s)')}
             </span>
           </div>
           <div className="w-11 h-11 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center font-bold">
@@ -486,12 +555,12 @@ export default function Clients({ currentEmpresa }: ClientsProps) {
 
         <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm flex items-center justify-between">
           <div>
-            <p className="text-xs font-semibold text-slate-400">Abonos Parciales Recibidos</p>
+            <p className="text-xs font-semibold text-slate-400">{L('Abonos Parciales Recibidos', 'Partial Payments Received')}</p>
             <p className="text-2xl font-black text-emerald-700 mt-1">
-              Q {totalRecuperadoEnCurso.toLocaleString('es-GT', { minimumFractionDigits: 2 })}
+              {money(totalRecuperadoEnCurso)}
             </p>
             <span className="text-[11px] text-emerald-600 font-medium mt-1 block">
-              En cuentas activas de cartera
+              {L('En cuentas activas de cartera', 'Across active receivable accounts')}
             </span>
           </div>
           <div className="w-11 h-11 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold">
@@ -505,26 +574,24 @@ export default function Clients({ currentEmpresa }: ClientsProps) {
         <button
           type="button"
           onClick={() => setActiveTab('directorio')}
-          className={`py-3.5 px-4 font-bold text-xs flex items-center gap-2 border-b-2 transition-colors cursor-pointer ${
-            activeTab === 'directorio'
+          className={`py-3.5 px-4 font-bold text-xs flex items-center gap-2 border-b-2 transition-colors cursor-pointer ${activeTab === 'directorio'
               ? 'border-indigo-600 text-indigo-600'
               : 'border-transparent text-slate-500 hover:text-slate-800'
-          }`}
+            }`}
         >
           <Users className="w-4 h-4" />
-          Directorio de Clientes ({clientes.length})
+          {L('Directorio de Clientes', 'Customer Directory')} ({clientes.length})
         </button>
         <button
           type="button"
           onClick={() => setActiveTab('cxc')}
-          className={`py-3.5 px-4 font-bold text-xs flex items-center gap-2 border-b-2 transition-colors cursor-pointer ${
-            activeTab === 'cxc'
+          className={`py-3.5 px-4 font-bold text-xs flex items-center gap-2 border-b-2 transition-colors cursor-pointer ${activeTab === 'cxc'
               ? 'border-indigo-600 text-indigo-600'
               : 'border-transparent text-slate-500 hover:text-slate-800'
-          }`}
+            }`}
         >
           <Clock className="w-4 h-4" />
-          Cuentas por Cobrar & Abonos ({creditSales.length})
+          {L('Cuentas por Cobrar & Abonos', 'Accounts Receivable & Payments')} ({creditSales.length})
         </button>
       </div>
 
@@ -538,12 +605,12 @@ export default function Clients({ currentEmpresa }: ClientsProps) {
                 type="text"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Buscar cliente por nombre, NIT o teléfono..."
+                placeholder={L('Buscar cliente por nombre, NIT o teléfono...', 'Search customer by name, Tax ID, or phone...')}
                 className="w-full pl-9 pr-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
               />
             </div>
             <div className="text-xs text-slate-500 font-medium">
-              Segmentación comercial por tipo de cliente
+              {L('Segmentación comercial por tipo de cliente', 'Commercial segmentation by customer type')}
             </div>
           </div>
 
@@ -551,13 +618,13 @@ export default function Clients({ currentEmpresa }: ClientsProps) {
             <table className="w-full text-left text-xs text-slate-600">
               <thead className="bg-slate-50 text-slate-700 font-semibold uppercase text-[10px] tracking-wider border-b border-slate-200">
                 <tr>
-                  <th className="py-3 px-4">Cliente / Razón Social</th>
-                  <th className="py-3 px-4">NIT</th>
-                  <th className="py-3 px-4">Categoría</th>
-                  <th className="py-3 px-4">Contacto & Teléfono</th>
-                  <th className="py-3 px-4">Crédito Concedido</th>
-                  <th className="py-3 px-4 text-right">Saldo Pendiente</th>
-                  <th className="py-3 px-4 text-center">Acciones</th>
+                  <th className="py-3 px-4">{L('Cliente / Razón Social', 'Customer / Legal Name')}</th>
+                  <th className="py-3 px-4">{taxIdLabel}</th>
+                  <th className="py-3 px-4">{L('Categoría', 'Category')}</th>
+                  <th className="py-3 px-4">{L('Contacto & Teléfono', 'Contact & Phone')}</th>
+                  <th className="py-3 px-4">{L('Crédito Concedido', 'Credit Limit')}</th>
+                  <th className="py-3 px-4 text-right">{L('Saldo Pendiente', 'Pending Balance')}</th>
+                  <th className="py-3 px-4 text-center">{L('Acciones', 'Actions')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -565,8 +632,8 @@ export default function Clients({ currentEmpresa }: ClientsProps) {
                   <tr>
                     <td colSpan={7} className="py-12 text-center text-slate-400">
                       <Users className="w-10 h-10 mx-auto mb-2 text-slate-300" />
-                      <p className="font-semibold text-slate-600">No se encontraron clientes</p>
-                      <p className="text-xs text-slate-400 mt-1">Prueba cambiando el término de búsqueda o registra uno nuevo.</p>
+                      <p className="font-semibold text-slate-600">{L('No se encontraron clientes', 'No customers found')}</p>
+                      <p className="text-xs text-slate-400 mt-1">{L('Prueba cambiando el término de búsqueda o registra uno nuevo.', 'Try changing your search term or register a new customer.')}</p>
                     </td>
                   </tr>
                 ) : (
@@ -575,24 +642,23 @@ export default function Clients({ currentEmpresa }: ClientsProps) {
                     return (
                       <tr key={cliente.id_cliente} className="hover:bg-slate-50/80">
                         <td className="py-3.5 px-4">
-                          <div className="font-bold text-slate-800">{cliente.nombre_completo}</div>
+                          <div className="font-bold text-slate-800">{formatClient(cliente.nombre_completo)}</div>
                           <div className="text-[10px] text-slate-400 flex items-center gap-1 mt-0.5 truncate max-w-xs">
                             <MapPin className="w-3 h-3 text-slate-400 shrink-0" />
-                            {cliente.direccion}
+                            {trAddress(cliente.direccion)}
                           </div>
                         </td>
-                        <td className="py-3.5 px-4 font-mono font-bold text-slate-700">{cliente.nit}</td>
+                        <td className="py-3.5 px-4 font-mono font-bold text-slate-700">{trTaxId(cliente.nit)}</td>
                         <td className="py-3.5 px-4">
                           <span
-                            className={`inline-block px-2 py-0.5 rounded-md text-[10px] font-bold uppercase ${
-                              cliente.tipo_cliente === 'vip'
+                            className={`inline-block px-2 py-0.5 rounded-md text-[10px] font-bold uppercase ${cliente.tipo_cliente === 'vip'
                                 ? 'bg-purple-100 text-purple-700'
                                 : cliente.tipo_cliente === 'mayorista'
-                                ? 'bg-indigo-100 text-indigo-700'
-                                : 'bg-slate-100 text-slate-700'
-                            }`}
+                                  ? 'bg-indigo-100 text-indigo-700'
+                                  : 'bg-slate-100 text-slate-700'
+                              }`}
                           >
-                            {cliente.tipo_cliente} ({cliente.descuento_aplicable}% desc.)
+                            {trClientType(cliente.tipo_cliente)} ({cliente.descuento_aplicable}% {L('desc.', 'off')})
                           </span>
                         </td>
                         <td className="py-3.5 px-4">
@@ -605,19 +671,21 @@ export default function Clients({ currentEmpresa }: ClientsProps) {
                         </td>
                         <td className="py-3.5 px-4">
                           <div className="font-semibold text-slate-700">
-                            Q {cliente.limite_credito.toLocaleString('es-GT', { minimumFractionDigits: 2 })}
+                            {money(cliente.limite_credito)}
                           </div>
                           <div className="text-[10px] text-slate-400">
-                            {cliente.dias_credito > 0 ? `${cliente.dias_credito} días de plazo` : 'Solo Contado'}
+                            {cliente.dias_credito > 0
+                              ? L(`${cliente.dias_credito} días de plazo`, `${cliente.dias_credito}-day terms`)
+                              : L('Solo Contado', 'Cash Only')}
                           </div>
                         </td>
                         <td className="py-3.5 px-4 text-right font-black text-sm">
                           {saldoReal > 0 ? (
                             <span className="text-amber-600">
-                              Q {saldoReal.toLocaleString('es-GT', { minimumFractionDigits: 2 })}
+                              {money(saldoReal)}
                             </span>
                           ) : (
-                            <span className="text-emerald-600">Al Día (Q 0.00)</span>
+                            <span className="text-emerald-600">{L(`Al Día (${money(0)})`, `Current (${money(0)})`)}</span>
                           )}
                         </td>
                         <td className="py-3.5 px-4 text-center">
@@ -630,7 +698,7 @@ export default function Clients({ currentEmpresa }: ClientsProps) {
                               }}
                               className="px-2.5 py-1 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-sm cursor-pointer"
                             >
-                              Ver Créditos
+                              {L('Ver Créditos', 'View Credits')}
                             </button>
                           )}
                         </td>
@@ -654,12 +722,12 @@ export default function Clients({ currentEmpresa }: ClientsProps) {
                 type="text"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Buscar por cliente, NIT o # de venta..."
+                placeholder={L('Buscar por cliente, NIT o # de venta...', 'Search by customer, Tax ID, or sale #...')}
                 className="w-full pl-9 pr-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
               />
             </div>
             <div className="text-xs font-bold text-amber-700 bg-amber-50 px-3 py-1.5 rounded-xl border border-amber-200">
-              Saldo Total Adeudado: Q {totalCarteraCredito.toLocaleString('es-GT', { minimumFractionDigits: 2 })}
+              {L('Saldo Total Adeudado:', 'Total Balance Due:')} {money(totalCarteraCredito)}
             </div>
           </div>
 
@@ -667,13 +735,13 @@ export default function Clients({ currentEmpresa }: ClientsProps) {
             <table className="w-full text-left text-xs text-slate-600">
               <thead className="bg-slate-50 text-slate-700 font-semibold uppercase text-[10px] tracking-wider border-b border-slate-200">
                 <tr>
-                  <th className="py-3 px-4">Venta / Fecha</th>
-                  <th className="py-3 px-4">Cliente / NIT</th>
-                  <th className="py-3 px-4 text-right">Total Venta</th>
-                  <th className="py-3 px-4 text-right">Abonado</th>
-                  <th className="py-3 px-4 text-right">Saldo Pendiente</th>
-                  <th className="py-3 px-4 text-center">Estado</th>
-                  <th className="py-3 px-4 text-right">Acciones (Abono / PDF)</th>
+                  <th className="py-3 px-4">{L('Venta / Fecha', 'Sale / Date')}</th>
+                  <th className="py-3 px-4">{L('Cliente', 'Customer')} / {taxIdLabel}</th>
+                  <th className="py-3 px-4 text-right">{L('Total Venta', 'Sale Total')}</th>
+                  <th className="py-3 px-4 text-right">{L('Abonado', 'Paid')}</th>
+                  <th className="py-3 px-4 text-right">{L('Saldo Pendiente', 'Pending Balance')}</th>
+                  <th className="py-3 px-4 text-center">{L('Estado', 'Status')}</th>
+                  <th className="py-3 px-4 text-right">{L('Acciones (Abono / PDF)', 'Actions (Payment / PDF)')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -681,16 +749,19 @@ export default function Clients({ currentEmpresa }: ClientsProps) {
                   <tr>
                     <td colSpan={7} className="py-12 text-center text-slate-400">
                       <Loader2 className="w-8 h-8 mx-auto mb-2 text-indigo-500 animate-spin" />
-                      <p className="font-semibold text-slate-600">Cargando cuentas por cobrar desde MySQL...</p>
+                      <p className="font-semibold text-slate-600">{L('Cargando cuentas por cobrar desde MySQL...', 'Loading accounts receivable from MySQL...')}</p>
                     </td>
                   </tr>
                 ) : paginatedCredits.length === 0 ? (
                   <tr>
                     <td colSpan={7} className="py-12 text-center text-slate-400">
                       <Clock className="w-10 h-10 mx-auto mb-2 text-slate-300" />
-                      <p className="font-semibold text-slate-600">No hay cuentas por cobrar pendientes</p>
+                      <p className="font-semibold text-slate-600">{L('No hay cuentas por cobrar pendientes', 'No pending accounts receivable')}</p>
                       <p className="text-xs text-slate-400 mt-1">
-                        Cuando registres una venta al Crédito desde el Punto de Venta, aparecerá aquí para controlar sus abonos parciales y generar su PDF.
+                        {L(
+                          'Cuando registres una venta al Crédito desde el Punto de Venta, aparecerá aquí para controlar sus abonos parciales y generar su PDF.',
+                          'When you record a Credit sale in the POS, it will appear here to track partial payments and generate PDF statements.'
+                        )}
                       </p>
                     </td>
                   </tr>
@@ -707,37 +778,37 @@ export default function Clients({ currentEmpresa }: ClientsProps) {
                             <div className="text-[10px] text-slate-400">{credit.fecha}</div>
                           </td>
                           <td className="py-3.5 px-4">
-                            <div className="font-bold text-slate-800">{credit.cliente.nombre_completo}</div>
+                            <div className="font-bold text-slate-800">{formatClient(credit.cliente.nombre_completo)}</div>
                             <div className="text-[10px] text-slate-500 font-mono">
-                              NIT: {credit.cliente.nit}
-                              {credit.cliente.telefono ? ` • Tel: ${credit.cliente.telefono}` : ''}
+                              {taxIdLabel}: {trTaxId(credit.cliente.nit)}
+                              {credit.cliente.telefono ? ` • ${L('Tel', 'Phone')}: ${credit.cliente.telefono}` : ''}
                             </div>
                           </td>
                           <td className="py-3.5 px-4 text-right font-mono font-bold text-slate-700">
-                            Q {credit.total.toFixed(2)}
+                            {money(credit.total)}
                           </td>
                           <td className="py-3.5 px-4 text-right">
                             <div className="font-mono font-bold text-emerald-700">
-                              Q {credit.pagado.toFixed(2)}
+                              {money(credit.pagado)}
                             </div>
                             <div className="w-20 ml-auto bg-slate-100 h-1.5 rounded-full overflow-hidden mt-1">
                               <div className="bg-emerald-500 h-full rounded-full" style={{ width: `${progressPct}%` }} />
                             </div>
                             <div className="text-[9.5px] text-slate-400 mt-0.5">
-                              {credit.pagos.length} abono(s) • {progressPct}%
+                              {credit.pagos.length} {L('abono(s)', 'payment(s)')} • {progressPct}%
                             </div>
                           </td>
                           <td className="py-3.5 px-4 text-right font-mono font-black text-rose-600 text-sm">
-                            Q {credit.saldo_pendiente.toFixed(2)}
+                            {money(credit.saldo_pendiente)}
                           </td>
                           <td className="py-3.5 px-4 text-center">
                             {credit.estado_pago === 'parcial' || credit.pagado > 0 ? (
                               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-50 text-amber-800 border border-amber-200">
-                                Abono Parcial
+                                {L('Abono Parcial', 'Partial Payment')}
                               </span>
                             ) : (
                               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black bg-rose-50 text-rose-700 border border-rose-200">
-                                Pendiente
+                                {trStatus('pendiente')}
                               </span>
                             )}
                           </td>
@@ -749,7 +820,7 @@ export default function Clients({ currentEmpresa }: ClientsProps) {
                                 className="px-3 py-1.5 text-[11px] font-black text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-xs inline-flex items-center gap-1 cursor-pointer"
                               >
                                 <CreditCard className="w-3.5 h-3.5" />
-                                <span>Registrar Abono</span>
+                                <span>{L('Registrar Abono', 'Record Payment')}</span>
                               </button>
 
                               <button
@@ -757,7 +828,7 @@ export default function Clients({ currentEmpresa }: ClientsProps) {
                                 disabled={downloadingPdfId === credit.id}
                                 onClick={() => handleDownloadPdf(credit.id)}
                                 className="px-2.5 py-1.5 text-[11px] font-bold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-xl inline-flex items-center gap-1 cursor-pointer disabled:opacity-50"
-                                title="Descargar PDF elegante con productos, abonos y saldo pendiente"
+                                title={L('Descargar PDF elegante con productos, abonos y saldo pendiente', 'Download formal PDF with items, payments, and pending balance')}
                               >
                                 {downloadingPdfId === credit.id ? (
                                   <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -771,7 +842,7 @@ export default function Clients({ currentEmpresa }: ClientsProps) {
                                 type="button"
                                 onClick={() => setExpandedCreditId(isExpanded ? null : credit.id)}
                                 className="p-1.5 text-slate-500 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 rounded-xl cursor-pointer"
-                                title="Ver historial de abonos parciales"
+                                title={L('Ver historial de abonos parciales', 'View partial payment history')}
                               >
                                 {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                               </button>
@@ -786,34 +857,37 @@ export default function Clients({ currentEmpresa }: ClientsProps) {
                                 <div className="flex items-center justify-between">
                                   <span className="text-xs font-black text-slate-800 flex items-center gap-1.5">
                                     <Receipt className="w-4 h-4 text-emerald-600" />
-                                    Historial de Abonos Registrados — {credit.codigo}
+                                    {L('Historial de Abonos Registrados —', 'Recorded Payment History —')} {credit.codigo}
                                   </span>
                                   <span className="text-[11px] text-slate-500">
-                                    Total: <strong>Q {credit.total.toFixed(2)}</strong> • Pagado: <strong className="text-emerald-700">Q {credit.pagado.toFixed(2)}</strong> • Pendiente: <strong className="text-rose-600">Q {credit.saldo_pendiente.toFixed(2)}</strong>
+                                    {L('Total:', 'Total:')} <strong>{money(credit.total)}</strong> • {L('Pagado:', 'Paid:')} <strong className="text-emerald-700">{money(credit.pagado)}</strong> • {L('Pendiente:', 'Pending:')} <strong className="text-rose-600">{money(credit.saldo_pendiente)}</strong>
                                   </span>
                                 </div>
                                 {credit.pagos.length === 0 ? (
                                   <p className="text-[11px] text-slate-400 italic">
-                                    Aún no se han registrado abonos para esta cuenta. Usa &quot;Registrar Abono&quot; para ingresar un pago parcial o total.
+                                    {L(
+                                      'Aún no se han registrado abonos para esta cuenta. Usa "Registrar Abono" para ingresar un pago parcial o total.',
+                                      'No payments have been recorded for this account yet. Use "Record Payment" to log a partial or full payment.'
+                                    )}
                                   </p>
                                 ) : (
                                   <table className="w-full text-[11px]">
                                     <thead className="bg-slate-50 text-slate-500 uppercase text-[10px]">
                                       <tr>
-                                        <th className="py-1.5 px-3 text-left">Fecha</th>
-                                        <th className="py-1.5 px-3 text-left">Forma de Pago</th>
-                                        <th className="py-1.5 px-3 text-left">Referencia / Recibo</th>
-                                        <th className="py-1.5 px-3 text-right">Monto Abonado</th>
+                                        <th className="py-1.5 px-3 text-left">{L('Fecha', 'Date')}</th>
+                                        <th className="py-1.5 px-3 text-left">{L('Forma de Pago', 'Payment Method')}</th>
+                                        <th className="py-1.5 px-3 text-left">{L('Referencia / Recibo', 'Reference / Receipt')}</th>
+                                        <th className="py-1.5 px-3 text-right">{L('Monto Abonado', 'Amount Paid')}</th>
                                       </tr>
                                     </thead>
                                     <tbody className="divide-y divide-slate-100">
                                       {credit.pagos.map((p) => (
                                         <tr key={p.id_pago}>
                                           <td className="py-1.5 px-3 font-mono text-slate-600">{p.fecha_pago}</td>
-                                          <td className="py-1.5 px-3 capitalize font-semibold text-slate-700">{p.metodo_pago}</td>
+                                          <td className="py-1.5 px-3 capitalize font-semibold text-slate-700">{trPayment(p.metodo_pago)}</td>
                                           <td className="py-1.5 px-3 font-mono text-slate-500">{p.referencia_interna || '—'}</td>
                                           <td className="py-1.5 px-3 text-right font-mono font-black text-emerald-700">
-                                            + Q {p.monto.toFixed(2)}
+                                            + {money(p.monto)}
                                           </td>
                                         </tr>
                                       ))}
@@ -838,9 +912,19 @@ export default function Clients({ currentEmpresa }: ClientsProps) {
       {totalPages > 1 && (
         <div className="p-4 bg-white rounded-2xl border border-slate-200/80 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
           <span className="text-slate-500 font-medium">
-            Mostrando <strong className="text-slate-800">{currentTotalCount === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1}</strong> a{' '}
-            <strong className="text-slate-800">{Math.min(currentPage * itemsPerPage, currentTotalCount)}</strong> de{' '}
-            <strong className="text-slate-800">{currentTotalCount.toLocaleString()}</strong> registros
+            {isEn ? (
+              <>
+                Showing <strong className="text-slate-800">{currentTotalCount === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1}</strong> to{' '}
+                <strong className="text-slate-800">{Math.min(currentPage * itemsPerPage, currentTotalCount)}</strong> of{' '}
+                <strong className="text-slate-800">{currentTotalCount.toLocaleString(locale)}</strong> records
+              </>
+            ) : (
+              <>
+                Mostrando <strong className="text-slate-800">{currentTotalCount === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1}</strong> a{' '}
+                <strong className="text-slate-800">{Math.min(currentPage * itemsPerPage, currentTotalCount)}</strong> de{' '}
+                <strong className="text-slate-800">{currentTotalCount.toLocaleString(locale)}</strong> registros
+              </>
+            )}
           </span>
           <div className="flex items-center gap-2">
             <button
@@ -849,10 +933,10 @@ export default function Clients({ currentEmpresa }: ClientsProps) {
               onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
               className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-40 cursor-pointer flex items-center gap-1"
             >
-              <ChevronLeft className="w-3.5 h-3.5" /> Anterior
+              <ChevronLeft className="w-3.5 h-3.5" /> {L('Anterior', 'Previous')}
             </button>
             <span className="px-3 py-1.5 font-bold text-slate-700 bg-slate-50 border border-slate-200 rounded-lg">
-              Pág. {currentPage} de {totalPages}
+              {L(`Pág. ${currentPage} de ${totalPages}`, `Page ${currentPage} of ${totalPages}`)}
             </span>
             <button
               type="button"
@@ -860,7 +944,7 @@ export default function Clients({ currentEmpresa }: ClientsProps) {
               onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
               className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-40 cursor-pointer flex items-center gap-1"
             >
-              Siguiente <ChevronRight className="w-3.5 h-3.5" />
+              {L('Siguiente', 'Next')} <ChevronRight className="w-3.5 h-3.5" />
             </button>
           </div>
         </div>
@@ -874,10 +958,10 @@ export default function Clients({ currentEmpresa }: ClientsProps) {
               <div>
                 <h3 className="text-sm font-black text-slate-900 flex items-center gap-2">
                   <CreditCard className="w-4 h-4 text-indigo-600" />
-                  Registrar Abono (Parcial o Total)
+                  {L('Registrar Abono (Parcial o Total)', 'Record Payment (Partial or Full)')}
                 </h3>
                 <p className="text-[11px] text-slate-500 mt-0.5">
-                  {selectedCredit.codigo} • {selectedCredit.cliente.nombre_completo}
+                  {selectedCredit.codigo} • {formatClient(selectedCredit.cliente.nombre_completo)}
                 </p>
               </div>
               <button
@@ -893,30 +977,30 @@ export default function Clients({ currentEmpresa }: ClientsProps) {
             <form onSubmit={handleApplyAbono} className="p-5 space-y-4 text-xs">
               <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 grid grid-cols-3 gap-2 text-center">
                 <div>
-                  <span className="text-[10px] text-slate-400 font-bold block">Total Venta</span>
-                  <span className="font-mono font-black text-slate-800">Q {selectedCredit.total.toFixed(2)}</span>
+                  <span className="text-[10px] text-slate-400 font-bold block">{L('Total Venta', 'Sale Total')}</span>
+                  <span className="font-mono font-black text-slate-800">{money(selectedCredit.total)}</span>
                 </div>
                 <div>
-                  <span className="text-[10px] text-slate-400 font-bold block">Ya Abonado</span>
-                  <span className="font-mono font-black text-emerald-700">Q {selectedCredit.pagado.toFixed(2)}</span>
+                  <span className="text-[10px] text-slate-400 font-bold block">{L('Ya Abonado', 'Already Paid')}</span>
+                  <span className="font-mono font-black text-emerald-700">{money(selectedCredit.pagado)}</span>
                 </div>
                 <div>
-                  <span className="text-[10px] text-slate-400 font-bold block">Saldo Pendiente</span>
-                  <span className="font-mono font-black text-rose-600">Q {selectedCredit.saldo_pendiente.toFixed(2)}</span>
+                  <span className="text-[10px] text-slate-400 font-bold block">{L('Saldo Pendiente', 'Pending Balance')}</span>
+                  <span className="font-mono font-black text-rose-600">{money(selectedCredit.saldo_pendiente)}</span>
                 </div>
               </div>
 
               <div>
                 <div className="flex items-center justify-between mb-1.5">
-                  <label className="font-bold text-slate-700">Monto a Abonar Hoy (Q):</label>
+                  <label className="font-bold text-slate-700">{L('Monto a Abonar Hoy', 'Amount to Pay Today')} ({currencySymbol}):</label>
                   <div className="flex items-center gap-1">
                     {[
                       { label: '25%', mult: 0.25 },
                       { label: '50%', mult: 0.5 },
-                      { label: 'Todo (100%)', mult: 1 }
+                      { label: L('Todo (100%)', 'Full (100%)'), mult: 1 }
                     ].map((opt) => (
                       <button
-                        key={opt.label}
+                        key={opt.mult}
                         type="button"
                         onClick={() => setMontoAbono((selectedCredit.saldo_pendiente * opt.mult).toFixed(2))}
                         className="px-2 py-0.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-md text-[10px] font-black cursor-pointer"
@@ -939,37 +1023,37 @@ export default function Clients({ currentEmpresa }: ClientsProps) {
                 />
                 {abonoNum > 0 && abonoNum <= selectedCredit.saldo_pendiente + 0.01 && (
                   <div
-                    className={`mt-2 px-3 py-1.5 rounded-xl text-[11px] font-bold flex items-center justify-between ${
-                      nuevoSaldoPreview <= 0.01
+                    className={`mt-2 px-3 py-1.5 rounded-xl text-[11px] font-bold flex items-center justify-between ${nuevoSaldoPreview <= 0.01
                         ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
                         : 'bg-amber-50 text-amber-900 border border-amber-200'
-                    }`}
+                      }`}
                   >
                     <span>
-                      {nuevoSaldoPreview <= 0.01 ? '✅ Quedará PAGADA COMPLETAMENTE' : '📌 Abono Parcial — Nuevo saldo:'}
+                      {nuevoSaldoPreview <= 0.01
+                        ? L('✅ Quedará PAGADA COMPLETAMENTE', '✅ Will be PAID IN FULL')
+                        : L('📌 Abono Parcial — Nuevo saldo:', '📌 Partial Payment — New balance:')}
                     </span>
-                    <span className="font-mono font-black">Q {nuevoSaldoPreview.toFixed(2)}</span>
+                    <span className="font-mono font-black">{money(nuevoSaldoPreview)}</span>
                   </div>
                 )}
               </div>
 
               <div>
-                <label className="block font-bold text-slate-700 mb-1.5">Forma de Pago del Abono:</label>
+                <label className="block font-bold text-slate-700 mb-1.5">{L('Forma de Pago del Abono:', 'Payment Method:')}</label>
                 <div className="grid grid-cols-3 gap-2">
                   {[
-                    { id: 'efectivo' as const, label: 'Efectivo' },
-                    { id: 'tarjeta' as const, label: 'Tarjeta' },
-                    { id: 'transferencia' as const, label: 'Transferencia' }
+                    { id: 'efectivo' as const, label: L('Efectivo', 'Cash') },
+                    { id: 'tarjeta' as const, label: L('Tarjeta', 'Card') },
+                    { id: 'transferencia' as const, label: L('Transferencia', 'Bank Transfer') }
                   ].map((m) => (
                     <button
                       key={m.id}
                       type="button"
                       onClick={() => setMetodoAbono(m.id)}
-                      className={`py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
-                        metodoAbono === m.id
+                      className={`py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer ${metodoAbono === m.id
                           ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
                           : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
-                      }`}
+                        }`}
                     >
                       {m.label}
                     </button>
@@ -978,10 +1062,10 @@ export default function Clients({ currentEmpresa }: ClientsProps) {
               </div>
 
               <div>
-                <label className="block font-bold text-slate-700 mb-1">No. de Recibo / Boleta / Referencia (opcional):</label>
+                <label className="block font-bold text-slate-700 mb-1">{L('No. de Recibo / Boleta / Referencia (opcional):', 'Receipt / Deposit / Reference # (optional):')}</label>
                 <input
                   type="text"
-                  placeholder="Ej. REC-0045, Boleta BI #88291..."
+                  placeholder={L('Ej. REC-0045, Boleta BI #88291...', 'e.g., REC-0045, Wire Ref #88291...')}
                   value={referenciaAbono}
                   onChange={(e) => setReferenciaAbono(e.target.value)}
                   className="w-full px-3 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none"
@@ -1001,7 +1085,7 @@ export default function Clients({ currentEmpresa }: ClientsProps) {
                   onClick={() => setShowAbonoModal(false)}
                   className="px-4 py-2 border border-slate-200 text-slate-600 font-semibold rounded-xl cursor-pointer"
                 >
-                  Cancelar
+                  {L('Cancelar', 'Cancel')}
                 </button>
                 <button
                   type="submit"
@@ -1011,12 +1095,12 @@ export default function Clients({ currentEmpresa }: ClientsProps) {
                   {isSavingAbono ? (
                     <>
                       <Loader2 className="w-4 h-4 animate-spin" />
-                      <span>Guardando...</span>
+                      <span>{L('Guardando...', 'Saving...')}</span>
                     </>
                   ) : (
                     <>
                       <CheckCircle2 className="w-4 h-4" />
-                      <span>Guardar Abono</span>
+                      <span>{L('Guardar Abono', 'Save Payment')}</span>
                     </>
                   )}
                 </button>
@@ -1033,7 +1117,7 @@ export default function Clients({ currentEmpresa }: ClientsProps) {
             <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/80">
               <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
                 <Users className="w-5 h-5 text-indigo-600" />
-                Registrar Nuevo Cliente
+                {L('Registrar Nuevo Cliente', 'Register New Customer')}
               </h3>
               <button
                 type="button"
@@ -1047,21 +1131,21 @@ export default function Clients({ currentEmpresa }: ClientsProps) {
             <form onSubmit={handleSaveCliente} className="p-6 space-y-4 text-xs">
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Nombre / Razón Social:</label>
+                  <label className="block font-semibold text-slate-700 mb-1">{L('Nombre / Razón Social:', 'First Name / Company Name:')}</label>
                   <input
                     type="text"
                     required
-                    placeholder="Ej. Comercial Los Ángeles"
+                    placeholder={L('Ej. Comercial Los Ángeles', 'e.g., Acme Retail Corp.')}
                     value={newCliente.nombre}
                     onChange={(e) => setNewCliente({ ...newCliente, nombre: e.target.value })}
                     className="w-full px-3 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none"
                   />
                 </div>
                 <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Apellido / Tipo Sociedad:</label>
+                  <label className="block font-semibold text-slate-700 mb-1">{L('Apellido / Tipo Sociedad:', 'Last Name / Entity Type:')}</label>
                   <input
                     type="text"
-                    placeholder="Ej. S.A. o de Martínez"
+                    placeholder={L('Ej. S.A. o de Martínez', 'e.g., LLC or Smith')}
                     value={newCliente.apellido}
                     onChange={(e) => setNewCliente({ ...newCliente, apellido: e.target.value })}
                     className="w-full px-3 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none"
@@ -1071,46 +1155,46 @@ export default function Clients({ currentEmpresa }: ClientsProps) {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-semibold text-slate-700 mb-1">NIT Tributario:</label>
+                  <label className="block font-semibold text-slate-700 mb-1">{L('NIT Tributario:', 'Tax ID:')}</label>
                   <input
                     type="text"
                     required
-                    placeholder="Ej. 1234567-8 o CF"
+                    placeholder={L('Ej. 1234567-8 o CF', 'e.g., 12-3456789 or N/A')}
                     value={newCliente.nit}
                     onChange={(e) => setNewCliente({ ...newCliente, nit: e.target.value })}
                     className="w-full px-3 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none"
                   />
                 </div>
                 <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Tipo de Cliente:</label>
+                  <label className="block font-semibold text-slate-700 mb-1">{L('Tipo de Cliente:', 'Customer Type:')}</label>
                   <select
                     value={newCliente.tipo_cliente}
                     onChange={(e) => setNewCliente({ ...newCliente, tipo_cliente: e.target.value as any })}
                     className="w-full px-3 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none"
                   >
-                    <option value="normal">Normal</option>
-                    <option value="mayorista">Mayorista</option>
-                    <option value="vip">Especial / Corporativo</option>
+                    <option value="normal">{L('Normal', 'Standard')}</option>
+                    <option value="mayorista">{L('Mayorista', 'Wholesale')}</option>
+                    <option value="vip">{L('Especial / Corporativo', 'Special / Corporate')}</option>
                   </select>
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Teléfono:</label>
+                  <label className="block font-semibold text-slate-700 mb-1">{L('Teléfono:', 'Phone:')}</label>
                   <input
                     type="text"
-                    placeholder="+502 2000-0000"
+                    placeholder={L('+502 2000-0000', '+1 (555) 000-0000')}
                     value={newCliente.telefono}
                     onChange={(e) => setNewCliente({ ...newCliente, telefono: e.target.value })}
                     className="w-full px-3 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none"
                   />
                 </div>
                 <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Correo Electrónico:</label>
+                  <label className="block font-semibold text-slate-700 mb-1">{L('Correo Electrónico:', 'Email Address:')}</label>
                   <input
                     type="email"
-                    placeholder="cliente@correo.com"
+                    placeholder={L('cliente@correo.com', 'customer@email.com')}
                     value={newCliente.email}
                     onChange={(e) => setNewCliente({ ...newCliente, email: e.target.value })}
                     className="w-full px-3 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none"
@@ -1120,7 +1204,7 @@ export default function Clients({ currentEmpresa }: ClientsProps) {
 
               <div className="grid grid-cols-3 gap-3">
                 <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Días de Crédito:</label>
+                  <label className="block font-semibold text-slate-700 mb-1">{L('Días de Crédito:', 'Credit Days:')}</label>
                   <input
                     type="number"
                     min="0"
@@ -1130,7 +1214,7 @@ export default function Clients({ currentEmpresa }: ClientsProps) {
                   />
                 </div>
                 <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Descuento (%):</label>
+                  <label className="block font-semibold text-slate-700 mb-1">{L('Descuento (%):', 'Discount (%):')}</label>
                   <input
                     type="number"
                     step="0.5"
@@ -1142,7 +1226,7 @@ export default function Clients({ currentEmpresa }: ClientsProps) {
                   />
                 </div>
                 <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Límite Crédito (Q):</label>
+                  <label className="block font-semibold text-slate-700 mb-1">{L('Límite Crédito', 'Credit Limit')} ({currencySymbol}):</label>
                   <input
                     type="number"
                     step="100"
@@ -1155,10 +1239,10 @@ export default function Clients({ currentEmpresa }: ClientsProps) {
               </div>
 
               <div>
-                <label className="block font-semibold text-slate-700 mb-1">Dirección de Entrega / Facturación:</label>
+                <label className="block font-semibold text-slate-700 mb-1">{L('Dirección de Entrega / Facturación:', 'Shipping / Billing Address:')}</label>
                 <input
                   type="text"
-                  placeholder="Zona, Dirección completa..."
+                  placeholder={L('Zona, Dirección completa...', 'Street, City, State / Zip...')}
                   value={newCliente.direccion}
                   onChange={(e) => setNewCliente({ ...newCliente, direccion: e.target.value })}
                   className="w-full px-3 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none"
@@ -1172,14 +1256,14 @@ export default function Clients({ currentEmpresa }: ClientsProps) {
                   onClick={() => setShowNewClienteModal(false)}
                   className="px-4 py-2 border border-slate-200 text-slate-600 font-semibold rounded-xl cursor-pointer"
                 >
-                  Cancelar
+                  {L('Cancelar', 'Cancel')}
                 </button>
                 <button
                   type="submit"
                   disabled={isSavingCliente}
                   className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-sm cursor-pointer disabled:opacity-50"
                 >
-                  {isSavingCliente ? 'Guardando...' : 'Guardar Cliente'}
+                  {isSavingCliente ? L('Guardando...', 'Saving...') : L('Guardar Cliente', 'Save Customer')}
                 </button>
               </div>
             </form>

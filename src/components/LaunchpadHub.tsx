@@ -38,6 +38,7 @@ import {
 import { REAL_SALES } from '../data/realSales';
 import { REAL_CLIENTS } from '../data/realClients';
 import { useTimeFormat } from '../context/TimeFormatContext';
+import { useLanguage } from '../context/LanguageContext';
 import { formatRegimenLabel, getTipoRegimenSAT } from '../utils/tax';
 
 interface LaunchpadHubProps {
@@ -86,6 +87,7 @@ interface HubCard {
 // -------------------------------------------------------------
 
 function LiveStreamWidget() {
+  const { L, money } = useLanguage();
   return (
     <div className="relative h-28 rounded-2xl bg-gradient-to-br from-slate-950 via-purple-950 to-rose-950 p-3 overflow-hidden border border-rose-500/30 flex flex-col justify-between shadow-inner">
       <div className="absolute -top-10 -right-10 w-24 h-24 bg-rose-500/30 rounded-full blur-xl pointer-events-none group-hover:scale-150 transition-transform duration-500" />
@@ -96,10 +98,10 @@ function LiveStreamWidget() {
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75" />
             <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-500" />
           </span>
-          TIKTOK LIVE • EN VIVO
+          {L('TIKTOK LIVE • EN VIVO', 'TIKTOK LIVE • ON AIR')}
         </span>
         <span className="px-1.5 py-0.5 rounded-md bg-rose-500/20 text-rose-300 font-mono text-[9px] font-bold border border-rose-500/30">
-          Stock Inmediato
+          {L('Stock Inmediato', 'Instant Stock')}
         </span>
       </div>
 
@@ -107,24 +109,24 @@ function LiveStreamWidget() {
         <div className="bg-white/10 hover:bg-white/15 backdrop-blur-xs rounded-lg p-1.5 border border-white/10 text-center transition-colors">
           <span className="text-[10px] block">👗</span>
           <span className="text-[9px] font-bold text-white block leading-tight truncate">@marielos</span>
-          <span className="text-[8px] text-rose-300 font-mono">Q 320.00</span>
+          <span className="text-[8px] text-rose-300 font-mono">{money(320)}</span>
         </div>
         <div className="bg-white/10 hover:bg-white/15 backdrop-blur-xs rounded-lg p-1.5 border border-white/10 text-center transition-colors">
           <span className="text-[10px] block">👖</span>
           <span className="text-[9px] font-bold text-white block leading-tight truncate">@karla_gt</span>
-          <span className="text-[8px] text-amber-300 font-mono">Q 210.00</span>
+          <span className="text-[8px] text-amber-300 font-mono">{money(210)}</span>
         </div>
         <div className="bg-white/10 hover:bg-white/15 backdrop-blur-xs rounded-lg p-1.5 border border-white/10 text-center transition-colors">
           <span className="text-[10px] block">🧥</span>
           <span className="text-[9px] font-bold text-white block leading-tight truncate">@sofi_outfits</span>
-          <span className="text-[8px] text-emerald-300 font-mono">Q 215.00</span>
+          <span className="text-[8px] text-emerald-300 font-mono">{money(215)}</span>
         </div>
       </div>
 
       <div className="flex items-center justify-between text-[9px] text-slate-400 border-t border-white/10 pt-1">
-        <span className="truncate">3 Canastas • 5 Prendas Apartadas</span>
+        <span className="truncate">{L('3 Canastas • 5 Prendas Apartadas', '3 Baskets • 5 Reserved Items')}</span>
         <span className="text-amber-400 font-bold flex items-center gap-0.5">
-          <Flame className="w-2.5 h-2.5 fill-current" /> Remates Activos
+          <Flame className="w-2.5 h-2.5 fill-current" /> {L('Remates Activos', 'Active Flash Sales')}
         </span>
       </div>
     </div>
@@ -132,6 +134,7 @@ function LiveStreamWidget() {
 }
 
 function SaaSWallWidget() {
+  const { L, isEn, currencySymbol } = useLanguage();
   return (
     <div className="relative h-28 rounded-2xl bg-gradient-to-br from-slate-950 via-indigo-950 to-slate-900 p-3 overflow-hidden border border-indigo-500/30 flex flex-col justify-between shadow-inner">
       <div className="absolute -top-10 -right-10 w-24 h-24 bg-indigo-500/30 rounded-full blur-xl pointer-events-none group-hover:scale-150 transition-transform duration-500" />
@@ -145,7 +148,7 @@ function SaaSWallWidget() {
           HOTMART SYNC • LIVE
         </span>
         <span className="px-1.5 py-0.5 rounded-md bg-indigo-500/20 text-indigo-300 font-mono text-[9px] font-bold border border-indigo-500/30">
-          ARR Q 24,500
+          ARR {isEn ? `${currencySymbol}24,500` : `${currencySymbol} 24,500`}
         </span>
       </div>
 
@@ -153,7 +156,7 @@ function SaaSWallWidget() {
         <div className="bg-white/10 hover:bg-white/15 backdrop-blur-xs rounded-lg p-1.5 border border-white/10 text-center transition-colors">
           <span className="text-[10px] block">🚗</span>
           <span className="text-[9px] font-bold text-white block leading-tight truncate">RutaFuel</span>
-          <span className="text-[8px] text-emerald-300 font-mono">365d Anual</span>
+          <span className="text-[8px] text-emerald-300 font-mono">{L('365d Anual', '365d Annual')}</span>
         </div>
         <div className="bg-white/10 hover:bg-white/15 backdrop-blur-xs rounded-lg p-1.5 border border-white/10 text-center transition-colors">
           <span className="text-[10px] block">💻</span>
@@ -168,7 +171,7 @@ function SaaSWallWidget() {
       </div>
 
       <div className="flex items-center justify-between text-[9px] text-slate-400 border-t border-white/10 pt-1">
-        <span className="truncate">3 Suscripciones próximas a corte</span>
+        <span className="truncate">{L('3 Suscripciones próximas a corte', '3 Subscriptions due soon')}</span>
         <span className="text-emerald-400 font-bold flex items-center gap-0.5">
           <TrendingUp className="w-2.5 h-2.5" /> +18% MoM
         </span>
@@ -178,6 +181,7 @@ function SaaSWallWidget() {
 }
 
 function PosScannerWidget() {
+  const { L, money } = useLanguage();
   return (
     <div className="relative h-28 rounded-2xl bg-gradient-to-br from-slate-950 via-slate-900 to-emerald-950 p-3 overflow-hidden border border-emerald-500/30 flex flex-col justify-between shadow-inner">
       <div className="absolute -top-10 -right-10 w-24 h-24 bg-emerald-500/20 rounded-full blur-xl pointer-events-none group-hover:scale-150 transition-transform duration-500" />
@@ -188,10 +192,10 @@ function PosScannerWidget() {
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
             <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
           </span>
-          CAJA #01 • ACTIVA
+          {L('CAJA #01 • ACTIVA', 'REGISTER #01 • ACTIVE')}
         </span>
         <span className="px-1.5 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 font-mono text-[9px] font-bold border border-emerald-500/30">
-          ESCANER LISTO
+          {L('ESCANER LISTO', 'SCANNER READY')}
         </span>
       </div>
 
@@ -210,20 +214,21 @@ function PosScannerWidget() {
         </div>
 
         <div className="text-right">
-          <span className="text-[9px] text-slate-400 block font-mono">Último Ticket</span>
-          <span className="text-xs font-black text-emerald-300 font-mono">Q 150.00</span>
+          <span className="text-[9px] text-slate-400 block font-mono">{L('Último Ticket', 'Last Receipt')}</span>
+          <span className="text-xs font-black text-emerald-300 font-mono">{money(150)}</span>
         </div>
       </div>
 
       <div className="flex items-center justify-between text-[9px] text-slate-400 border-t border-white/10 pt-1">
-        <span className="truncate">Cobro rápido: Efectivo, Tarjeta POS, QR</span>
-        <span className="text-emerald-400 font-bold">18 ventas hoy</span>
+        <span className="truncate">{L('Cobro rápido: Efectivo, Tarjeta POS, QR', 'Fast checkout: Cash, Card POS, QR')}</span>
+        <span className="text-emerald-400 font-bold">{L('18 ventas hoy', '18 sales today')}</span>
       </div>
     </div>
   );
 }
 
 function InventoryGaugeWidget({ isTech = false }: { isTech?: boolean }) {
+  const { L } = useLanguage();
   return (
     <div className="relative h-28 rounded-2xl bg-gradient-to-br from-slate-950 via-slate-900 to-amber-950 p-3 overflow-hidden border border-amber-500/30 flex flex-col justify-between shadow-inner">
       <div className="absolute -top-10 -right-10 w-24 h-24 bg-amber-500/20 rounded-full blur-xl pointer-events-none group-hover:scale-150 transition-transform duration-500" />
@@ -231,7 +236,7 @@ function InventoryGaugeWidget({ isTech = false }: { isTech?: boolean }) {
       <div className="flex items-center justify-between text-[10px]">
         <span className="flex items-center gap-1.5 font-bold text-amber-400">
           <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
-          {isTech ? 'HARDWARE TECH' : 'STOCK EN BODEGA'}
+          {isTech ? 'HARDWARE TECH' : L('STOCK EN BODEGA', 'WAREHOUSE STOCK')}
         </span>
         <span className="px-1.5 py-0.5 rounded-md bg-amber-500/20 text-amber-300 font-mono text-[9px] font-bold border border-amber-500/30">
           2,555 ITEMS
@@ -240,8 +245,8 @@ function InventoryGaugeWidget({ isTech = false }: { isTech?: boolean }) {
 
       <div className="my-1 space-y-1.5">
         <div className="flex items-center justify-between text-[9px] text-slate-300">
-          <span>Nivel de Existencias</span>
-          <span className="font-bold text-amber-300 font-mono">88% Óptimo</span>
+          <span>{L('Nivel de Existencias', 'Stock Level')}</span>
+          <span className="font-bold text-amber-300 font-mono">{L('88% Óptimo', '88% Optimal')}</span>
         </div>
         <div className="w-full h-2 rounded-full bg-white/10 overflow-hidden p-0.5 border border-white/10">
           <div className="h-full rounded-full bg-gradient-to-r from-amber-500 via-orange-400 to-emerald-400 w-[88%]" />
@@ -250,10 +255,10 @@ function InventoryGaugeWidget({ isTech = false }: { isTech?: boolean }) {
 
       <div className="flex items-center justify-between text-[9px] text-slate-400 border-t border-white/10 pt-1">
         <span className="flex items-center gap-1 text-emerald-400">
-          <Check className="w-3 h-3" /> Bodega Central OK
+          <Check className="w-3 h-3" /> {L('Bodega Central OK', 'Main Warehouse OK')}
         </span>
         <span className="text-amber-400 font-bold flex items-center gap-1">
-          <ShieldAlert className="w-3 h-3 text-amber-400" /> 14 bajo mínimo
+          <ShieldAlert className="w-3 h-3 text-amber-400" /> {L('14 bajo mínimo', '14 below min')}
         </span>
       </div>
     </div>
@@ -261,6 +266,7 @@ function InventoryGaugeWidget({ isTech = false }: { isTech?: boolean }) {
 }
 
 function FelInvoiceWidget() {
+  const { L } = useLanguage();
   return (
     <div className="relative h-28 rounded-2xl bg-gradient-to-br from-slate-950 via-slate-900 to-blue-950 p-3 overflow-hidden border border-blue-500/30 flex flex-col justify-between shadow-inner">
       <div className="absolute -top-10 -right-10 w-24 h-24 bg-blue-500/20 rounded-full blur-xl pointer-events-none group-hover:scale-150 transition-transform duration-500" />
@@ -268,35 +274,36 @@ function FelInvoiceWidget() {
       <div className="flex items-center justify-between text-[10px]">
         <span className="flex items-center gap-1.5 font-bold text-blue-400">
           <span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse" />
-          SAT DTE CERTIFICADO
+          {L('SAT DTE CERTIFICADO', 'CERTIFIED E-INVOICE')}
         </span>
         <span className="px-1.5 py-0.5 rounded-md bg-blue-500/20 text-blue-300 font-mono text-[9px] font-bold border border-blue-500/30">
-          INFILE GT
+          {L('INFILE GT', 'E-INVOICE')}
         </span>
       </div>
 
       <div className="my-1 bg-white/10 rounded-lg p-1.5 border border-white/10 flex items-center justify-between">
         <div>
-          <span className="text-[9px] text-slate-300 font-mono block">DTE: Serie 4A9B • #1842</span>
+          <span className="text-[9px] text-slate-300 font-mono block">{L('DTE: Serie 4A9B • #1842', 'INV: Series 4A9B • #1842')}</span>
           <span className="text-[8px] text-slate-400 font-mono truncate block max-w-[130px]">
             UUID: e4b2-91f0-410a...
           </span>
         </div>
         <div className="px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[9px] font-bold flex items-center gap-1">
           <CheckCircle2 className="w-3 h-3 text-emerald-400" />
-          FIRMADO
+          {L('FIRMADO', 'SIGNED')}
         </div>
       </div>
 
       <div className="flex items-center justify-between text-[9px] text-slate-400 border-t border-white/10 pt-1">
-        <span className="truncate">Libro de Ventas Fiscal SAT</span>
-        <span className="text-blue-300 font-bold">100% Electrónico</span>
+        <span className="truncate">{L('Libro de Ventas Fiscal SAT', 'Tax Sales Ledger')}</span>
+        <span className="text-blue-300 font-bold">{L('100% Electrónico', '100% Electronic')}</span>
       </div>
     </div>
   );
 }
 
 function AnalyticsChartWidget() {
+  const { L } = useLanguage();
   return (
     <div className="relative h-28 rounded-2xl bg-gradient-to-br from-slate-950 via-slate-900 to-rose-950 p-3 overflow-hidden border border-rose-500/30 flex flex-col justify-between shadow-inner">
       <div className="absolute -top-10 -right-10 w-24 h-24 bg-rose-500/20 rounded-full blur-xl pointer-events-none group-hover:scale-150 transition-transform duration-500" />
@@ -304,7 +311,7 @@ function AnalyticsChartWidget() {
       <div className="flex items-center justify-between text-[10px]">
         <span className="flex items-center gap-1.5 font-bold text-rose-400">
           <Activity className="w-3 h-3 text-rose-400 animate-pulse" />
-          TELEMETRÍA 2026
+          {L('TELEMETRÍA 2026', 'TELEMETRY 2026')}
         </span>
         <span className="px-1.5 py-0.5 rounded-md bg-rose-500/20 text-rose-300 font-mono text-[9px] font-bold border border-rose-500/30">
           +24.8% YoY
@@ -321,14 +328,15 @@ function AnalyticsChartWidget() {
       </div>
 
       <div className="flex items-center justify-between text-[9px] text-slate-400 border-t border-white/10 pt-1">
-        <span>Comparativa 2025 vs 2026</span>
-        <span className="text-rose-300 font-bold">12 meses analizados</span>
+        <span>{L('Comparativa 2025 vs 2026', '2025 vs 2026 Comparison')}</span>
+        <span className="text-rose-300 font-bold">{L('12 meses analizados', '12 months analyzed')}</span>
       </div>
     </div>
   );
 }
 
 function ClientsRosterWidget({ isB2B = false }: { isB2B?: boolean }) {
+  const { L, money } = useLanguage();
   return (
     <div className="relative h-28 rounded-2xl bg-gradient-to-br from-slate-950 via-slate-900 to-cyan-950 p-3 overflow-hidden border border-cyan-500/30 flex flex-col justify-between shadow-inner">
       <div className="absolute -top-10 -right-10 w-24 h-24 bg-cyan-500/20 rounded-full blur-xl pointer-events-none group-hover:scale-150 transition-transform duration-500" />
@@ -336,10 +344,10 @@ function ClientsRosterWidget({ isB2B = false }: { isB2B?: boolean }) {
       <div className="flex items-center justify-between text-[10px]">
         <span className="flex items-center gap-1.5 font-bold text-cyan-400">
           <Users className="w-3 h-3 text-cyan-400" />
-          {isB2B ? 'CLIENTES & FLOTAS B2B' : 'CARTERA DE CLIENTES'}
+          {isB2B ? L('CLIENTES & FLOTAS B2B', 'B2B CLIENTS & FLEETS') : L('CARTERA DE CLIENTES', 'CLIENT PORTFOLIO')}
         </span>
         <span className="px-1.5 py-0.5 rounded-md bg-cyan-500/20 text-cyan-300 font-mono text-[9px] font-bold border border-cyan-500/30">
-          142 ACTIVOS
+          {L('142 ACTIVOS', '142 ACTIVE')}
         </span>
       </div>
 
@@ -352,20 +360,21 @@ function ClientsRosterWidget({ isB2B = false }: { isB2B?: boolean }) {
         </div>
 
         <div className="text-right">
-          <span className="text-[8px] text-slate-400 block font-mono">Crédito Concedido</span>
-          <span className="text-[10px] font-bold text-cyan-300 font-mono">Q 42,500.00</span>
+          <span className="text-[8px] text-slate-400 block font-mono">{L('Crédito Concedido', 'Credit Extended')}</span>
+          <span className="text-[10px] font-bold text-cyan-300 font-mono">{money(42500)}</span>
         </div>
       </div>
 
       <div className="flex items-center justify-between text-[9px] text-slate-400 border-t border-white/10 pt-1">
-        <span>Cuentas por cobrar al día</span>
-        <span className="text-cyan-300 font-bold">Límites protegidos</span>
+        <span>{L('Cuentas por cobrar al día', 'Accounts receivable up to date')}</span>
+        <span className="text-cyan-300 font-bold">{L('Límites protegidos', 'Limits protected')}</span>
       </div>
     </div>
   );
 }
 
 function LogisticsFleetWidget() {
+  const { L } = useLanguage();
   return (
     <div className="relative h-28 rounded-2xl bg-gradient-to-br from-slate-950 via-slate-900 to-violet-950 p-3 overflow-hidden border border-violet-500/30 flex flex-col justify-between shadow-inner">
       <div className="absolute -top-10 -right-10 w-24 h-24 bg-violet-500/20 rounded-full blur-xl pointer-events-none group-hover:scale-150 transition-transform duration-500" />
@@ -373,34 +382,35 @@ function LogisticsFleetWidget() {
       <div className="flex items-center justify-between text-[10px]">
         <span className="flex items-center gap-1.5 font-bold text-violet-400">
           <Truck className="w-3 h-3 text-violet-400" />
-          COMPRAS & PROVEEDORES
+          {L('COMPRAS & PROVEEDORES', 'PURCHASES & SUPPLIERS')}
         </span>
         <span className="px-1.5 py-0.5 rounded-md bg-violet-500/20 text-violet-300 font-mono text-[9px] font-bold border border-violet-500/30">
-          LOGÍSTICA
+          {L('LOGÍSTICA', 'LOGISTICS')}
         </span>
       </div>
 
       <div className="my-1 bg-white/10 rounded-lg p-1.5 border border-white/10 flex items-center justify-between text-[9px]">
         <div className="flex items-center gap-2">
           <span className="w-2 h-2 rounded-full bg-violet-400" />
-          <span className="text-slate-300">Proveedor</span>
+          <span className="text-slate-300">{L('Proveedor', 'Supplier')}</span>
           <div className="w-8 border-t border-dashed border-violet-400" />
           <Truck className="w-3.5 h-3.5 text-violet-300 animate-bounce" />
           <div className="w-8 border-t border-dashed border-violet-400" />
           <span className="w-2 h-2 rounded-full bg-emerald-400" />
-          <span className="text-emerald-300">Bodega</span>
+          <span className="text-emerald-300">{L('Bodega', 'Warehouse')}</span>
         </div>
       </div>
 
       <div className="flex items-center justify-between text-[9px] text-slate-400 border-t border-white/10 pt-1">
-        <span>Crédito Fiscal 12% SAT</span>
-        <span className="text-violet-300 font-bold">3 pedidos en camino</span>
+        <span>{L('Crédito Fiscal 12% SAT', '12% VAT Tax Credit')}</span>
+        <span className="text-violet-300 font-bold">{L('3 pedidos en camino', '3 orders in transit')}</span>
       </div>
     </div>
   );
 }
 
 function FiscalLedgerWidget() {
+  const { L, money } = useLanguage();
   return (
     <div className="relative h-28 rounded-2xl bg-gradient-to-br from-slate-950 via-slate-900 to-emerald-950 p-3 overflow-hidden border border-emerald-500/30 flex flex-col justify-between shadow-inner">
       <div className="absolute -top-10 -right-10 w-24 h-24 bg-emerald-500/20 rounded-full blur-xl pointer-events-none group-hover:scale-150 transition-transform duration-500" />
@@ -408,28 +418,28 @@ function FiscalLedgerWidget() {
       <div className="flex items-center justify-between text-[10px]">
         <span className="flex items-center gap-1.5 font-bold text-emerald-400">
           <Landmark className="w-3 h-3 text-emerald-400" />
-          LIBRO DIARIO & SAT
+          {L('LIBRO DIARIO & SAT', 'GENERAL JOURNAL & TAX')}
         </span>
         <span className="px-1.5 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 font-mono text-[9px] font-bold border border-emerald-500/30">
-          CUADRADO 100%
+          {L('CUADRADO 100%', '100% BALANCED')}
         </span>
       </div>
 
       <div className="my-1 bg-black/40 rounded-lg p-1.5 border border-emerald-500/20 grid grid-cols-2 gap-2 text-center">
         <div className="border-r border-white/10 pr-1">
-          <span className="text-[8px] text-slate-400 block font-mono">DEBE TOTAL</span>
-          <span className="text-[10px] font-bold text-emerald-300 font-mono">Q 118,450.00</span>
+          <span className="text-[8px] text-slate-400 block font-mono">{L('DEBE TOTAL', 'TOTAL DEBIT')}</span>
+          <span className="text-[10px] font-bold text-emerald-300 font-mono">{money(118450)}</span>
         </div>
         <div className="pl-1">
-          <span className="text-[8px] text-slate-400 block font-mono">HABER TOTAL</span>
-          <span className="text-[10px] font-bold text-emerald-300 font-mono">Q 118,450.00</span>
+          <span className="text-[8px] text-slate-400 block font-mono">{L('HABER TOTAL', 'TOTAL CREDIT')}</span>
+          <span className="text-[10px] font-bold text-emerald-300 font-mono">{money(118450)}</span>
         </div>
       </div>
 
       <div className="flex items-center justify-between text-[9px] text-slate-400 border-t border-white/10 pt-1">
-        <span>Partida Doble Auditada</span>
+        <span>{L('Partida Doble Auditada', 'Audited Double-Entry')}</span>
         <span className="text-emerald-400 font-bold flex items-center gap-1">
-          <CheckCircle2 className="w-3 h-3" /> Sin descuadres
+          <CheckCircle2 className="w-3 h-3" /> {L('Sin descuadres', 'Balanced')}
         </span>
       </div>
     </div>
@@ -437,6 +447,7 @@ function FiscalLedgerWidget() {
 }
 
 function HrTeamWidget() {
+  const { L } = useLanguage();
   return (
     <div className="relative h-28 rounded-2xl bg-gradient-to-br from-slate-950 via-slate-900 to-teal-950 p-3 overflow-hidden border border-teal-500/30 flex flex-col justify-between shadow-inner">
       <div className="absolute -top-10 -right-10 w-24 h-24 bg-teal-500/20 rounded-full blur-xl pointer-events-none group-hover:scale-150 transition-transform duration-500" />
@@ -444,27 +455,28 @@ function HrTeamWidget() {
       <div className="flex items-center justify-between text-[10px]">
         <span className="flex items-center gap-1.5 font-bold text-teal-400">
           <UserCheck className="w-3 h-3 text-teal-400" />
-          PLANILLA & PERSONAL
+          {L('PLANILLA & PERSONAL', 'PAYROLL & STAFF')}
         </span>
         <span className="px-1.5 py-0.5 rounded-md bg-teal-500/20 text-teal-300 font-mono text-[9px] font-bold border border-teal-500/30">
-          8 COLABORADORES
+          {L('8 COLABORADORES', '8 EMPLOYEES')}
         </span>
       </div>
 
       <div className="my-1 bg-white/10 rounded-lg p-1.5 border border-white/10 flex items-center justify-between text-[9px]">
-        <span className="text-slate-300">Cuota Laboral IGSS (4.83%)</span>
-        <span className="font-bold text-teal-300 font-mono">Al Día</span>
+        <span className="text-slate-300">{L('Cuota Laboral IGSS (4.83%)', 'Social Security Withholding (4.83%)')}</span>
+        <span className="font-bold text-teal-300 font-mono">{L('Al Día', 'Up to Date')}</span>
       </div>
 
       <div className="flex items-center justify-between text-[9px] text-slate-400 border-t border-white/10 pt-1">
-        <span>Expedientes con DPI</span>
-        <span className="text-teal-300 font-bold">Nómina Activa</span>
+        <span>{L('Expedientes con DPI', 'ID Files & Contracts')}</span>
+        <span className="text-teal-300 font-bold">{L('Nómina Activa', 'Active Payroll')}</span>
       </div>
     </div>
   );
 }
 
 function AttendanceKioskWidget() {
+  const { L } = useLanguage();
   return (
     <div className="relative h-28 rounded-2xl bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 p-3 overflow-hidden border border-indigo-500/30 flex flex-col justify-between shadow-inner">
       <div className="absolute -top-10 -right-10 w-24 h-24 bg-indigo-500/20 rounded-full blur-xl pointer-events-none group-hover:scale-150 transition-transform duration-500" />
@@ -472,10 +484,10 @@ function AttendanceKioskWidget() {
       <div className="flex items-center justify-between text-[10px]">
         <span className="flex items-center gap-1.5 font-bold text-indigo-400">
           <Clock3 className="w-3 h-3 text-indigo-400" />
-          KIOSCO RELOJ CHECADOR
+          {L('KIOSCO RELOJ CHECADOR', 'TIME CLOCK KIOSK')}
         </span>
         <span className="px-1.5 py-0.5 rounded-md bg-indigo-500/20 text-indigo-300 font-mono text-[9px] font-bold border border-indigo-500/30">
-          PIN SEGURO
+          {L('PIN SEGURO', 'SECURE PIN')}
         </span>
       </div>
 
@@ -485,12 +497,12 @@ function AttendanceKioskWidget() {
         </span>
         <div className="flex items-center gap-1 text-[9px] text-slate-400">
           <KeyRound className="w-3 h-3 text-indigo-400" />
-          <span>Marcaje Rápido</span>
+          <span>{L('Marcaje Rápido', 'Quick Clock-In')}</span>
         </div>
       </div>
 
       <div className="flex items-center justify-between text-[9px] text-slate-400 border-t border-white/10 pt-1">
-        <span>Turnos & Horas Extras</span>
+        <span>{L('Turnos & Horas Extras', 'Shifts & Overtime')}</span>
         <span className="text-indigo-400 font-bold">100% Digital</span>
       </div>
     </div>
@@ -498,6 +510,7 @@ function AttendanceKioskWidget() {
 }
 
 function BranchesNetWidget() {
+  const { L } = useLanguage();
   return (
     <div className="relative h-28 rounded-2xl bg-gradient-to-br from-slate-950 via-slate-900 to-blue-950 p-3 overflow-hidden border border-blue-500/30 flex flex-col justify-between shadow-inner">
       <div className="absolute -top-10 -right-10 w-24 h-24 bg-blue-500/20 rounded-full blur-xl pointer-events-none group-hover:scale-150 transition-transform duration-500" />
@@ -505,28 +518,29 @@ function BranchesNetWidget() {
       <div className="flex items-center justify-between text-[10px]">
         <span className="flex items-center gap-1.5 font-bold text-blue-400">
           <Store className="w-3 h-3 text-blue-400" />
-          RED MULTI-SUCURSAL
+          {L('RED MULTI-SUCURSAL', 'MULTI-BRANCH NETWORK')}
         </span>
         <span className="px-1.5 py-0.5 rounded-md bg-blue-500/20 text-blue-300 font-mono text-[9px] font-bold border border-blue-500/30">
-          3 SEDES
+          {L('3 SEDES', '3 BRANCHES')}
         </span>
       </div>
 
       <div className="my-1 flex items-center justify-between bg-white/10 rounded-lg p-1.5 border border-white/10 text-[9px] text-slate-300">
-        <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-emerald-400" /> Central</span>
-        <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-blue-400" /> Norte</span>
-        <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-indigo-400" /> Sur</span>
+        <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-emerald-400" /> {L('Central', 'Main')}</span>
+        <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-blue-400" /> {L('Norte', 'North')}</span>
+        <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-indigo-400" /> {L('Sur', 'South')}</span>
       </div>
 
       <div className="flex items-center justify-between text-[9px] text-slate-400 border-t border-white/10 pt-1">
-        <span>Cajas asignadas por sede</span>
-        <span className="text-blue-300 font-bold">Interconectadas</span>
+        <span>{L('Cajas asignadas por sede', 'Registers assigned per branch')}</span>
+        <span className="text-blue-300 font-bold">{L('Interconectadas', 'Connected')}</span>
       </div>
     </div>
   );
 }
 
 function SecuritySystemWidget({ isInformal = false }: { isInformal?: boolean }) {
+  const { L } = useLanguage();
   if (isInformal) {
     return (
       <div className="relative h-28 rounded-2xl bg-gradient-to-br from-slate-950 via-indigo-950 to-slate-900 p-3 overflow-hidden border border-indigo-500/30 flex flex-col justify-between shadow-inner">
@@ -535,7 +549,7 @@ function SecuritySystemWidget({ isInformal = false }: { isInformal?: boolean }) 
         <div className="flex items-center justify-between text-[10px]">
           <span className="flex items-center gap-1.5 font-bold text-indigo-300">
             <Store className="w-3 h-3 text-indigo-400" />
-            DATOS DE MI TIENDA
+            {L('DATOS DE MI TIENDA', 'MY STORE INFO')}
           </span>
           <span className="px-1.5 py-0.5 rounded-md bg-indigo-500/20 text-indigo-300 font-mono text-[9px] font-bold border border-indigo-500/30">
             BOUTIQUE LIVE
@@ -543,15 +557,15 @@ function SecuritySystemWidget({ isInformal = false }: { isInformal?: boolean }) 
         </div>
 
         <div className="my-1 bg-white/10 rounded-lg p-1.5 border border-white/10 flex items-center justify-between text-[9px]">
-          <span className="text-slate-300">Cuentas Bancarias & Envíos</span>
+          <span className="text-slate-300">{L('Cuentas Bancarias & Envíos', 'Bank Accounts & Shipping')}</span>
           <span className="font-bold text-emerald-400 flex items-center gap-1">
-            <Check className="w-3 h-3" /> BI • Banrural • BAC
+            <Check className="w-3 h-3" /> {L('BI • Banrural • BAC', 'Banks Ready')}
           </span>
         </div>
 
         <div className="flex items-center justify-between text-[9px] text-slate-400 border-t border-white/10 pt-1">
-          <span>WhatsApp de Cobro</span>
-          <span className="text-indigo-300 font-bold">Resúmenes Listos</span>
+          <span>{L('WhatsApp de Cobro', 'WhatsApp Billing')}</span>
+          <span className="text-indigo-300 font-bold">{L('Resúmenes Listos', 'Summaries Ready')}</span>
         </div>
       </div>
     );
@@ -564,23 +578,23 @@ function SecuritySystemWidget({ isInformal = false }: { isInformal?: boolean }) 
       <div className="flex items-center justify-between text-[10px]">
         <span className="flex items-center gap-1.5 font-bold text-slate-300">
           <Settings className="w-3 h-3 text-slate-400" />
-          CONFIGURACIÓN GLOBAL
+          {L('CONFIGURACIÓN GLOBAL', 'GLOBAL SETTINGS')}
         </span>
         <span className="px-1.5 py-0.5 rounded-md bg-slate-800 text-slate-300 font-mono text-[9px] font-bold border border-slate-700">
-          SAT & FEL
+          {L('SAT & FEL', 'TAX & E-INV')}
         </span>
       </div>
 
       <div className="my-1 bg-white/10 rounded-lg p-1.5 border border-white/10 flex items-center justify-between text-[9px]">
-        <span className="text-slate-300">Certificados Digitales</span>
+        <span className="text-slate-300">{L('Certificados Digitales', 'Digital Certificates')}</span>
         <span className="font-bold text-emerald-400 flex items-center gap-1">
           <ShieldCheck className="w-3 h-3" /> SSL 256-Bit
         </span>
       </div>
 
       <div className="flex items-center justify-between text-[9px] text-slate-400 border-t border-white/10 pt-1">
-        <span>Régimen Tributario & Logo</span>
-        <span className="text-slate-300 font-bold">Parámetros OK</span>
+        <span>{L('Régimen Tributario & Logo', 'Tax Regime & Logo')}</span>
+        <span className="text-slate-300 font-bold">{L('Parámetros OK', 'Parameters OK')}</span>
       </div>
     </div>
   );
@@ -602,6 +616,7 @@ export default function LaunchpadHub({
   const [activeCategory, setActiveCategory] = useState<'all' | 'operaciones' | 'finanzas' | 'gestion'>('all');
   const [selectedUpgradeCard, setSelectedUpgradeCard] = useState<HubCard | null>(null);
   const { formatTime } = useTimeFormat();
+  const { lang, isEn, L, money, currencySymbol, locale, trPayment, trRegime, trClient } = useLanguage();
 
   const currentEmpId = Number(selectedEmpresa?.id ?? user.empresa_id);
   const isFortexa = currentEmpId === 22;
@@ -614,7 +629,7 @@ export default function LaunchpadHub({
     (selectedEmpresa?.modules?.pos === false && selectedEmpresa?.modules?.live_sales === true)
   );
   const rawReg = selectedEmpresa?.regimen || user.empresa_regimen || '';
-  const effectiveRegimen = formatRegimenLabel(rawReg);
+  const effectiveRegimen = trRegime(formatRegimenLabel(rawReg));
   const tipoRegimen = getTipoRegimenSAT(rawReg);
   const isPequeno = tipoRegimen === 'pequeno_contribuyente';
   const isInformal = tipoRegimen === 'exento' || isLiveOnlyCompany;
@@ -623,18 +638,18 @@ export default function LaunchpadHub({
   const recentSales = useMemo(() => {
     if (isFortexa) {
       return [
-        { id: 'FAC-B2B-108', cliente: 'Trans-Guatemala S.A.', total: 'Q 6,500.00', metodo: 'Transferencia', hora: '11:45', status: 'Completado', desc: 'RutaFuel Pro Flotas (10 Vehículos Anual)' },
-        { id: 'LIC-QTM-204', cliente: 'Abarrotes La Bendición', total: 'Q 499.00', metodo: 'Tarjeta POS', hora: '10:20', status: 'Completado', desc: 'Quantum Store POS Licencia Perpetua' },
-        { id: 'FAC-B2B-109', cliente: 'Transportes Rápidos del Norte', total: 'Q 3,850.00', metodo: 'Crédito B2B', hora: '09:15', status: 'Pendiente', desc: 'Hardware Sensores GPS Teltonika 4G' },
-        { id: 'SUB-PRO-012', cliente: 'Carlos M. Morales (Conductor)', total: 'Q 590.00', metodo: 'Hotmart Pay', hora: '08:40', status: 'Completado', desc: 'RutaFuel Pro Individual (Anual)' },
-        { id: 'LIC-QTM-205', cliente: 'Farmacia & Droguería Central', total: 'Q 999.00', metodo: 'Transferencia', hora: '08:10', status: 'Completado', desc: 'Quantum Store Red 5 PCs' },
+        { id: 'FAC-B2B-108', cliente: 'Trans-Guatemala S.A.', total: money(6500), metodo: trPayment('Transferencia'), hora: '11:45', status: 'Completado', desc: L('RutaFuel Pro Flotas (10 Vehículos Anual)', 'RutaFuel Pro Fleets (10 Vehicles Annual)') },
+        { id: 'LIC-QTM-204', cliente: 'Abarrotes La Bendición', total: money(499), metodo: L('Tarjeta POS', 'Card POS'), hora: '10:20', status: 'Completado', desc: L('Quantum Store POS Licencia Perpetua', 'Quantum Store POS Lifetime License') },
+        { id: 'FAC-B2B-109', cliente: 'Transportes Rápidos del Norte', total: money(3850), metodo: L('Crédito B2B', 'B2B Credit'), hora: '09:15', status: 'Pendiente', desc: L('Hardware Sensores GPS Teltonika 4G', 'Teltonika 4G GPS Sensor Hardware') },
+        { id: 'SUB-PRO-012', cliente: L('Carlos M. Morales (Conductor)', 'Carlos M. Morales (Driver)'), total: money(590), metodo: 'Hotmart Pay', hora: '08:40', status: 'Completado', desc: L('RutaFuel Pro Individual (Anual)', 'RutaFuel Pro Individual (Annual)') },
+        { id: 'LIC-QTM-205', cliente: 'Farmacia & Droguería Central', total: money(999), metodo: trPayment('Transferencia'), hora: '08:10', status: 'Completado', desc: L('Quantum Store Red 5 PCs', 'Quantum Store 5-PC Network') },
       ];
     }
     if (isDemoCompany) {
       return [
-        { id: 'TKT-DEMO-001', cliente: 'Cliente Mostrador Demo', total: 'Q 450.00', metodo: 'Tarjeta POS', hora: '10:30', status: 'Completado', desc: 'Smart Watch Pro Serie 8 Waterproof' },
-        { id: 'TKT-DEMO-002', cliente: 'Distribuidora Central Demo', total: 'Q 220.00', metodo: 'Efectivo', hora: '09:45', status: 'Completado', desc: 'Audífonos Inalámbricos TWS Pro' },
-        { id: 'TKT-DEMO-003', cliente: 'Consumidor Final', total: 'Q 110.00', metodo: 'Transferencia', hora: '09:10', status: 'Completado', desc: 'Termo Inteligente Acero LED 500ml' },
+        { id: 'TKT-DEMO-001', cliente: L('Cliente Mostrador Demo', 'Demo Counter Customer'), total: money(450), metodo: L('Tarjeta POS', 'Card POS'), hora: '10:30', status: 'Completado', desc: 'Smart Watch Pro Series 8 Waterproof' },
+        { id: 'TKT-DEMO-002', cliente: L('Distribuidora Central Demo', 'Central Distributor Demo'), total: money(220), metodo: trPayment('Efectivo'), hora: '09:45', status: 'Completado', desc: L('Audífonos Inalámbricos TWS Pro', 'TWS Pro Wireless Earbuds') },
+        { id: 'TKT-DEMO-003', cliente: trClient('Consumidor Final'), total: money(110), metodo: trPayment('Transferencia'), hora: '09:10', status: 'Completado', desc: L('Termo Inteligente Acero LED 500ml', 'Smart LED Steel Thermos 500ml') },
       ];
     }
     if (!isFashionStyles) {
@@ -642,30 +657,30 @@ export default function LaunchpadHub({
     }
     return REAL_SALES.slice(0, 5).map(s => ({
       id: s.id,
-      cliente: s.cliente,
-      total: `Q ${s.total.toFixed(2)}`,
-      metodo: s.metodoPago,
+      cliente: trClient(s.cliente),
+      total: money(s.total),
+      metodo: trPayment(s.metodoPago),
       hora: s.fecha.split(' ')[1] || s.fecha,
       status: s.estado === 'Completada' ? 'Completado' : s.estado === 'Crédito' ? 'Pendiente' : 'Anulado',
       desc: s.productos.map(p => p.nombre).slice(0, 2).join(', ')
     }));
-  }, [isFortexa, isDemoCompany, isFashionStyles]);
+  }, [isFortexa, isDemoCompany, isFashionStyles, lang]);
 
   // 2. Datos Operativos de Cuentas por Cobrar & Vencimientos
   const { receivables, totalCartera } = useMemo(() => {
     if (isFortexa) {
       const recs = [
-        { id: 'FAC-B2B-104', cliente: 'Transportes Rápidos S.A.', saldo: 14500, fecha_venc: '20/11/2026', dias: 'En 3 días', urgencia: 'urgente' },
-        { id: 'FAC-B2B-098', cliente: 'Trans-Guatemala Flotas', saldo: 8200, fecha_venc: '24/11/2026', dias: 'En 7 días', urgencia: 'alerta' },
-        { id: 'LIC-ENT-041', cliente: 'Distribuidora Logística Central', saldo: 6500, fecha_venc: '28/11/2026', dias: 'En 11 días', urgencia: 'normal' },
-        { id: 'CON-COR-015', cliente: 'Agro-Industrias del Sur', saldo: 4900, fecha_venc: '02/12/2026', dias: 'En 15 días', urgencia: 'normal' },
+        { id: 'FAC-B2B-104', cliente: 'Transportes Rápidos S.A.', saldo: 14500, fecha_venc: '20/11/2026', dias: L('En 3 días', 'In 3 days'), urgencia: 'urgente' },
+        { id: 'FAC-B2B-098', cliente: 'Trans-Guatemala Flotas', saldo: 8200, fecha_venc: '24/11/2026', dias: L('En 7 días', 'In 7 days'), urgencia: 'alerta' },
+        { id: 'LIC-ENT-041', cliente: 'Distribuidora Logística Central', saldo: 6500, fecha_venc: '28/11/2026', dias: L('En 11 días', 'In 11 days'), urgencia: 'normal' },
+        { id: 'CON-COR-015', cliente: 'Agro-Industrias del Sur', saldo: 4900, fecha_venc: '02/12/2026', dias: L('En 15 días', 'In 15 days'), urgencia: 'normal' },
       ];
       return { receivables: recs, totalCartera: 34100 };
     }
     if (isDemoCompany) {
       const recs = [
-        { id: 'FAC-DEMO-101', cliente: 'Distribuidora Central Demo', saldo: 1850, fecha_venc: '25/11/2026', dias: 'En 5 días', total: 3500, urgencia: 'normal' as const },
-        { id: 'FAC-DEMO-102', cliente: 'Tech Store Guatemala Demo', saldo: 3200, fecha_venc: '22/11/2026', dias: 'En 2 días', total: 3200, urgencia: 'alerta' as const }
+        { id: 'FAC-DEMO-101', cliente: L('Distribuidora Central Demo', 'Central Distributor Demo'), saldo: 1850, fecha_venc: '25/11/2026', dias: L('En 5 días', 'In 5 days'), total: 3500, urgencia: 'normal' as const },
+        { id: 'FAC-DEMO-102', cliente: 'Tech Store Guatemala Demo', saldo: 3200, fecha_venc: '22/11/2026', dias: L('En 2 días', 'In 2 days'), total: 3200, urgencia: 'alerta' as const }
       ];
       return { receivables: recs, totalCartera: 5050 };
     }
@@ -674,42 +689,42 @@ export default function LaunchpadHub({
     }
     const recs = REAL_CLIENTS.filter(c => c.saldo_actual > 0).slice(0, 5).map((c, i) => ({
       id: `CLI-${c.id_cliente}`,
-      cliente: c.nombre_completo,
+      cliente: trClient(c.nombre_completo),
       fecha_venc: '30/11/2026',
-      dias: i === 0 ? 'En 3 días' : i === 1 ? 'En 5 días' : 'En 8 días',
+      dias: i === 0 ? L('En 3 días', 'In 3 days') : i === 1 ? L('En 5 días', 'In 5 days') : L('En 8 días', 'In 8 days'),
       total: c.saldo_actual,
       saldo: c.saldo_actual,
       urgencia: (c.saldo_actual > 4500 ? 'urgente' : c.saldo_actual > 3000 ? 'alerta' : 'normal') as 'urgente' | 'alerta' | 'normal'
     }));
     const total = REAL_CLIENTS.reduce((acc, c) => acc + c.saldo_actual, 0);
     return { receivables: recs, totalCartera: total };
-  }, [isFortexa, isDemoCompany, isFashionStyles]);
+  }, [isFortexa, isDemoCompany, isFashionStyles, lang]);
 
   // 3. Datos de Demanda en Pre-Ventas & Déficit de Stock
   const demandProducts = useMemo(() => {
     if (isFortexa) {
       return [
         { id: 1, nombre: 'Teltonika GPS Tracker 4G IoT', sku: 'GPS-4G-TEL', solicitado: 50, stock: 12, deficit: 38, clientes: ['Transportes Rápidos', 'Flotas Pacífico'] },
-        { id: 2, nombre: 'Sensor de Flujo Digital Combustible', sku: 'SEN-FLUX-01', solicitado: 25, stock: 5, deficit: 20, clientes: ['Trans-Guatemala'] },
-        { id: 3, nombre: 'Gateway OBD2 Telemetría Pro', sku: 'GTW-OBD2-PRO', solicitado: 15, stock: 2, deficit: 13, clientes: ['Logística Central'] },
+        { id: 2, nombre: L('Sensor de Flujo Digital Combustible', 'Digital Fuel Flow Sensor'), sku: 'SEN-FLUX-01', solicitado: 25, stock: 5, deficit: 20, clientes: ['Trans-Guatemala'] },
+        { id: 3, nombre: L('Gateway OBD2 Telemetría Pro', 'OBD2 Telemetry Pro Gateway'), sku: 'GTW-OBD2-PRO', solicitado: 15, stock: 2, deficit: 13, clientes: ['Logística Central'] },
       ];
     }
     if (isDemoCompany) {
       return [
-        { id: 1, nombre: 'Smart Watch Pro Serie 8 Waterproof', sku: 'WCH-DEMO-01', solicitado: 15, stock: 3, deficit: 12, clientes: ['Cliente Demo Corporativo'] },
-        { id: 2, nombre: 'Audífonos Inalámbricos TWS Pro', sku: 'TWS-PRO-02', solicitado: 20, stock: 4, deficit: 16, clientes: ['Distribuidora Central Demo'] },
-        { id: 3, nombre: 'Termo Inteligente Acero LED 500ml', sku: 'TRM-LED-03', solicitado: 10, stock: 2, deficit: 8, clientes: ['Tech Store Demo'] }
+        { id: 1, nombre: 'Smart Watch Pro Series 8 Waterproof', sku: 'WCH-DEMO-01', solicitado: 15, stock: 3, deficit: 12, clientes: ['Cliente Demo Corporativo'] },
+        { id: 2, nombre: L('Audífonos Inalámbricos TWS Pro', 'TWS Pro Wireless Earbuds'), sku: 'TWS-PRO-02', solicitado: 20, stock: 4, deficit: 16, clientes: ['Distribuidora Central Demo'] },
+        { id: 3, nombre: L('Termo Inteligente Acero LED 500ml', 'Smart LED Steel Thermos 500ml'), sku: 'TRM-LED-03', solicitado: 10, stock: 2, deficit: 8, clientes: ['Tech Store Demo'] }
       ];
     }
     if (!isFashionStyles) {
       return [];
     }
     return [
-      { id: 4155, nombre: 'Serum Facial & Contorno de Ojos', sku: 'CDD-0000003', solicitado: 25, stock: 1, deficit: 24, clientes: ['Clientas Boutique VIP', 'Venta en Tienda'] },
-      { id: 2908, nombre: 'Juego Completo Depilación & Exfoliante', sku: 'GNR-0000446', solicitado: 30, stock: 10, deficit: 20, clientes: ['Clientas Frecuentes', 'Venta Mostrador'] },
-      { id: 2841, nombre: 'Aceite Labial Hidratante Gloss', sku: 'BLL-0000064', solicitado: 25, stock: 6, deficit: 19, clientes: ['Compradoras Live', 'Venta en Caja'] },
+      { id: 4155, nombre: L('Serum Facial & Contorno de Ojos', 'Facial & Eye Contour Serum'), sku: 'CDD-0000003', solicitado: 25, stock: 1, deficit: 24, clientes: ['Clientas Boutique VIP', 'Venta en Tienda'] },
+      { id: 2908, nombre: L('Juego Completo Depilación & Exfoliante', 'Complete Waxing & Exfoliating Kit'), sku: 'GNR-0000446', solicitado: 30, stock: 10, deficit: 20, clientes: ['Clientas Frecuentes', 'Venta Mostrador'] },
+      { id: 2841, nombre: L('Aceite Labial Hidratante Gloss', 'Hydrating Lip Gloss Oil'), sku: 'BLL-0000064', solicitado: 25, stock: 6, deficit: 19, clientes: ['Compradoras Live', 'Venta en Caja'] },
     ];
-  }, [isFortexa, isDemoCompany, isFashionStyles]);
+  }, [isFortexa, isDemoCompany, isFashionStyles, lang]);
 
   // Definición de Tarjetas adaptadas con sus Widgets
   const allCards: HubCard[] = useMemo(() => {
@@ -719,54 +734,66 @@ export default function LaunchpadHub({
     if (isFortexa) {
       cards.push({
         id: 'fortexa_apps',
-        title: 'Suscripciones & Apps Fortexa',
+        title: L('Suscripciones & Apps Fortexa', 'Fortexa Subscriptions & Apps'),
         subtitle: 'RutaFuel Pro, Quantum POS & IntegraPro',
-        description: 'Gestión central de suscripciones anuales, cortes automáticos, pagos en Hotmart y licencias perpetuas.',
+        description: L(
+          'Gestión central de suscripciones anuales, cortes automáticos, pagos en Hotmart y licencias perpetuas.',
+          'Centralized management of annual subscriptions, automatic billing cutoffs, Hotmart payments, and lifetime licenses.'
+        ),
         icon: Cpu,
         gradient: 'from-indigo-600 via-indigo-700 to-purple-800',
         glowColor: 'from-indigo-600/40 to-purple-600/40',
         badge: { text: 'SaaS / Hotmart', color: 'bg-indigo-500/10 text-indigo-700 border-indigo-200' },
-        metric: '11 Licencias Activas • Q 24,500 ARR',
+        metric: L(`11 Licencias Activas • ${currencySymbol} 24,500 ARR`, `11 Active Licenses • ${currencySymbol}24,500 ARR`),
         category: 'operaciones',
         highlight: true,
         widgetType: 'fortexa_saas'
       });
       cards.push({
         id: 'ventas',
-        title: 'Ventas & Facturación (FEL B2B)',
-        subtitle: 'DTEs Electrónicos SAT y Cotizaciones',
-        description: 'Facturación en línea FEL con firma electrónica DTE, cotizaciones para flotas y contratos B2B.',
+        title: L('Ventas & Facturación (FEL B2B)', 'Sales & E-Invoicing (B2B)'),
+        subtitle: L('DTEs Electrónicos SAT y Cotizaciones', 'Electronic Invoices & Quotes'),
+        description: L(
+          'Facturación en línea FEL con firma electrónica DTE, cotizaciones para flotas y contratos B2B.',
+          'Online electronic invoicing with digital signature, fleet quotes, and B2B service contracts.'
+        ),
         icon: ReceiptText,
         gradient: 'from-blue-600 to-indigo-700',
         glowColor: 'from-blue-600/40 to-indigo-600/40',
-        badge: { text: 'FEL SAT Oficial', color: 'bg-blue-500/10 text-blue-700 border-blue-200' },
-        metric: 'Certificación Infile SAT',
+        badge: { text: L('FEL SAT Oficial', 'Certified E-Invoice'), color: 'bg-blue-500/10 text-blue-700 border-blue-200' },
+        metric: L('Certificación Infile SAT', 'Tax Compliance Certified'),
         category: 'operaciones',
         widgetType: 'fel_invoice'
       });
       cards.push({
         id: 'inventario',
-        title: 'Hardware & Equipos',
-        subtitle: 'Dispositivos GPS, Sensores y Servidores',
-        description: 'Control de inventario de equipos tecnológicos, sensores de combustible y stock disponible en bodega.',
+        title: L('Hardware & Equipos', 'Hardware & Equipment'),
+        subtitle: L('Dispositivos GPS, Sensores y Servidores', 'GPS Devices, Sensors & Servers'),
+        description: L(
+          'Control de inventario de equipos tecnológicos, sensores de combustible y stock disponible en bodega.',
+          'Inventory control for tech hardware, fuel sensors, and available warehouse stock.'
+        ),
         icon: Boxes,
         gradient: 'from-amber-500 to-orange-600',
         glowColor: 'from-amber-500/40 to-orange-500/40',
         badge: { text: 'Tech Inventory', color: 'bg-amber-500/10 text-amber-700 border-amber-200' },
-        metric: 'Stock en Bodega Central',
+        metric: L('Stock en Bodega Central', 'Main Warehouse Stock'),
         category: 'operaciones',
         widgetType: 'inventory_gauge'
       });
       cards.push({
         id: 'clientes',
-        title: 'Clientes & Flotas B2B',
-        subtitle: 'Empresas de Transporte & Conductores',
-        description: 'Directorio de clientes corporativos, expedientes de flotas, saldos y contratos de servicio.',
+        title: L('Clientes & Flotas B2B', 'B2B Clients & Fleets'),
+        subtitle: L('Empresas de Transporte & Conductores', 'Transport Companies & Drivers'),
+        description: L(
+          'Directorio de clientes corporativos, expedientes de flotas, saldos y contratos de servicio.',
+          'Corporate client directory, fleet records, account balances, and service contracts.'
+        ),
         icon: Users,
         gradient: 'from-cyan-600 to-blue-700',
         glowColor: 'from-cyan-600/40 to-blue-600/40',
-        badge: { text: 'Cartera B2B', color: 'bg-cyan-500/10 text-cyan-700 border-cyan-200' },
-        metric: 'Directorio Empresarial',
+        badge: { text: L('Cartera B2B', 'B2B Portfolio'), color: 'bg-cyan-500/10 text-cyan-700 border-cyan-200' },
+        metric: L('Directorio Empresarial', 'Corporate Directory'),
         category: 'operaciones',
         widgetType: 'clients_roster'
       });
@@ -775,14 +802,17 @@ export default function LaunchpadHub({
       if (hasPosModule) {
         cards.push({
           id: 'pos',
-          title: 'Punto de Venta (POS Rápido)',
-          subtitle: 'Caja, Escaneo de Código y Tickets',
-          description: 'Venta rápida de mostrador, cobro con tarjeta, efectivo, cálculo de cambio y cierre de caja.',
+          title: L('Punto de Venta (POS Rápido)', 'Point of Sale (Quick POS)'),
+          subtitle: L('Caja, Escaneo de Código y Tickets', 'Register, Barcode Scanning & Receipts'),
+          description: L(
+            'Venta rápida de mostrador, cobro con tarjeta, efectivo, cálculo de cambio y cierre de caja.',
+            'Fast counter checkout, card & cash payments, automatic change calculation, and register closing.'
+          ),
           icon: Zap,
           gradient: 'from-emerald-500 via-teal-600 to-emerald-700',
           glowColor: 'from-emerald-500/40 to-teal-500/40',
-          badge: { text: 'Caja Activa', color: 'bg-emerald-500/10 text-emerald-700 border-emerald-200' },
-          metric: 'Caja Lista para Facturar',
+          badge: { text: L('Caja Activa', 'Active Register'), color: 'bg-emerald-500/10 text-emerald-700 border-emerald-200' },
+          metric: L('Caja Lista para Facturar', 'Register Ready for Checkout'),
           category: 'operaciones',
           highlight: true,
           widgetType: 'pos_terminal'
@@ -794,14 +824,17 @@ export default function LaunchpadHub({
       if (hasLiveSales) {
         cards.push({
           id: 'live_sales',
-          title: 'TikTok Live & Canastas',
-          subtitle: 'Ventas en Vivo, Apartados & Remates',
-          description: 'Apartado de prendas en tiempo real con descuento inmediato de inventario, remates relámpago y cobros unificados por WhatsApp.',
+          title: L('TikTok Live & Canastas', 'TikTok Live & Baskets'),
+          subtitle: L('Ventas en Vivo, Apartados & Remates', 'Live Sales, Reservations & Flash Deals'),
+          description: L(
+            'Apartado de prendas en tiempo real con descuento inmediato de inventario, remates relámpago y cobros unificados por WhatsApp.',
+            'Real-time item reservations with instant inventory deduction, flash deals, and unified WhatsApp billing.'
+          ),
           icon: Video,
           gradient: 'from-rose-500 via-pink-600 to-purple-700',
           glowColor: 'from-rose-500/40 to-purple-600/40',
           badge: { text: 'Social Commerce', color: 'bg-rose-500/10 text-rose-700 border-rose-200' },
-          metric: 'Canastas Abiertas en Vivo',
+          metric: L('Canastas Abiertas en Vivo', 'Open Live Baskets'),
           category: 'operaciones',
           widgetType: 'live_stream'
         });
@@ -809,40 +842,49 @@ export default function LaunchpadHub({
 
       cards.push({
         id: 'inventario',
-        title: 'Inventario & Bodega',
-        subtitle: 'Catálogo de Productos y Existencias',
-        description: 'Control de stock físico, precios de compra y venta, alertas de stock mínimo y código de barras.',
+        title: L('Inventario & Bodega', 'Inventory & Warehouse'),
+        subtitle: L('Catálogo de Productos y Existencias', 'Product Catalog & Stock Levels'),
+        description: L(
+          'Control de stock físico, precios de compra y venta, alertas de stock mínimo y código de barras.',
+          'Physical stock control, purchase & sale prices, low-stock alerts, and barcode generation.'
+        ),
         icon: Boxes,
         gradient: 'from-amber-500 to-orange-600',
         glowColor: 'from-amber-500/40 to-orange-500/40',
-        badge: { text: 'Stock en Tiempo Real', color: 'bg-amber-500/10 text-amber-700 border-amber-200' },
-        metric: 'Catálogo con Alertas de Mínimo',
+        badge: { text: L('Stock en Tiempo Real', 'Real-Time Stock'), color: 'bg-amber-500/10 text-amber-700 border-amber-200' },
+        metric: L('Catálogo con Alertas de Mínimo', 'Catalog with Low-Stock Alerts'),
         category: 'operaciones',
         widgetType: 'inventory_gauge'
       });
       cards.push({
         id: 'ventas',
-        title: 'Ventas & Facturación (FEL)',
-        subtitle: 'Historial de Ventas, DTEs y Clientes',
-        description: 'Emisión de Facturas Electrónicas SAT (DTE), cotizaciones, notas de crédito y reportes de corte.',
+        title: L('Ventas & Facturación (FEL)', 'Sales & E-Invoicing'),
+        subtitle: L('Historial de Ventas, DTEs y Clientes', 'Sales History, E-Invoices & Clients'),
+        description: L(
+          'Emisión de Facturas Electrónicas SAT (DTE), cotizaciones, notas de crédito y reportes de corte.',
+          'Issue certified electronic invoices, quotes, credit notes, and daily closing reports.'
+        ),
         icon: ReceiptText,
         gradient: 'from-blue-600 to-indigo-700',
         glowColor: 'from-blue-600/40 to-indigo-600/40',
-        badge: { text: 'FEL SAT', color: 'bg-blue-500/10 text-blue-700 border-blue-200' },
-        metric: 'Libro de Ventas Fiscal',
+        badge: { text: L('FEL SAT', 'E-Invoice'), color: 'bg-blue-500/10 text-blue-700 border-blue-200' },
+        metric: L('Libro de Ventas Fiscal', 'Tax Sales Ledger'),
         category: 'operaciones',
         widgetType: 'fel_invoice'
       });
       cards.push({
         id: 'clientes',
-        title: 'Clientes & Créditos',
-        subtitle: 'Cartera de Clientes y Cobranza',
-        description: 'Registro de clientes, asignación de límites de crédito, saldos pendientes y estado de cuenta.',
+        title: L('Clientes & Créditos', 'Clients & Credit'),
+        subtitle: L('Cartera de Clientes y Cobranza', 'Client Portfolio & Collections'),
+        description: L(
+          'Registro de clientes, asignación de límites de crédito, saldos pendientes y estado de cuenta.',
+          'Customer profiles, credit limits, pending balances, and account statements.'
+        ),
         icon: Users,
         gradient: 'from-cyan-600 to-blue-700',
         glowColor: 'from-cyan-600/40 to-blue-600/40',
-        badge: { text: 'Cartera', color: 'bg-cyan-500/10 text-cyan-700 border-cyan-200' },
-        metric: 'Cuentas por Cobrar',
+        badge: { text: L('Cartera', 'Portfolio'), color: 'bg-cyan-500/10 text-cyan-700 border-cyan-200' },
+        metric: L('Cuentas por Cobrar', 'Accounts Receivable'),
         category: 'operaciones',
         widgetType: 'clients_roster'
       });
@@ -851,42 +893,51 @@ export default function LaunchpadHub({
     // 2. Módulos de Finanzas & Compras
     cards.push({
       id: 'compras',
-      title: 'Compras & Proveedores',
-      subtitle: 'Órdenes de Compra y Cuentas por Pagar',
-      description: 'Gestión de proveedores, registro de facturas de compra para crédito fiscal SAT y control de pagos.',
+      title: L('Compras & Proveedores', 'Purchases & Suppliers'),
+      subtitle: L('Órdenes de Compra y Cuentas por Pagar', 'Purchase Orders & Accounts Payable'),
+      description: L(
+        'Gestión de proveedores, registro de facturas de compra para crédito fiscal SAT y control de pagos.',
+        'Supplier management, purchase invoice logging for VAT credit, and payment tracking.'
+      ),
       icon: Truck,
       gradient: 'from-violet-600 to-purple-700',
       glowColor: 'from-violet-600/40 to-purple-600/40',
-      badge: { text: 'Proveedores', color: 'bg-violet-500/10 text-violet-700 border-violet-200' },
-      metric: 'Gestión de Abastecimiento',
+      badge: { text: L('Proveedores', 'Suppliers'), color: 'bg-violet-500/10 text-violet-700 border-violet-200' },
+      metric: L('Gestión de Abastecimiento', 'Procurement Management'),
       category: 'finanzas',
       widgetType: 'logistics_fleet'
     });
 
     cards.push({
       id: 'contabilidad',
-      title: 'Contabilidad & SAT Fiscal',
-      subtitle: 'Libro Diario, IVA e Impuestos',
-      description: 'Generación de Libro Diario, Balance de Saldos, cálculo de IVA general (12%) y Pequeño Contribuyente (5%).',
+      title: L('Contabilidad & SAT Fiscal', 'Accounting & Tax Compliance'),
+      subtitle: L('Libro Diario, IVA e Impuestos', 'General Journal, VAT & Taxes'),
+      description: L(
+        'Generación de Libro Diario, Balance de Saldos, cálculo de IVA general (12%) y Pequeño Contribuyente (5%).',
+        'Generate General Journal, Trial Balance, standard VAT (12%), and small business tax (5%) calculations.'
+      ),
       icon: Landmark,
       gradient: 'from-emerald-600 to-teal-800',
       glowColor: 'from-emerald-600/40 to-teal-600/40',
-      badge: { text: 'Cumplimiento SAT', color: 'bg-emerald-500/10 text-emerald-700 border-emerald-200' },
-      metric: 'Plan de Cuentas & DTEs',
+      badge: { text: L('Cumplimiento SAT', 'Tax Compliance'), color: 'bg-emerald-500/10 text-emerald-700 border-emerald-200' },
+      metric: L('Plan de Cuentas & DTEs', 'Chart of Accounts & E-Invoices'),
       category: 'finanzas',
       widgetType: 'fiscal_ledger'
     });
 
     cards.push({
       id: 'dashboard',
-      title: 'Métricas & Dashboard Ejecutivo',
-      subtitle: 'Gráficas de Ventas, KPIs y Flujo de Caja',
-      description: 'Centro integral de analítica visual, comparativa de ventas 2025 vs 2026, demanda y cuentas por cobrar.',
+      title: L('Métricas & Dashboard Ejecutivo', 'Metrics & Executive Dashboard'),
+      subtitle: L('Gráficas de Ventas, KPIs y Flujo de Caja', 'Sales Charts, KPIs & Cash Flow'),
+      description: L(
+        'Centro integral de analítica visual, comparativa de ventas 2025 vs 2026, demanda y cuentas por cobrar.',
+        'Visual analytics hub, 2025 vs 2026 sales comparison, demand forecasting, and accounts receivable.'
+      ),
       icon: Activity,
       gradient: 'from-rose-500 to-pink-700',
       glowColor: 'from-rose-500/40 to-pink-500/40',
-      badge: { text: 'Analítica en Vivo', color: 'bg-rose-500/10 text-rose-700 border-rose-200' },
-      metric: 'Gráficas & Proyección Anual',
+      badge: { text: L('Analítica en Vivo', 'Live Analytics'), color: 'bg-rose-500/10 text-rose-700 border-rose-200' },
+      metric: L('Gráficas & Proyección Anual', 'Charts & Annual Forecast'),
       category: 'finanzas',
       widgetType: 'analytics_chart'
     });
@@ -894,74 +945,96 @@ export default function LaunchpadHub({
     // 3. Módulos de Gestión, Talento y Sistema
     cards.push({
       id: 'rrhh',
-      title: 'Recursos Humanos & Planillas',
-      subtitle: 'Colaboradores, Nómina y Expedientes',
-      description: 'Gestión del personal, puestos de trabajo, cálculo de salarios, descuentos del IGSS y contratos.',
+      title: L('Recursos Humanos & Planillas', 'Human Resources & Payroll'),
+      subtitle: L('Colaboradores, Nómina y Expedientes', 'Employees, Payroll & Records'),
+      description: L(
+        'Gestión del personal, puestos de trabajo, cálculo de salarios, descuentos del IGSS y contratos.',
+        'Staff management, job roles, salary calculations, social security deductions, and contracts.'
+      ),
       icon: UserCheck,
       gradient: 'from-teal-600 to-emerald-700',
       glowColor: 'from-teal-600/40 to-emerald-600/40',
-      badge: { text: 'Planilla IGSS', color: 'bg-teal-500/10 text-teal-700 border-teal-200' },
-      metric: 'Directorio de Personal',
+      badge: { text: L('Planilla IGSS', 'Payroll Suite'), color: 'bg-teal-500/10 text-teal-700 border-teal-200' },
+      metric: L('Directorio de Personal', 'Staff Directory'),
       category: 'gestion',
       widgetType: 'hr_team'
     });
 
     cards.push({
       id: 'asistencia',
-      title: 'Reloj Checador (Kiosco Asistencia)',
-      subtitle: 'Control de Asistencia con Código PIN',
-      description: 'Pantalla kiosco táctil para que los colaboradores marquen entradas, salidas y turnos con su PIN de seguridad.',
+      title: L('Reloj Checador (Kiosco Asistencia)', 'Time Clock (Attendance Kiosk)'),
+      subtitle: L('Control de Asistencia con Código PIN', 'PIN-Based Attendance Tracking'),
+      description: L(
+        'Pantalla kiosco táctil para que los colaboradores marquen entradas, salidas y turnos con su PIN de seguridad.',
+        'Touchscreen kiosk for employees to clock in, clock out, and track shifts with their security PIN.'
+      ),
       icon: Clock3,
       gradient: 'from-indigo-500 to-blue-700',
       glowColor: 'from-indigo-500/40 to-blue-500/40',
-      badge: { text: 'Kiosco con PIN', color: 'bg-indigo-500/10 text-indigo-700 border-indigo-200' },
-      metric: 'Marcaje en Tiempo Real',
+      badge: { text: L('Kiosco con PIN', 'PIN Kiosk'), color: 'bg-indigo-500/10 text-indigo-700 border-indigo-200' },
+      metric: L('Marcaje en Tiempo Real', 'Real-Time Clock In/Out'),
       category: 'gestion',
       widgetType: 'attendance_kiosk'
     });
 
     cards.push({
       id: 'sucursales',
-      title: 'Red de Sucursales & Cajas',
-      subtitle: 'Ubicaciones Físicas y Asignaciones',
-      description: 'Administración de sedes, bodegas satélite y asignación de cajas registradoras para cada sucursal.',
+      title: L('Red de Sucursales & Cajas', 'Branch Network & Registers'),
+      subtitle: L('Ubicaciones Físicas y Asignaciones', 'Physical Locations & Assignments'),
+      description: L(
+        'Administración de sedes, bodegas satélite y asignación de cajas registradoras para cada sucursal.',
+        'Manage locations, satellite warehouses, and cash register assignments per branch.'
+      ),
       icon: Store,
       gradient: 'from-blue-500 to-cyan-600',
       glowColor: 'from-blue-500/40 to-cyan-500/40',
-      badge: { text: 'Multi-Sede', color: 'bg-blue-500/10 text-blue-700 border-blue-200' },
-      metric: 'Gestión Multi-Sucursal',
+      badge: { text: L('Multi-Sede', 'Multi-Branch'), color: 'bg-blue-500/10 text-blue-700 border-blue-200' },
+      metric: L('Gestión Multi-Sucursal', 'Multi-Branch Management'),
       category: 'gestion',
       widgetType: 'branches_net'
     });
 
     cards.push({
       id: 'configuracion',
-      title: isInformal ? 'Datos & Perfil de Mi Tienda' : 'Configuración de Empresa & SAT',
-      subtitle: isInformal ? 'Identidad de Boutique, WhatsApp y Cuentas' : 'Datos Fiscales, FEL, Logo y Sistema',
+      title: isInformal
+        ? L('Datos & Perfil de Mi Tienda', 'My Store Info & Profile')
+        : L('Configuración de Empresa & SAT', 'Company & Tax Settings'),
+      subtitle: isInformal
+        ? L('Identidad de Boutique, WhatsApp y Cuentas', 'Boutique Identity, WhatsApp & Accounts')
+        : L('Datos Fiscales, FEL, Logo y Sistema', 'Tax Info, E-Invoice, Logo & System'),
       description: isInformal
-        ? 'Configura el nombre de tu boutique, teléfono de WhatsApp para cobros, cuentas bancarias BI/Banrural y tarifas de envío.'
-        : 'Ajuste de régimen tributario (General, Pequeño, Exento), credenciales DTE de Infile, logo y usuarios.',
+        ? L(
+            'Configura el nombre de tu boutique, teléfono de WhatsApp para cobros, cuentas bancarias BI/Banrural y tarifas de envío.',
+            'Configure your boutique name, WhatsApp billing number, bank accounts, and shipping rates.'
+          )
+        : L(
+            'Ajuste de régimen tributario (General, Pequeño, Exento), credenciales DTE de Infile, logo y usuarios.',
+            'Configure tax regime (Standard, Small Business, Exempt), E-Invoice credentials, logo, and users.'
+          ),
       icon: isInformal ? Store : Settings,
       gradient: isInformal ? 'from-indigo-600 to-purple-800' : 'from-slate-600 to-slate-800',
       glowColor: isInformal ? 'from-indigo-600/40 to-purple-600/40' : 'from-slate-600/40 to-slate-800/40',
       badge: isInformal
-        ? { text: 'Perfil de Tienda', color: 'bg-indigo-500/10 text-indigo-700 border-indigo-200' }
-        : { text: 'Ajustes del Sistema', color: 'bg-slate-500/10 text-slate-700 border-slate-200' },
-      metric: isInformal ? 'Cuentas Bancarias & Envíos' : 'Configuración Global',
+        ? { text: L('Perfil de Tienda', 'Store Profile'), color: 'bg-indigo-500/10 text-indigo-700 border-indigo-200' }
+        : { text: L('Ajustes del Sistema', 'System Settings'), color: 'bg-slate-500/10 text-slate-700 border-slate-200' },
+      metric: isInformal ? L('Cuentas Bancarias & Envíos', 'Bank Accounts & Shipping') : L('Configuración Global', 'Global Settings'),
       category: 'gestion',
       widgetType: 'security_system'
     });
 
     cards.push({
       id: 'token_scraper',
-      title: 'Token Scraper Chrome',
-      subtitle: 'Extensión para Shein, Temu & AliExpress',
-      description: 'Genera y administra tu clave de API personal para conectar la extensión de Chrome y extraer productos en 1 clic.',
+      title: L('Token Scraper Chrome', 'Chrome Scraper Token'),
+      subtitle: L('Extensión para Shein, Temu & AliExpress', 'Extension for Shein, Temu & AliExpress'),
+      description: L(
+        'Genera y administra tu clave de API personal para conectar la extensión de Chrome y extraer productos en 1 clic.',
+        'Generate and manage your personal API key to connect the Chrome extension and import products in 1 click.'
+      ),
       icon: KeyRound,
       gradient: 'from-amber-500 to-indigo-700',
       glowColor: 'from-amber-500/40 to-indigo-500/40',
-      badge: { text: 'API Extensión', color: 'bg-amber-500/10 text-amber-700 border-amber-200' },
-      metric: 'Extracción Automatizada',
+      badge: { text: L('API Extensión', 'Extension API'), color: 'bg-amber-500/10 text-amber-700 border-amber-200' },
+      metric: L('Extracción Automatizada', 'Automated Import'),
       category: 'gestion',
       widgetType: 'security_system'
     });
@@ -985,7 +1058,7 @@ export default function LaunchpadHub({
         isLocked
       };
     });
-  }, [isFortexa, isLiveOnlyCompany, selectedEmpresa?.id, selectedEmpresa?.modules, selectedEmpresa?.plan]);
+  }, [isFortexa, isLiveOnlyCompany, isInformal, selectedEmpresa?.id, selectedEmpresa?.modules, selectedEmpresa?.plan, lang, currencySymbol]);
 
   // Filtrado de tarjetas por búsqueda y categoría
   const filteredCards = useMemo(() => {
@@ -1058,12 +1131,12 @@ export default function LaunchpadHub({
           <div className="space-y-2 max-w-2xl">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 backdrop-blur-md border border-white/15 text-xs font-semibold text-indigo-200">
               <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
-              <span>Centro de Operaciones • Bento Grid 3D</span>
+              <span>{L('Centro de Operaciones • Bento Grid 3D', 'Operations Center • 3D Bento Grid')}</span>
             </div>
 
             <div className="flex items-center justify-between gap-3 flex-wrap sm:flex-nowrap">
               <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-white flex items-center gap-2.5">
-                <span>Hola, {user.name.split(' ')[0]}</span>
+                <span>{L('Hola,', 'Hello,')} {user.name.split(' ')[0]}</span>
                 <span className="text-xl">👋</span>
               </h1>
 
@@ -1072,26 +1145,35 @@ export default function LaunchpadHub({
                   type="button"
                   onClick={onLogout}
                   className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer shrink-0"
-                  title="Cerrar sesión en este dispositivo"
+                  title={L('Cerrar sesión en este dispositivo', 'Sign out on this device')}
                 >
                   <LogOut className="w-3.5 h-3.5 text-rose-400" />
-                  <span>Cerrar Sesión</span>
+                  <span>{L('Cerrar Sesión', 'Sign Out')}</span>
                 </button>
               )}
             </div>
 
             <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
               {isFortexa
-                ? 'Consola tecnológica para gestionar RutaFuel Pro, licencias de software, contratos y cortes automáticos.'
+                ? L(
+                    'Consola tecnológica para gestionar RutaFuel Pro, licencias de software, contratos y cortes automáticos.',
+                    'Technology console to manage RutaFuel Pro, software licenses, contracts, and automatic billing cutoffs.'
+                  )
                 : selectedEmpresa?.id === 99
-                  ? 'Panel Live Express para vendedoras de TikTok Live: canastas abiertas, catálogo de prendas, remates en vivo y cobros por WhatsApp.'
-                  : 'Punto de venta y gestión comercial para retail, catálogo de productos y facturación en caja.'}
+                  ? L(
+                      'Panel Live Express para vendedoras de TikTok Live: canastas abiertas, catálogo de prendas, remates en vivo y cobros por WhatsApp.',
+                      'Live Express hub for TikTok Live sellers: open baskets, item catalog, live flash deals, and WhatsApp billing.'
+                    )
+                  : L(
+                      'Punto de venta y gestión comercial para retail, catálogo de productos y facturación en caja.',
+                      'Point of sale and commercial management for retail, product catalog, and counter invoicing.'
+                    )}
             </p>
 
             {/* Indicador o Selector de Empresa en el Hero */}
             {empresas && onSelectEmpresa && empresas.length > 1 && (user.role === 'SuperAdmin' || user.email === 'admin@integrapro.com' || user.email === 'admin@admin.com') ? (
               <div className="pt-2 flex flex-wrap items-center gap-2 text-xs">
-                <span className="text-slate-400 font-medium">Empresa activa:</span>
+                <span className="text-slate-400 font-medium">{L('Empresa activa:', 'Active company:')}</span>
                 <div className="inline-flex items-center gap-2 px-3 py-1 bg-white/15 hover:bg-white/20 transition-colors rounded-xl border border-white/20 backdrop-blur-sm">
                   <Building2 className="w-3.5 h-3.5 text-indigo-300" />
                   <select
@@ -1101,7 +1183,7 @@ export default function LaunchpadHub({
                   >
                     {empresas.map((emp) => (
                       <option key={emp.id} value={emp.id} className="text-slate-900 bg-white">
-                        {emp.nombre} ({emp.regimen})
+                        {emp.nombre} ({trRegime(emp.regimen)})
                       </option>
                     ))}
                   </select>
@@ -1109,12 +1191,14 @@ export default function LaunchpadHub({
 
                 <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-semibold text-[11px]">
                   <CheckCircle2 className="w-3 h-3 text-emerald-400" />
-                  {selectedEmpresa?.nombre === 'Fortexa Technologies' ? 'Modo B2B Tech' : 'Modo Tienda POS'}
+                  {selectedEmpresa?.nombre === 'Fortexa Technologies'
+                    ? L('Modo B2B Tech', 'B2B Tech Mode')
+                    : L('Modo Tienda POS', 'Retail POS Mode')}
                 </span>
               </div>
             ) : (
               <div className="pt-2 flex flex-wrap items-center gap-2 text-xs">
-                <span className="text-slate-400 font-medium">Empresa activa:</span>
+                <span className="text-slate-400 font-medium">{L('Empresa activa:', 'Active company:')}</span>
                 <div className="inline-flex items-center gap-2 px-3 py-1 bg-white/15 rounded-xl border border-white/20 backdrop-blur-sm">
                   <Building2 className="w-3.5 h-3.5 text-indigo-300" />
                   <span className="text-white font-bold">
@@ -1128,13 +1212,15 @@ export default function LaunchpadHub({
                 {isDemoCompany && (
                   <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-indigo-500/30 text-indigo-200 border border-indigo-400/40 font-bold text-[11px]">
                     <Sparkles className="w-3 h-3 text-indigo-300" />
-                    Entorno Demo Aislado
+                    {L('Entorno Demo Aislado', 'Isolated Demo Sandbox')}
                   </span>
                 )}
 
                 <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-semibold text-[11px]">
                   <CheckCircle2 className="w-3 h-3 text-emerald-400" />
-                  {selectedEmpresa?.nombre === 'Fortexa Technologies' ? 'Modo B2B Tech' : 'Modo Tienda POS'}
+                  {selectedEmpresa?.nombre === 'Fortexa Technologies'
+                    ? L('Modo B2B Tech', 'B2B Tech Mode')
+                    : L('Modo Tienda POS', 'Retail POS Mode')}
                 </span>
               </div>
             )}
@@ -1144,39 +1230,55 @@ export default function LaunchpadHub({
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 shrink-0">
             <div className="bg-white/10 backdrop-blur-md rounded-2xl p-3 border border-white/10">
               <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">
-                {isFortexa ? 'SaaS Activas' : 'Caja POS'}
+                {isFortexa ? L('SaaS Activas', 'Active SaaS') : L('Caja POS', 'POS Register')}
               </span>
               <span className="text-base sm:text-lg font-black text-white block mt-0.5">
-                {isFortexa ? '11 Licencias' : 'Disponible'}
+                {isFortexa ? L('11 Licencias', '11 Licenses') : L('Disponible', 'Available')}
               </span>
               <span className="text-[10px] text-emerald-400 font-medium flex items-center gap-1 mt-0.5">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                {isFortexa ? 'RutaFuel & Quantum' : 'Caja #01 Lista'}
+                {isFortexa ? 'RutaFuel & Quantum' : L('Caja #01 Lista', 'Register #01 Ready')}
               </span>
             </div>
 
             <div className="bg-white/10 backdrop-blur-md rounded-2xl p-3 border border-white/10">
               <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">
-                {isFortexa ? 'ARR Recurrente' : isInformal ? 'Comprobantes' : 'Facturas FEL'}
+                {isFortexa ? L('ARR Recurrente', 'Recurring ARR') : isInformal ? L('Comprobantes', 'Receipts') : L('Facturas FEL', 'E-Invoices')}
               </span>
               <span className="text-base sm:text-lg font-black text-white block mt-0.5">
-                {isFortexa ? 'Q 24,500' : isFashionStyles ? (isInformal ? '951 emitidos' : '951 emitidas') : '3 emitidas'}
+                {isFortexa
+                  ? (isEn ? `${currencySymbol}24,500` : `${currencySymbol} 24,500`)
+                  : isFashionStyles
+                    ? (isInformal ? L('951 emitidos', '951 issued') : L('951 emitidas', '951 issued'))
+                    : L('3 emitidas', '3 issued')}
               </span>
               <span className="text-[10px] text-indigo-300 font-medium block mt-0.5">
-                {isFortexa ? 'Anualizado' : isFashionStyles ? 'Q 179.4k facturados' : 'Modo Demo'}
+                {isFortexa
+                  ? L('Anualizado', 'Annualized')
+                  : isFashionStyles
+                    ? L(`${currencySymbol} 179.4k facturados`, `${currencySymbol}179.4k billed`)
+                    : L('Modo Demo', 'Demo Mode')}
               </span>
             </div>
 
             <div className="col-span-2 sm:col-span-1 bg-white/10 backdrop-blur-md rounded-2xl p-3 border border-white/10">
               <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">
-                {isInformal ? 'Régimen Fiscal' : isPequeno ? 'Régimen Fiscal' : 'Servicio SAT'}
+                {isInformal || isPequeno ? L('Régimen Fiscal', 'Tax Regime') : L('Servicio SAT', 'Tax Service')}
               </span>
               <span className="text-base sm:text-lg font-black text-emerald-400 block mt-0.5 flex items-center gap-1.5">
                 <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                {isInformal ? 'Exento / Informal' : isPequeno ? 'Pequeño Contribuyente' : 'Online FEL (12%)'}
+                {isInformal
+                  ? L('Exento / Informal', 'Tax-Exempt')
+                  : isPequeno
+                    ? L('Pequeño Contribuyente', 'Small Business (5%)')
+                    : L('Online FEL (12%)', 'Online E-Inv (12%)')}
               </span>
               <span className="text-[10px] text-slate-300 font-medium block mt-0.5">
-                {isInformal ? '0% IVA (Negocio no factura)' : isPequeno ? '5% Monotributo SAT' : 'DTE Infile GT'}
+                {isInformal
+                  ? L('0% IVA (Negocio no factura)', '0% VAT (No Tax Invoicing)')
+                  : isPequeno
+                    ? L('5% Monotributo SAT', '5% Flat Tax Rate')
+                    : L('DTE Infile GT', 'Certified E-Invoicing')}
               </span>
             </div>
           </div>
@@ -1191,7 +1293,7 @@ export default function LaunchpadHub({
             type="text"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Buscar módulo (ej. 'Inventario', 'FEL', 'Caja')..."
+            placeholder={L("Buscar módulo (ej. 'Inventario', 'FEL', 'Caja')...", "Search module (e.g. 'Inventory', 'Invoice', 'POS')...")}
             className="w-full pl-9 pr-4 py-2 rounded-xl text-xs bg-slate-50 border border-slate-200 text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
           />
           {searchTerm && (
@@ -1212,7 +1314,7 @@ export default function LaunchpadHub({
                 : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
               }`}
           >
-            Todos ({filteredCards.length})
+            {L('Todos', 'All')} ({filteredCards.length})
           </button>
           <button
             onClick={() => setActiveCategory('operaciones')}
@@ -1221,7 +1323,7 @@ export default function LaunchpadHub({
                 : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
               }`}
           >
-            Operaciones Comerciales
+            {L('Operaciones Comerciales', 'Commercial Operations')}
           </button>
           <button
             onClick={() => setActiveCategory('finanzas')}
@@ -1230,7 +1332,7 @@ export default function LaunchpadHub({
                 : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
               }`}
           >
-            Finanzas & Compras
+            {L('Finanzas & Compras', 'Finance & Purchases')}
           </button>
           <button
             onClick={() => setActiveCategory('gestion')}
@@ -1239,7 +1341,7 @@ export default function LaunchpadHub({
                 : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
               }`}
           >
-            Gestión & Talento
+            {L('Gestión & Talento', 'Management & Talent')}
           </button>
         </div>
       </div>
@@ -1282,12 +1384,18 @@ export default function LaunchpadHub({
                           ? 'bg-amber-100 text-amber-900 border-amber-300'
                           : 'bg-indigo-500/10 text-indigo-700 border-indigo-500/20'
                         }`}>
-                        {heroCard.isLocked ? '🔒 Módulo Pro' : isFortexa ? 'Módulo Principal SaaS' : heroCard.id === 'live_sales' ? 'TikTok Live Commerce' : 'Caja Principal POS'}
+                        {heroCard.isLocked
+                          ? L('🔒 Módulo Pro', '🔒 Pro Module')
+                          : isFortexa
+                            ? L('Módulo Principal SaaS', 'Main SaaS Module')
+                            : heroCard.id === 'live_sales'
+                              ? 'TikTok Live Commerce'
+                              : L('Caja Principal POS', 'Main POS Register')}
                       </span>
                       {!heroCard.isLocked && (
                         <span className="flex items-center gap-1 text-[11px] font-bold text-emerald-600">
                           <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                          En línea
+                          {L('En línea', 'Online')}
                         </span>
                       )}
                     </div>
@@ -1299,7 +1407,7 @@ export default function LaunchpadHub({
 
                 <span className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-white/80 border border-slate-200 text-xs font-bold text-slate-700 shadow-2xs shrink-0">
                   {heroCard.isLocked ? <Lock className="w-3.5 h-3.5 text-amber-600" /> : <Maximize2 className="w-3.5 h-3.5 text-indigo-600" />}
-                  {heroCard.isLocked ? 'Requiere Upgrade' : 'Módulo Destacado'}
+                  {heroCard.isLocked ? L('Requiere Upgrade', 'Upgrade Required') : L('Módulo Destacado', 'Featured Module')}
                 </span>
               </div>
 
@@ -1326,7 +1434,15 @@ export default function LaunchpadHub({
                     : 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-600/30'
                   }`}
               >
-                <span>{heroCard.isLocked ? 'Conocer Módulo' : isFortexa ? 'Gestionar Suscripciones' : heroCard.id === 'live_sales' ? 'Abrir Pantalla Live' : 'Abrir Terminal POS'}</span>
+                <span>
+                  {heroCard.isLocked
+                    ? L('Conocer Módulo', 'Learn More')
+                    : isFortexa
+                      ? L('Gestionar Suscripciones', 'Manage Subscriptions')
+                      : heroCard.id === 'live_sales'
+                        ? L('Abrir Pantalla Live', 'Open Live Screen')
+                        : L('Abrir Terminal POS', 'Open POS Terminal')}
+                </span>
                 {heroCard.isLocked ? <Lock className="w-3.5 h-3.5" /> : <ArrowRight className="w-3.5 h-3.5" />}
               </button>
             </div>
@@ -1385,9 +1501,9 @@ export default function LaunchpadHub({
               <span className="text-[11px] font-bold text-amber-700 truncate max-w-[160px]">{tallCard.metric}</span>
               <span className="inline-flex items-center gap-1 text-xs font-bold text-indigo-600 group-hover:translate-x-1 transition-all shrink-0">
                 {tallCard.isLocked ? (
-                  <><span>Conocer</span> <Lock className="w-3.5 h-3.5 text-amber-600" /></>
+                  <><span>{L('Conocer', 'Explore')}</span> <Lock className="w-3.5 h-3.5 text-amber-600" /></>
                 ) : (
-                  <><span>Abrir</span> <ArrowRight className="w-3.5 h-3.5" /></>
+                  <><span>{L('Abrir', 'Open')}</span> <ArrowRight className="w-3.5 h-3.5" /></>
                 )}
               </span>
             </div>
@@ -1465,12 +1581,12 @@ export default function LaunchpadHub({
                   }`}>
                   {card.isLocked ? (
                     <>
-                      <span>Conocer</span>
+                      <span>{L('Conocer', 'Explore')}</span>
                       <Lock className="w-3.5 h-3.5 text-amber-600" />
                     </>
                   ) : (
                     <>
-                      <span>Ingresar</span>
+                      <span>{L('Ingresar', 'Enter')}</span>
                       <ArrowRight className="w-3.5 h-3.5" />
                     </>
                   )}
@@ -1493,17 +1609,20 @@ export default function LaunchpadHub({
                 <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500" />
               </span>
               <h2 className="text-lg font-black tracking-tight text-slate-900 flex items-center gap-2">
-                Pulso Operativo del Negocio en Vivo
+                {L('Pulso Operativo del Negocio en Vivo', 'Live Business Operational Pulse')}
               </h2>
             </div>
             <p className="text-xs text-slate-500 mt-0.5">
-              Monitoreo activo de transacciones recientes, cobranza pendiente y compras urgentes por déficit de stock.
+              {L(
+                'Monitoreo activo de transacciones recientes, cobranza pendiente y compras urgentes por déficit de stock.',
+                'Active monitoring of recent transactions, pending receivables, and urgent restocking needs.'
+              )}
             </p>
           </div>
 
           <div className="flex items-center gap-2 text-xs font-bold text-indigo-700 bg-indigo-50 px-3 py-1.5 rounded-xl border border-indigo-200 shrink-0 self-start sm:self-auto">
             <Activity className="w-3.5 h-3.5 text-indigo-600" />
-            <span>Telemetría en Tiempo Real</span>
+            <span>{L('Telemetría en Tiempo Real', 'Real-Time Telemetry')}</span>
           </div>
         </div>
 
@@ -1522,13 +1641,13 @@ export default function LaunchpadHub({
                     <ReceiptText className="w-4 h-4" />
                   </div>
                   <div>
-                    <h3 className="font-bold text-slate-900 text-sm">Últimas Ventas & Facturas</h3>
-                    <p className="text-[10px] text-slate-400">Transacciones de hoy en cajas y FEL</p>
+                    <h3 className="font-bold text-slate-900 text-sm">{L('Últimas Ventas & Facturas', 'Recent Sales & Invoices')}</h3>
+                    <p className="text-[10px] text-slate-400">{L('Transacciones de hoy en cajas y FEL', "Today's POS & E-Invoice transactions")}</p>
                   </div>
                 </div>
 
                 <span className="px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold text-[10px]">
-                  {recentSales.length} Recientes
+                  {recentSales.length} {L('Recientes', 'Recent')}
                 </span>
               </div>
 
@@ -1558,14 +1677,14 @@ export default function LaunchpadHub({
 
             <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs">
               <span className="text-[11px] font-bold text-emerald-700 flex items-center gap-1">
-                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> Facturación Activa
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> {L('Facturación Activa', 'Invoicing Active')}
               </span>
               <button
                 type="button"
                 onClick={() => onNavigate(isFortexa ? 'ventas' : 'ventas')}
                 className="inline-flex items-center gap-1 font-bold text-indigo-600 hover:text-indigo-800 transition-colors cursor-pointer"
               >
-                <span>Ver historial completo</span>
+                <span>{L('Ver historial completo', 'View full history')}</span>
                 <ArrowRight className="w-3 h-3" />
               </button>
             </div>
@@ -1583,13 +1702,13 @@ export default function LaunchpadHub({
                     <Clock className="w-4 h-4" />
                   </div>
                   <div>
-                    <h3 className="font-bold text-slate-900 text-sm">Cuentas por Cobrar</h3>
-                    <p className="text-[10px] text-slate-400">Próximos vencimientos de crédito</p>
+                    <h3 className="font-bold text-slate-900 text-sm">{L('Cuentas por Cobrar', 'Accounts Receivable')}</h3>
+                    <p className="text-[10px] text-slate-400">{L('Próximos vencimientos de crédito', 'Upcoming credit due dates')}</p>
                   </div>
                 </div>
 
                 <span className="px-2.5 py-0.5 rounded-full bg-cyan-50 text-cyan-700 border border-cyan-200 font-bold text-[10px]">
-                  Q {totalCartera.toLocaleString('es-GT', { minimumFractionDigits: 0 })} Total
+                  {isEn ? `${currencySymbol}${totalCartera.toLocaleString(locale, { minimumFractionDigits: 0 })}` : `${currencySymbol} ${totalCartera.toLocaleString(locale, { minimumFractionDigits: 0 })}`} Total
                 </span>
               </div>
 
@@ -1601,12 +1720,12 @@ export default function LaunchpadHub({
                       <div className="flex items-center gap-1.5">
                         <span className="font-bold text-slate-800 text-xs truncate">{rec.cliente}</span>
                       </div>
-                      <p className="text-[10px] text-slate-400 font-mono mt-0.5">{rec.id} • Vence: {rec.fecha_venc}</p>
+                      <p className="text-[10px] text-slate-400 font-mono mt-0.5">{rec.id} • {L('Vence:', 'Due:')} {rec.fecha_venc}</p>
                     </div>
 
                     <div className="text-right shrink-0">
                       <span className="text-xs font-black text-slate-900 block font-mono">
-                        Q{rec.saldo.toLocaleString('es-GT', { minimumFractionDigits: 2 })}
+                        {money(rec.saldo)}
                       </span>
                       <span className={`inline-block px-1.5 py-0.2 rounded text-[9px] font-bold ${rec.urgencia === 'urgente'
                           ? 'bg-rose-50 text-rose-700 border border-rose-200'
@@ -1624,14 +1743,14 @@ export default function LaunchpadHub({
 
             <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs">
               <span className="text-[11px] font-bold text-slate-500">
-                Cartera al día
+                {L('Cartera al día', 'Portfolio up to date')}
               </span>
               <button
                 type="button"
                 onClick={() => onNavigate('clientes')}
                 className="inline-flex items-center gap-1 font-bold text-indigo-600 hover:text-indigo-800 transition-colors cursor-pointer"
               >
-                <span>Gestionar cartera</span>
+                <span>{L('Gestionar cartera', 'Manage portfolio')}</span>
                 <ArrowRight className="w-3 h-3" />
               </button>
             </div>
@@ -1649,13 +1768,13 @@ export default function LaunchpadHub({
                     <ShoppingCart className="w-4 h-4" />
                   </div>
                   <div>
-                    <h3 className="font-bold text-slate-900 text-sm">Déficit en Pre-Ventas</h3>
-                    <p className="text-[10px] text-slate-400">Cotizaciones con falta de stock</p>
+                    <h3 className="font-bold text-slate-900 text-sm">{L('Déficit en Pre-Ventas', 'Pre-Sale Stock Deficit')}</h3>
+                    <p className="text-[10px] text-slate-400">{L('Cotizaciones con falta de stock', 'Quotes with insufficient stock')}</p>
                   </div>
                 </div>
 
                 <span className="px-2.5 py-0.5 rounded-full bg-rose-50 text-rose-700 border border-rose-200 font-bold text-[10px]">
-                  {demandProducts.length} Ítems Faltantes
+                  {demandProducts.length} {L('Ítems Faltantes', 'Shortfall Items')}
                 </span>
               </div>
 
@@ -1668,16 +1787,16 @@ export default function LaunchpadHub({
                         <span className="font-bold text-slate-800 text-xs truncate">{p.nombre}</span>
                       </div>
                       <p className="text-[10px] text-slate-400 font-mono mt-0.5">
-                        SKU: {p.sku} • Stock: {p.stock} unid
+                        SKU: {p.sku} • Stock: {p.stock} {L('unid', 'units')}
                       </p>
                     </div>
 
                     <div className="text-right shrink-0">
                       <span className="px-2 py-0.5 rounded-lg bg-rose-50 text-rose-700 border border-rose-200 font-black text-xs font-mono block">
-                        -{p.deficit} unid
+                        -{p.deficit} {L('unid', 'units')}
                       </span>
                       <span className="text-[9px] text-amber-600 font-semibold block mt-0.5">
-                        Pidieron {p.solicitado}
+                        {L('Pidieron', 'Requested')} {p.solicitado}
                       </span>
                     </div>
                   </div>
@@ -1687,7 +1806,7 @@ export default function LaunchpadHub({
 
             <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs">
               <span className="text-[11px] font-bold text-rose-600 flex items-center gap-1">
-                <AlertTriangle className="w-3.5 h-3.5 text-rose-500" /> Reabastecer stock
+                <AlertTriangle className="w-3.5 h-3.5 text-rose-500" /> {L('Reabastecer stock', 'Restock inventory')}
               </span>
               <button
                 type="button"
@@ -1695,7 +1814,7 @@ export default function LaunchpadHub({
                 className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 font-bold text-xs transition-colors cursor-pointer"
               >
                 <Truck className="w-3.5 h-3.5 text-amber-700" />
-                <span>Pedir a Compras</span>
+                <span>{L('Pedir a Compras', 'Order via Purchases')}</span>
               </button>
             </div>
           </div>
@@ -1719,7 +1838,7 @@ export default function LaunchpadHub({
                   </div>
                   <div>
                     <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-400 text-slate-950 shadow-xs flex items-center gap-1 w-fit mb-1">
-                      <Lock className="w-3 h-3" /> Módulo Pro / Enterprise
+                      <Lock className="w-3 h-3" /> {L('Módulo Pro / Enterprise', 'Pro / Enterprise Module')}
                     </span>
                     <h3 className="text-lg font-black tracking-tight text-white">
                       {selectedUpgradeCard.title}
@@ -1744,7 +1863,7 @@ export default function LaunchpadHub({
             <div className="p-6 space-y-4 text-xs">
               <div className="space-y-1.5">
                 <h4 className="text-xs font-black uppercase tracking-wider text-slate-400">
-                  ¿Para qué sirve este módulo en tu negocio?
+                  {L('¿Para qué sirve este módulo en tu negocio?', 'How does this module help your business?')}
                 </h4>
                 <p className="text-slate-700 leading-relaxed text-[13px]">
                   {selectedUpgradeCard.description}
@@ -1755,20 +1874,38 @@ export default function LaunchpadHub({
               <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-2.5">
                 <span className="text-[11px] font-black text-slate-900 flex items-center gap-1.5">
                   <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
-                  Beneficios al Activar este Módulo en tu Cuenta:
+                  {L('Beneficios al Activar este Módulo en tu Cuenta:', 'Benefits of Enabling This Module on Your Account:')}
                 </span>
                 <ul className="space-y-2 text-slate-600">
                   <li className="flex items-start gap-2">
                     <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
-                    <span><strong>Activación Inmediata en la Nube:</strong> Fortexa Technologies enciende este módulo en tu base de datos en menos de 15 minutos sin reinstalaciones.</span>
+                    <span>
+                      <strong>{L('Activación Inmediata en la Nube:', 'Instant Cloud Activation:')}</strong>{' '}
+                      {L(
+                        'Fortexa Technologies enciende este módulo en tu base de datos en menos de 15 minutos sin reinstalaciones.',
+                        'Fortexa Technologies activates this module on your workspace in under 15 minutes with zero reinstalls.'
+                      )}
+                    </span>
                   </li>
                   <li className="flex items-start gap-2">
                     <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
-                    <span><strong>Capacitación & Soporte Incluido:</strong> Te acompañamos paso a paso para que tu equipo aprenda a usarlo desde el primer día.</span>
+                    <span>
+                      <strong>{L('Capacitación & Soporte Incluido:', 'Training & Support Included:')}</strong>{' '}
+                      {L(
+                        'Te acompañamos paso a paso para que tu equipo aprenda a usarlo desde el primer día.',
+                        'We guide your team step by step so everyone is productive from day one.'
+                      )}
+                    </span>
                   </li>
                   <li className="flex items-start gap-2">
                     <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
-                    <span><strong>Facturación Mensual Flexible:</strong> Agrégalo como un add-on adicional a tu suscripción actual.</span>
+                    <span>
+                      <strong>{L('Facturación Mensual Flexible:', 'Flexible Monthly Billing:')}</strong>{' '}
+                      {L(
+                        'Agrégalo como un add-on adicional a tu suscripción actual.',
+                        'Add it as a flexible add-on to your current subscription.'
+                      )}
+                    </span>
                   </li>
                 </ul>
               </div>
@@ -1776,11 +1913,11 @@ export default function LaunchpadHub({
               {/* Banner de Precios Estimados */}
               <div className="flex items-center justify-between p-3.5 rounded-xl bg-gradient-to-r from-indigo-50 to-purple-50 border border-indigo-200">
                 <div>
-                  <p className="text-[10px] font-bold text-indigo-900 uppercase">Planes Comerciales Disponibles</p>
-                  <p className="text-xs text-indigo-700 font-semibold">Incluido en IntegraPro Comercial o Add-on</p>
+                  <p className="text-[10px] font-bold text-indigo-900 uppercase">{L('Planes Comerciales Disponibles', 'Available Commercial Plans')}</p>
+                  <p className="text-xs text-indigo-700 font-semibold">{L('Incluido en IntegraPro Comercial o Add-on', 'Included in IntegraPro Business or Add-on')}</p>
                 </div>
                 <div className="text-right">
-                  <span className="text-sm font-black text-indigo-900 font-mono">Desde Q 99 / mes</span>
+                  <span className="text-sm font-black text-indigo-900 font-mono">{L('Desde Q 99 / mes', 'From $15 / mo')}</span>
                 </div>
               </div>
 
@@ -1788,14 +1925,16 @@ export default function LaunchpadHub({
               <div className="pt-2 flex flex-col sm:flex-row items-center gap-2.5">
                 <a
                   href={`https://api.whatsapp.com/send?phone=50223349000&text=${encodeURIComponent(
-                    `Hola Fortexa Technologies, soy de la empresa "${selectedEmpresa?.nombre || 'Mi Empresa'}" y me interesa cotizar y activar el módulo de "${selectedUpgradeCard.title}".`
+                    isEn
+                      ? `Hello Fortexa Technologies, I am from "${selectedEmpresa?.nombre || 'My Company'}" and I would like to quote and activate the "${selectedUpgradeCard.title}" module.`
+                      : `Hola Fortexa Technologies, soy de la empresa "${selectedEmpresa?.nombre || 'Mi Empresa'}" y me interesa cotizar y activar el módulo de "${selectedUpgradeCard.title}".`
                   )}`}
                   target="_blank"
                   rel="noreferrer"
                   className="w-full sm:flex-1 py-3 px-4 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs rounded-xl shadow-lg shadow-emerald-900/20 active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer text-center"
                 >
                   <ExternalLink className="w-4 h-4" />
-                  <span>Solicitar Activación por WhatsApp</span>
+                  <span>{L('Solicitar Activación por WhatsApp', 'Request Activation via WhatsApp')}</span>
                 </a>
 
                 <button
@@ -1803,7 +1942,7 @@ export default function LaunchpadHub({
                   onClick={() => setSelectedUpgradeCard(null)}
                   className="w-full sm:w-auto py-3 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-all cursor-pointer"
                 >
-                  Volver al Menú
+                  {L('Volver al Menú', 'Back to Menu')}
                 </button>
               </div>
             </div>
@@ -1818,15 +1957,16 @@ export default function LaunchpadHub({
           <div className="w-12 h-12 rounded-2xl bg-slate-100 text-slate-400 flex items-center justify-center mx-auto mb-3">
             <Search className="w-6 h-6" />
           </div>
-          <h3 className="font-bold text-slate-800 text-base">No se encontraron módulos</h3>
+          <h3 className="font-bold text-slate-800 text-base">{L('No se encontraron módulos', 'No modules found')}</h3>
           <p className="text-xs text-slate-500 mt-1">
-            No hay ningún módulo que coincida con "<span className="font-semibold text-slate-700">{searchTerm}</span>".
+            {L('No hay ningún módulo que coincida con ', 'No module matches ')}
+            "<span className="font-semibold text-slate-700">{searchTerm}</span>".
           </p>
           <button
             onClick={() => { setSearchTerm(''); setActiveCategory('all'); }}
             className="mt-4 px-4 py-2 bg-indigo-50 text-indigo-700 rounded-xl text-xs font-bold hover:bg-indigo-100 transition-colors"
           >
-            Restablecer búsqueda
+            {L('Restablecer búsqueda', 'Reset search')}
           </button>
         </div>
       )}

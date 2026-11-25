@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { NavigationTab, User, EmpresaSaaS } from '../types';
+import { useLanguage } from '../context/LanguageContext';
 import { 
   LayoutDashboard, 
   Boxes, 
@@ -64,6 +65,7 @@ export default function Sidebar({
   onClose,
   onLogout
 }: SidebarProps) {
+  const { L, isEn } = useLanguage();
   const [isCollapsed, setIsCollapsed] = useState<boolean>(() => {
     try {
       return localStorage.getItem('integrapro_sidebar_collapsed') === 'true';
@@ -89,41 +91,52 @@ export default function Sidebar({
   const hasPosEnabled = !isFortexa && currentEmpresa?.modules?.pos !== false;
   const hasLiveEnabled = !isFortexa && (currentEmpresa?.modules?.live_sales ?? activeEmpresaId === 1);
 
+  const trRole = (role?: string) => {
+    if (!isEn || !role) return role || '';
+    const r = role.toLowerCase();
+    if (r === 'administrador' || r === 'admin') return 'Administrator';
+    if (r.includes('administrador de empresa')) return 'Company Admin';
+    if (r === 'cajero' || r === 'cajera') return 'Cashier';
+    if (r === 'vendedor' || r === 'vendedora') return 'Sales Rep';
+    if (r === 'contador' || r === 'contadora') return 'Accountant';
+    return role;
+  };
+
   const commercialItems: MenuItem[] = isFortexa ? [
     { 
       id: 'fortexa_apps', 
-      label: 'Suscripciones & Apps', 
+      label: L('Suscripciones & Apps', 'Subscriptions & Apps'), 
       icon: Cpu,
-      badge: { text: 'SaaS / Cortes', variant: 'indigo' }
+      badge: { text: L('SaaS / Cortes', 'SaaS / Billing'), variant: 'indigo' }
     },
     { 
       id: 'ventas', 
-      label: 'Ventas & Facturación (FEL)', 
+      label: L('Ventas & Facturación (FEL)', 'Sales & E-Invoicing'), 
       icon: ReceiptText,
       badge: { text: 'B2B', variant: 'emerald' }
     },
     { 
       id: 'clientes', 
-      label: 'Clientes & Flotas', 
+      label: L('Clientes & Flotas', 'Clients & Fleets'), 
       icon: Users,
     },
     { 
       id: 'inventario', 
-      label: 'Hardware & Equipos', 
+      label: L('Hardware & Equipos', 'Hardware & Equipment'), 
       icon: Boxes,
       badge: { text: 'Tech', variant: 'amber' }
     },
     { 
       id: 'asistencia', 
-      label: 'Kiosco de Asistencia', 
+      label: L('Kiosco de Asistencia', 'Attendance Kiosk'), 
       icon: Clock3,
     },
   ] : [
     ...(hasPosEnabled ? [{ 
       id: 'pos' as NavigationTab, 
-      label: 'Punto de Venta (POS)', 
+      label: L('Punto de Venta (POS)', 'Point of Sale (POS)'), 
       icon: Zap,
-      badge: { text: 'Caja', variant: 'emerald' as const }
+      badge: { text: L('Caja', 'Register'), variant: 'emerald' as const }
     }] : []),
     ...(hasLiveEnabled ? [{ 
       id: 'live_sales' as NavigationTab, 
@@ -133,23 +146,23 @@ export default function Sidebar({
     }] : []),
     { 
       id: 'inventario', 
-      label: 'Inventario & Bodega', 
+      label: L('Inventario & Bodega', 'Inventory & Warehouse'), 
       icon: Boxes,
       badge: { text: 'Stock', variant: 'amber' }
     },
     { 
       id: 'ventas', 
-      label: 'Ventas & Facturación', 
+      label: L('Ventas & Facturación', 'Sales & Invoicing'), 
       icon: ReceiptText,
     },
     { 
       id: 'clientes', 
-      label: 'Clientes & Créditos', 
+      label: L('Clientes & Créditos', 'Clients & Credit'), 
       icon: Users,
     },
     { 
       id: 'asistencia', 
-      label: 'Kiosco de Asistencia', 
+      label: L('Kiosco de Asistencia', 'Attendance Kiosk'), 
       icon: Clock3,
     },
   ];
@@ -157,66 +170,66 @@ export default function Sidebar({
   const systemItems: MenuItem[] = [
     { 
       id: 'rrhh', 
-      label: 'Recursos Humanos', 
+      label: L('Recursos Humanos', 'Human Resources'), 
       icon: UserCheck,
     },
     { 
       id: 'sucursales', 
-      label: 'Red de Sucursales', 
+      label: L('Red de Sucursales', 'Branch Network'), 
       icon: Store,
     },
     { 
       id: 'token_scraper', 
-      label: 'Token Scraper Chrome', 
+      label: L('Token Scraper Chrome', 'Chrome Scraper Token'), 
       icon: Key,
       badge: { text: 'API', variant: 'indigo' }
     },
     { 
       id: 'configuracion', 
-      label: 'Configuración Global', 
+      label: L('Configuración Global', 'Global Settings'), 
       icon: Settings,
     },
   ];
 
   const rawMenuSections: MenuSection[] = [
     {
-      title: 'Principal',
+      title: L('Principal', 'Main'),
       items: [
         { 
           id: 'hub', 
-          label: 'Menú de Módulos (Inicio)', 
+          label: L('Menú de Módulos (Inicio)', 'Modules Menu (Home)'), 
           icon: LayoutGrid,
-          badge: { text: 'Tarjetas', variant: 'indigo' }
+          badge: { text: L('Tarjetas', 'Cards'), variant: 'indigo' }
         },
         { 
           id: 'dashboard', 
-          label: 'Dashboard Ejecutivo', 
+          label: L('Dashboard Ejecutivo', 'Executive Dashboard'), 
           icon: LayoutDashboard,
         },
       ]
     },
     {
-      title: 'Operaciones Comerciales',
+      title: L('Operaciones Comerciales', 'Commercial Operations'),
       items: commercialItems
     },
     {
-      title: 'Finanzas & Compras',
+      title: L('Finanzas & Compras', 'Finance & Purchases'),
       items: [
         { 
           id: 'compras', 
-          label: 'Compras & Proveedores', 
+          label: L('Compras & Proveedores', 'Purchases & Suppliers'), 
           icon: Truck,
         },
         { 
           id: 'contabilidad', 
-          label: 'Contabilidad & SAT', 
+          label: L('Contabilidad & SAT', 'Accounting & Tax'), 
           icon: Landmark,
-          badge: { text: 'FEL', variant: 'indigo' }
+          badge: { text: L('FEL', 'Tax'), variant: 'indigo' }
         },
       ]
     },
     {
-      title: 'Empresa & Sistema',
+      title: L('Empresa & Sistema', 'Company & System'),
       items: systemItems
     }
   ];
@@ -247,7 +260,7 @@ export default function Sidebar({
       const isStoreConfig = item.id === 'configuracion' && isLiveOnlyCompany;
       return {
         ...item,
-        label: isStoreConfig ? 'Datos de Mi Tienda' : item.label,
+        label: isStoreConfig ? L('Datos de Mi Tienda', 'My Store Info') : item.label,
         icon: isStoreConfig ? Store : item.icon,
         badge: locked ? { text: '🔒 Pro', variant: 'amber' as const } : item.badge
       };
@@ -296,7 +309,7 @@ export default function Sidebar({
               </div>
               <p className="text-[10px] text-slate-400 font-medium truncate flex items-center gap-1 mt-0.5">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
-                <span className="truncate">{user.empresa_nombre || 'Corporación IntegraPro'}</span>
+                <span className="truncate">{user.empresa_nombre || L('Corporación IntegraPro', 'IntegraPro Corp')}</span>
               </p>
             </div>
           )}
@@ -309,7 +322,7 @@ export default function Sidebar({
               type="button"
               onClick={toggleCollapsed}
               className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800/60 rounded-lg transition-colors border border-transparent hover:border-slate-700/60"
-              title="Colapsar menú lateral"
+              title={L('Colapsar menú lateral', 'Collapse sidebar')}
             >
               <ChevronLeft className="w-4 h-4" />
             </button>
@@ -320,7 +333,7 @@ export default function Sidebar({
               type="button"
               onClick={onClose}
               className="p-1.5 text-slate-400 hover:text-rose-400 hover:bg-slate-800/80 rounded-lg transition-colors"
-              title="Cerrar panel lateral"
+              title={L('Cerrar panel lateral', 'Close sidebar')}
             >
               <X className="w-4 h-4" />
             </button>
@@ -335,7 +348,7 @@ export default function Sidebar({
             type="button"
             onClick={toggleCollapsed}
             className="w-full py-1.5 text-slate-400 hover:text-white hover:bg-slate-800/80 rounded-xl transition-colors border border-slate-800 flex items-center justify-center"
-            title="Expandir menú lateral"
+            title={L('Expandir menú lateral', 'Expand sidebar')}
           >
             <ChevronRight className="w-3.5 h-3.5" />
           </button>
@@ -369,7 +382,12 @@ export default function Sidebar({
                       type="button"
                       onClick={() => {
                         if (isItemLocked(item.id)) {
-                          alert(`🔒 Módulo "${item.label}" no incluido en tu plan actual.\n\nPara activarlo en tu cuenta de IntegraPro, solicítalo a Fortexa Technologies desde el Menú Principal.`);
+                          alert(
+                            L(
+                              `🔒 Módulo "${item.label}" no incluido en tu plan actual.\n\nPara activarlo en tu cuenta de IntegraPro, solicítalo a Fortexa Technologies desde el Menú Principal.`,
+                              `🔒 Module "${item.label}" is not included in your current plan.\n\nTo enable it on your IntegraPro account, request activation from Fortexa Technologies in the Main Menu.`
+                            )
+                          );
                           onTabChange('hub');
                         } else {
                           onTabChange(item.id);
@@ -435,12 +453,12 @@ export default function Sidebar({
           <div className="flex items-center justify-between mb-1">
             <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-400 flex items-center gap-1">
               <Sparkles className="w-3 h-3 text-indigo-400" />
-              v2.1 Disponible
+              {L('v2.1 Disponible', 'v2.1 Available')}
             </span>
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
           </div>
           <p className="text-[10px] text-slate-400 leading-tight">
-            Nuevas mejoras listas para aplicar.
+            {L('Nuevas mejoras listas para aplicar.', 'New improvements ready to install.')}
           </p>
           <button
             type="button"
@@ -448,7 +466,7 @@ export default function Sidebar({
             className="mt-2 w-full py-1 px-2 bg-indigo-600/80 hover:bg-indigo-600 text-white text-[10px] font-bold rounded-lg transition-colors flex items-center justify-center gap-1.5 shadow-sm"
           >
             <RefreshCw className="w-3 h-3" />
-            <span>Actualizar Sistema</span>
+            <span>{L('Actualizar Sistema', 'Update System')}</span>
           </button>
         </div>
       )}
@@ -459,17 +477,17 @@ export default function Sidebar({
           <a
             href="/admin"
             className="flex items-center gap-2 px-2.5 py-1.5 text-[11px] font-medium text-slate-400 hover:text-indigo-300 hover:bg-slate-800/60 rounded-lg transition-colors border border-slate-800/60 mb-2.5"
-            title="Abrir Panel Filament ERP"
+            title={L('Abrir Panel Filament ERP', 'Open Filament Admin Panel')}
           >
             <ShieldCheck className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
-            <span className="truncate">Panel Filament Admin</span>
+            <span className="truncate">{L('Panel Filament Admin', 'Filament Admin Panel')}</span>
             <ExternalLink className="w-3 h-3 ml-auto opacity-70 shrink-0" />
           </a>
         ) : (
           <a
             href="/admin"
             className="flex items-center justify-center p-1.5 text-slate-400 hover:text-indigo-300 hover:bg-slate-800/60 rounded-lg transition-colors border border-slate-800/60 mb-2.5"
-            title="Panel Filament Admin"
+            title={L('Panel Filament Admin', 'Filament Admin Panel')}
           >
             <ShieldCheck className="w-4 h-4 text-indigo-400" />
           </a>
@@ -491,7 +509,7 @@ export default function Sidebar({
                   {user.name}
                 </p>
                 <p className="text-[10px] text-slate-400 font-medium truncate leading-tight">
-                  {user.role}
+                  {trRole(user.role)}
                 </p>
               </div>
             )}
@@ -512,10 +530,10 @@ export default function Sidebar({
             className={`mt-3 w-full flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 border border-rose-500/30 text-xs font-bold transition-all shadow-sm cursor-pointer ${
               isCollapsed ? 'p-2' : ''
             }`}
-            title="Cerrar sesión"
+            title={L('Cerrar sesión', 'Sign out')}
           >
             <LogOut className="w-4 h-4 text-rose-400" />
-            {!isCollapsed && <span>Cerrar Sesión</span>}
+            {!isCollapsed && <span>{L('Cerrar Sesión', 'Sign Out')}</span>}
           </button>
         )}
       </div>

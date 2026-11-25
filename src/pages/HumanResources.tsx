@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { PagoSalarioNomina, SuspensionEmpleado, HorarioEmpleado } from '../types';
 import { useTimeFormat } from '../context/TimeFormatContext';
+import { useLanguage } from '../context/LanguageContext';
 import DateInputWithCalendar from '../components/DateInputWithCalendar';
 import SpecificTimePicker, { calculateTimeDifference } from '../components/SpecificTimePicker';
 
@@ -52,10 +53,108 @@ interface AsistenciaItem {
 }
 
 export default function HumanResources() {
+  const { L, money, currencySymbol, isEn } = useLanguage();
   const { timeFormat, toggleTimeFormat, formatTime } = useTimeFormat();
   const [activeTab, setActiveTab] = useState<'empleados' | 'asistencias' | 'nomina' | 'liquidaciones' | 'suspensiones' | 'horarios'>('empleados');
   const [searchTerm, setSearchTerm] = useState('');
   const [notificationToast, setNotificationToast] = useState<string | null>(null);
+
+  const trEmpStatus = (estado: EmpleadoItem['estado']) => {
+    switch (estado) {
+      case 'Activo': return L('Activo', 'Active');
+      case 'Suspendido': return L('Suspendido', 'Suspended');
+      case 'Vacaciones': return L('Vacaciones', 'On Vacation');
+      case 'Baja': return L('Baja', 'Terminated');
+      case 'Inactivo': return L('Inactivo', 'Inactive');
+      default: return estado;
+    }
+  };
+
+  const trAttendanceStatus = (estado: AsistenciaItem['estado']) => {
+    switch (estado) {
+      case 'Puntual': return L('Puntual', 'On Time');
+      case 'Tarde': return L('Tarde', 'Late');
+      case 'Falta': return L('Falta', 'Absent');
+      default: return estado;
+    }
+  };
+
+  const trBranch = (val: string) => {
+    if (!isEn) return val;
+    return val
+      .replace(/^Sucursal Central$/i, 'Central Branch')
+      .replace(/^Sucursal Norte$/i, 'North Branch')
+      .replace(/^Sucursal Sur$/i, 'South Branch')
+      .replace(/^Central$/i, 'Central')
+      .replace(/^Norte$/i, 'North')
+      .replace(/^Sur$/i, 'South');
+  };
+
+  const trRole = (val: string) => {
+    if (!isEn) return val;
+    const map: Record<string, string> = {
+      'Cajero Principal / POS': 'Lead Cashier / POS',
+      'Cajero Principal': 'Lead Cashier',
+      'Encargada de Bodega e Inventario': 'Warehouse & Inventory Lead',
+      'Encargada de Bodega': 'Warehouse Lead',
+      'Vendedor de Mostrador': 'Counter Sales Rep',
+      'Vendedor Mostrador': 'Counter Sales Rep',
+      'Gerente de Sucursal': 'Branch Manager',
+      'Gerente Sucursal': 'Branch Manager',
+      'Gerente Comercial': 'Commercial Manager',
+    };
+    return map[val] || val;
+  };
+
+  const trSuspensionReason = (val: string) => {
+    if (!isEn) return val;
+    const map: Record<string, string> = {
+      'IGSS Accidente': 'Social Security - Accident',
+      'IGSS Enfermedad Común': 'Social Security - Common Illness',
+      'IGSS Maternidad': 'Social Security - Maternity',
+      'Sanción Disciplinaria': 'Disciplinary Action',
+      'Permiso sin goce de sueldo': 'Unpaid Leave',
+    };
+    return map[val] || val;
+  };
+
+  const trSuspensionDesc = (val: string) => {
+    if (!isEn) return val;
+    const map: Record<string, string> = {
+      'Accidente en motocicleta en trayecto a laborar. Constancia médica IGSS #89451.':
+        'Motorcycle accident while commuting to work. Social Security medical note #89451.',
+      'Reposo médico por cuadro gripal severo.':
+        'Medical rest for severe flu.',
+      'Registro de suspensión laboral':
+        'Work suspension record',
+    };
+    return map[val] || val;
+  };
+
+  const trShiftName = (val: string) => {
+    if (!isEn) return val;
+    const map: Record<string, string> = {
+      'Turno Diurno Completo (Administrativo)': 'Full Day Shift (Administrative)',
+      'Turno Tienda / POS Rotativo': 'Rotating Store / POS Shift',
+      'Turno Bodega / Despacho Matutino': 'Morning Warehouse / Dispatch Shift',
+      'Turno Cierre Nocturno': 'Evening Closing Shift',
+    };
+    return map[val] || val;
+  };
+
+  const trWorkDays = (val: string) => {
+    if (!isEn) return val;
+    return val
+      .replace(/Lunes a Viernes/gi, 'Monday to Friday')
+      .replace(/Lunes a Sábado/gi, 'Monday to Saturday')
+      .replace(/Lunes a Domingo/gi, 'Monday to Sunday')
+      .replace(/Martes a Domingo/gi, 'Tuesday to Sunday');
+  };
+
+  const trHoursWorked = (val: string) => {
+    if (!isEn) return val;
+    return val === 'En turno' ? 'On shift' : val;
+  };
 
   // Modales Administrativos de RRHH
   const [showNewEmployeeModal, setShowNewEmployeeModal] = useState(false);
@@ -299,7 +398,10 @@ export default function HumanResources() {
     const existingIndex = asistenciasList.findIndex(a => a.empleado === emp.nombre && a.fecha === '16/11/2026');
     if (existingIndex >= 0) {
       if (asistenciasList[existingIndex].horaEntrada !== '---') {
-        showToast(`El colaborador ${emp.nombre} ya tiene registrada su hora de entrada (${asistenciasList[existingIndex].horaEntrada}).`);
+        showToast(L(
+          `El colaborador ${emp.nombre} ya tiene registrada su hora de entrada (${asistenciasList[existingIndex].horaEntrada}).`,
+          `Employee ${emp.nombre} already clocked in at ${asistenciasList[existingIndex].horaEntrada}.`
+        ));
         return;
       }
       const updated = [...asistenciasList];
@@ -325,7 +427,10 @@ export default function HumanResources() {
       setAsistenciasList([nuevo, ...asistenciasList]);
     }
 
-    const msg = `✅ Entrada registrada a las ${horaActualStr} para ${emp.nombre} (${estado}).`;
+    const msg = L(
+      `✅ Entrada registrada a las ${horaActualStr} para ${emp.nombre} (${trAttendanceStatus(estado)}).`,
+      `✅ Clock-in recorded at ${horaActualStr} for ${emp.nombre} (${trAttendanceStatus(estado)}).`
+    );
     showToast(msg);
   };
 
@@ -340,11 +445,17 @@ export default function HumanResources() {
     if (existingIndex >= 0) {
       const rec = asistenciasList[existingIndex];
       if (rec.horaEntrada === '---') {
-        showToast(`No se puede marcar salida: ${emp.nombre} aún no tiene registrada su entrada.`);
+        showToast(L(
+          `No se puede marcar salida: ${emp.nombre} aún no tiene registrada su entrada.`,
+          `Cannot clock out: ${emp.nombre} has not clocked in yet.`
+        ));
         return;
       }
       if (rec.horaSalida !== '---') {
-        showToast(`El colaborador ${emp.nombre} ya marcó salida hoy a las ${rec.horaSalida}.`);
+        showToast(L(
+          `El colaborador ${emp.nombre} ya marcó salida hoy a las ${rec.horaSalida}.`,
+          `Employee ${emp.nombre} already clocked out today at ${rec.horaSalida}.`
+        ));
         return;
       }
       const updated = [...asistenciasList];
@@ -354,9 +465,15 @@ export default function HumanResources() {
         horasTrabajadas: '8h 30m'
       };
       setAsistenciasList(updated);
-      showToast(`🔴 Salida registrada a las ${horaActualStr} para ${emp.nombre}. ¡Feliz descanso!`);
+      showToast(L(
+        `🔴 Salida registrada a las ${horaActualStr} para ${emp.nombre}. ¡Feliz descanso!`,
+        `🔴 Clock-out recorded at ${horaActualStr} for ${emp.nombre}. Have a great rest!`
+      ));
     } else {
-      showToast(`No se puede marcar salida sin registro previo de entrada.`);
+      showToast(L(
+        'No se puede marcar salida sin registro previo de entrada.',
+        'Cannot clock out without a prior clock-in record.'
+      ));
     }
   };
 
@@ -396,7 +513,10 @@ export default function HumanResources() {
     }
 
     setShowManualAttendanceModal(false);
-    showToast(`Asistencia registrada para ${emp.nombre}: Entrada ${entradaFmt} - Salida ${salidaFmt} (${dur.formatted}).`);
+    showToast(L(
+      `Asistencia registrada para ${emp.nombre}: Entrada ${entradaFmt} - Salida ${salidaFmt} (${dur.formatted}).`,
+      `Attendance recorded for ${emp.nombre}: In ${entradaFmt} - Out ${salidaFmt} (${dur.formatted}).`
+    ));
   };
 
   // Cálculo de liquidación en vivo (Sincronizado exactamente con GuatemalaStrategy.php de Laravel)
@@ -487,7 +607,7 @@ export default function HumanResources() {
       const reader = new FileReader();
       reader.onloadend = () => {
         setNewEmployee(prev => ({ ...prev, avatar: reader.result as string }));
-        showToast(`Fotografía "${file.name}" cargada correctamente.`);
+        showToast(L(`Fotografía "${file.name}" cargada correctamente.`, `Photo "${file.name}" uploaded successfully.`));
       };
       reader.readAsDataURL(file);
     }
@@ -513,7 +633,7 @@ export default function HumanResources() {
     };
     setEmpleados([...empleados, nuevo]);
     setShowNewEmployeeModal(false);
-    showToast(`Colaborador "${nuevo.nombre}" registrado exitosamente.`);
+    showToast(L(`Colaborador "${nuevo.nombre}" registrado exitosamente.`, `Employee "${nuevo.nombre}" registered successfully.`));
     setNewEmployee({
       nombre: '',
       dpi: '',
@@ -549,7 +669,7 @@ export default function HumanResources() {
     // Actualizar estado del colaborador
     setEmpleados(empleados.map(e => e.id === emp.id ? { ...e, estado: 'Suspendido' } : e));
     setShowNewSuspensionModal(false);
-    showToast(`Suspensión registrada para ${emp.nombre}.`);
+    showToast(L(`Suspensión registrada para ${emp.nombre}.`, `Suspension recorded for ${emp.nombre}.`));
     setNewSuspension({
       id_empleado: 1,
       fecha_inicio: new Date().toISOString().split('T')[0],
@@ -577,7 +697,10 @@ export default function HumanResources() {
     };
     setHorarios([...horarios, creado]);
     setShowNewHorarioModal(false);
-    showToast(`Turno "${creado.nombre_turno}" registrado exitosamente (${dur.formatted}/día, ±${creado.tolerancia_minutos} min tolerancia).`);
+    showToast(L(
+      `Turno "${creado.nombre_turno}" registrado exitosamente (${dur.formatted}/día, ±${creado.tolerancia_minutos} min tolerancia).`,
+      `Shift "${creado.nombre_turno}" created successfully (${dur.formatted}/day, ±${creado.tolerancia_minutos} min grace period).`
+    ));
     setNewHorario({
       nombre_turno: '',
       hora_entrada: '08:00',
@@ -609,12 +732,12 @@ export default function HumanResources() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-slate-200">
         <div>
           <h1 className="text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2.5">
-            Recursos Humanos & Planilla
+            {L('Recursos Humanos & Planilla', 'Human Resources & Payroll')}
             <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-purple-50 text-purple-700 border border-purple-200">
-              Control Laboral
+              {L('Control Laboral', 'Workforce Control')}
             </span>
           </h1>
-          <p className="text-xs text-slate-500 font-medium">Gestión de personal, control de asistencias y simulador de liquidaciones laborales</p>
+          <p className="text-xs text-slate-500 font-medium">{L('Gestión de personal, control de asistencias y simulador de liquidaciones laborales', 'Staff management, attendance tracking, and employee severance simulator')}</p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
@@ -624,7 +747,7 @@ export default function HumanResources() {
             className="px-3.5 py-2.5 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 shadow-sm transition-all flex items-center gap-2"
           >
             <Calculator className="w-4 h-4 text-purple-600" />
-            <span>Calcular Liquidación</span>
+            <span>{L('Calcular Liquidación', 'Calculate Severance')}</span>
           </button>
 
           <button 
@@ -633,7 +756,7 @@ export default function HumanResources() {
             className="px-4 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold shadow-md shadow-purple-600/25 transition-all flex items-center gap-2"
           >
             <UserPlus className="w-4 h-4" />
-            <span>Nuevo Colaborador</span>
+            <span>{L('Nuevo Colaborador', 'New Employee')}</span>
           </button>
         </div>
       </div>
@@ -642,9 +765,9 @@ export default function HumanResources() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
           <div>
-            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Planilla Activa</span>
-            <p className="text-2xl font-black text-slate-900 mt-1">{empleados.length} Colaboradores</p>
-            <span className="text-[11px] font-semibold text-emerald-600">3 sucursales cubiertas</span>
+            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">{L('Planilla Activa', 'Active Headcount')}</span>
+            <p className="text-2xl font-black text-slate-900 mt-1">{empleados.length} {L('Colaboradores', 'Employees')}</p>
+            <span className="text-[11px] font-semibold text-emerald-600">{L('3 sucursales cubiertas', '3 branches covered')}</span>
           </div>
           <div className="w-10 h-10 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center">
             <UserPlus className="w-5 h-5" />
@@ -653,9 +776,9 @@ export default function HumanResources() {
 
         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
           <div>
-            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Costo Mensual Nómina</span>
-            <p className="text-2xl font-black text-slate-900 mt-1">Q {empleados.reduce((a, b) => a + b.salarioBase, 0).toLocaleString('es-GT', { minimumFractionDigits: 2 })}</p>
-            <span className="text-[11px] font-semibold text-slate-500">Salarios base fijos</span>
+            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">{L('Costo Mensual Nómina', 'Monthly Payroll Cost')}</span>
+            <p className="text-2xl font-black text-slate-900 mt-1">{money(empleados.reduce((a, b) => a + b.salarioBase, 0))}</p>
+            <span className="text-[11px] font-semibold text-slate-500">{L('Salarios base fijos', 'Fixed base salaries')}</span>
           </div>
           <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
             <DollarSign className="w-5 h-5" />
@@ -664,9 +787,9 @@ export default function HumanResources() {
 
         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
           <div>
-            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Puntualidad Hoy</span>
+            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">{L('Puntualidad Hoy', "Today's Punctuality")}</span>
             <p className="text-2xl font-black text-slate-900 mt-1">75%</p>
-            <span className="text-[11px] font-semibold text-amber-600">1 llegada tarde</span>
+            <span className="text-[11px] font-semibold text-amber-600">{L('1 llegada tarde', '1 late arrival')}</span>
           </div>
           <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
             <Clock className="w-5 h-5" />
@@ -675,9 +798,9 @@ export default function HumanResources() {
 
         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
           <div>
-            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Vacaciones / Permisos</span>
-            <p className="text-2xl font-black text-purple-600 mt-1">1 en descanso</p>
-            <span className="text-[11px] font-semibold text-purple-700">Elena Reyes (Suc. Sur)</span>
+            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">{L('Vacaciones / Permisos', 'Vacation / Time Off')}</span>
+            <p className="text-2xl font-black text-purple-600 mt-1">{L('1 en descanso', '1 on leave')}</p>
+            <span className="text-[11px] font-semibold text-purple-700">{L('Elena Reyes (Suc. Sur)', 'Elena Reyes (South Br.)')}</span>
           </div>
           <div className="w-10 h-10 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center">
             <Calendar className="w-5 h-5" />
@@ -698,7 +821,7 @@ export default function HumanResources() {
                   : 'text-slate-500 hover:text-slate-800'
               }`}
             >
-              Directorio ({empleados.length})
+              {L('Directorio', 'Directory')} ({empleados.length})
             </button>
             <button
               onClick={() => setActiveTab('asistencias')}
@@ -708,9 +831,9 @@ export default function HumanResources() {
                   : 'text-slate-500 hover:text-slate-800'
               }`}
             >
-              <span>Control de Asistencias</span>
+              <span>{L('Control de Asistencias', 'Attendance Log')}</span>
               <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-indigo-100 text-indigo-800 font-extrabold">
-                Auditoría
+                {L('Auditoría', 'Audit')}
               </span>
             </button>
             <button
@@ -721,7 +844,7 @@ export default function HumanResources() {
                   : 'text-slate-500 hover:text-slate-800'
               }`}
             >
-              Nómina & Sueldos
+              {L('Nómina & Sueldos', 'Payroll & Salaries')}
             </button>
             <button
               onClick={() => setActiveTab('liquidaciones')}
@@ -731,7 +854,7 @@ export default function HumanResources() {
                   : 'text-slate-500 hover:text-slate-800'
               }`}
             >
-              Liquidaciones (Art. 82)
+              {L('Liquidaciones (Art. 82)', 'Severance Calculator')}
             </button>
             <button
               onClick={() => setActiveTab('suspensiones')}
@@ -741,7 +864,7 @@ export default function HumanResources() {
                   : 'text-slate-500 hover:text-slate-800'
               }`}
             >
-              Suspensiones IGSS ({suspensiones.filter(s => s.estado === 'activa').length})
+              {L('Suspensiones IGSS', 'Social Security Leave')} ({suspensiones.filter(s => s.estado === 'activa').length})
             </button>
             <button
               onClick={() => setActiveTab('horarios')}
@@ -751,7 +874,7 @@ export default function HumanResources() {
                   : 'text-slate-500 hover:text-slate-800'
               }`}
             >
-              Horarios & Turnos
+              {L('Horarios & Turnos', 'Schedules & Shifts')}
             </button>
           </div>
 
@@ -759,7 +882,7 @@ export default function HumanResources() {
             <Search className="w-4 h-4 absolute left-3.5 top-3 text-slate-400" />
             <input
               type="text"
-              placeholder="Buscar colaborador o puesto..."
+              placeholder={L('Buscar colaborador o puesto...', 'Search employee or role...')}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-500 font-medium"
@@ -778,7 +901,7 @@ export default function HumanResources() {
                   <div 
                     onClick={() => setEnlargedEmployee(emp)}
                     className="w-12 h-12 rounded-2xl overflow-hidden bg-slate-100 shrink-0 border border-slate-200 cursor-zoom-in hover:ring-2 hover:ring-purple-500 hover:scale-105 transition-all relative group/img"
-                    title="Clic para ampliar fotografía del colaborador"
+                    title={L('Clic para ampliar fotografía del colaborador', 'Click to enlarge employee photo')}
                   >
                     <img src={emp.avatar} alt={emp.nombre} className="w-full h-full object-cover" />
                     <div className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center justify-center text-white">
@@ -787,33 +910,33 @@ export default function HumanResources() {
                   </div>
                   <div className="min-w-0">
                     <h3 className="text-xs font-black text-slate-900 truncate">{emp.nombre}</h3>
-                    <p className="text-[11px] font-bold text-purple-600 truncate">{emp.puesto}</p>
-                    <span className="text-[10px] text-slate-400 block">{emp.sucursal}</span>
+                    <p className="text-[11px] font-bold text-purple-600 truncate">{trRole(emp.puesto)}</p>
+                    <span className="text-[10px] text-slate-400 block">{trBranch(emp.sucursal)}</span>
                   </div>
                 </div>
 
                 <div className="py-3 space-y-1.5 text-[11px] text-slate-600">
                   <div className="flex justify-between">
-                    <span className="text-slate-400">DPI:</span>
+                    <span className="text-slate-400">{L('DPI:', 'ID:')}</span>
                     <span className="font-semibold">{emp.dpi}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-slate-400">Ingreso:</span>
+                    <span className="text-slate-400">{L('Ingreso:', 'Hired:')}</span>
                     <span className="font-semibold">{emp.fechaIngreso}</span>
                   </div>
                   {emp.fechaSalida && (
                     <div className="flex justify-between text-rose-600 font-semibold">
-                      <span className="text-slate-400">Salida / Baja:</span>
+                      <span className="text-slate-400">{L('Salida / Baja:', 'Termination:')}</span>
                       <span>{emp.fechaSalida}</span>
                     </div>
                   )}
                   <div className="flex justify-between">
-                    <span className="text-slate-400">Teléfono:</span>
+                    <span className="text-slate-400">{L('Teléfono:', 'Phone:')}</span>
                     <span className="font-semibold">{emp.telefono}</span>
                   </div>
                   <div className="flex justify-between pt-1 border-t border-slate-100">
-                    <span className="text-slate-400">Salario:</span>
-                    <span className="font-black text-slate-900">Q {emp.salarioBase.toFixed(2)}</span>
+                    <span className="text-slate-400">{L('Salario:', 'Salary:')}</span>
+                    <span className="font-black text-slate-900">{money(emp.salarioBase)}</span>
                   </div>
                 </div>
               </div>
@@ -826,7 +949,7 @@ export default function HumanResources() {
                     ? 'bg-rose-50 text-rose-700 border border-rose-200'
                     : 'bg-purple-50 text-purple-700 border border-purple-200'
                 }`}>
-                  {emp.estado}
+                  {trEmpStatus(emp.estado)}
                 </span>
 
                 <button
@@ -837,7 +960,7 @@ export default function HumanResources() {
                   }}
                   className="text-[11px] font-bold text-purple-600 hover:text-purple-800"
                 >
-                  Simular Finiquito →
+                  {L('Simular Finiquito →', 'Simulate Severance →')}
                 </button>
               </div>
             </div>
@@ -853,18 +976,21 @@ export default function HumanResources() {
             <div className="space-y-1">
               <span className="text-[10px] font-bold text-indigo-300 uppercase tracking-wider flex items-center gap-1.5">
                 <Clock className="w-3.5 h-3.5 text-indigo-400" />
-                Auditoría de Puntualidad & Jornada Laboral
+                {L('Auditoría de Puntualidad & Jornada Laboral', 'Punctuality & Workday Audit')}
               </span>
-              <h2 className="text-base font-black tracking-tight">Bitácora Central de Asistencias del Personal</h2>
+              <h2 className="text-base font-black tracking-tight">{L('Bitácora Central de Asistencias del Personal', 'Central Staff Attendance Log')}</h2>
               <p className="text-xs text-slate-300">
-                Consulta y fiscalización de entradas y salidas registradas desde la terminal autónoma del Reloj Checador.
+                {L(
+                  'Consulta y fiscalización de entradas y salidas registradas desde la terminal autónoma del Reloj Checador.',
+                  'Review and audit clock-in and clock-out entries recorded from the standalone Time Clock terminal.'
+                )}
               </p>
             </div>
 
             <div className="flex items-center gap-2">
               <span className="px-3.5 py-1.5 rounded-xl bg-white/10 border border-white/15 text-xs font-bold text-emerald-300 flex items-center gap-1.5">
                 <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                Marcajes en Reloj Checador
+                {L('Marcajes en Reloj Checador', 'Time Clock Entries')}
               </span>
             </div>
           </div>
@@ -874,30 +1000,30 @@ export default function HumanResources() {
             <div className="p-4 border-b border-slate-100 flex items-center justify-between">
               <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-2">
                 <Clock className="w-4 h-4 text-purple-600" />
-                Marcajes del Día • 16 de Noviembre de 2026
+                {L('Marcajes del Día • 16 de Noviembre de 2026', 'Daily Clock-Ins • November 16, 2026')}
               </h3>
               <div className="flex items-center gap-2.5">
                 <button
                   type="button"
                   onClick={() => setShowManualAttendanceModal(true)}
                   className="px-3 py-1.5 rounded-xl text-xs font-bold bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-700 flex items-center gap-1.5 transition-colors cursor-pointer shadow-sm"
-                  title="Registrar o ajustar hora de marcaje con el selector específico"
+                  title={L('Registrar o ajustar hora de marcaje con el selector específico', 'Record or adjust clock-in time using the time picker')}
                 >
                   <Plus className="w-3.5 h-3.5 text-indigo-600" />
-                  <span>Ajuste / Marcaje Manual</span>
+                  <span>{L('Ajuste / Marcaje Manual', 'Manual Entry / Adjustment')}</span>
                 </button>
 
                 <button
                   type="button"
                   onClick={toggleTimeFormat}
                   className="px-2.5 py-1.5 rounded-xl text-xs font-bold bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 flex items-center gap-1.5 transition-colors cursor-pointer shadow-sm"
-                  title="Alternar formato de hora (12h / 24h)"
+                  title={L('Alternar formato de hora (12h / 24h)', 'Toggle time format (12h / 24h)')}
                 >
                   <Clock className="w-3.5 h-3.5 text-indigo-600" />
                   <span className="text-[11px]">{timeFormat === '12h' ? '12H (AM/PM)' : '24H'}</span>
                 </button>
                 <span className="text-[11px] text-slate-400 font-medium">
-                  {asistenciasList.filter(a => a.horaEntrada !== '---').length} presentes
+                  {asistenciasList.filter(a => a.horaEntrada !== '---').length} {L('presentes', 'present')}
                 </span>
               </div>
             </div>
@@ -906,15 +1032,15 @@ export default function HumanResources() {
               <table className="w-full text-left text-xs">
                 <thead className="bg-slate-50 text-slate-500 uppercase tracking-wider font-semibold border-b border-slate-200">
                   <tr>
-                    <th className="py-3.5 px-4">Colaborador</th>
-                    <th className="py-3.5 px-4">Puesto / Sucursal</th>
-                    <th className="py-3.5 px-4">Fecha</th>
-                    <th className="py-3.5 px-4">Hora Entrada ({timeFormat.toUpperCase()})</th>
-                    <th className="py-3.5 px-4">Hora Salida ({timeFormat.toUpperCase()})</th>
-                    <th className="py-3.5 px-4">Horas Cumplidas</th>
-                    <th className="py-3.5 px-4 text-center">Estado</th>
-                    <th className="py-3.5 px-4 text-center">Geocerca GPS</th>
-                    <th className="py-3.5 px-4 text-center">Marcaje Rápido</th>
+                    <th className="py-3.5 px-4">{L('Colaborador', 'Employee')}</th>
+                    <th className="py-3.5 px-4">{L('Puesto / Sucursal', 'Role / Branch')}</th>
+                    <th className="py-3.5 px-4">{L('Fecha', 'Date')}</th>
+                    <th className="py-3.5 px-4">{L('Hora Entrada', 'Clock In')} ({timeFormat.toUpperCase()})</th>
+                    <th className="py-3.5 px-4">{L('Hora Salida', 'Clock Out')} ({timeFormat.toUpperCase()})</th>
+                    <th className="py-3.5 px-4">{L('Horas Cumplidas', 'Hours Worked')}</th>
+                    <th className="py-3.5 px-4 text-center">{L('Estado', 'Status')}</th>
+                    <th className="py-3.5 px-4 text-center">{L('Geocerca GPS', 'GPS Geofence')}</th>
+                    <th className="py-3.5 px-4 text-center">{L('Marcaje Rápido', 'Quick Action')}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -924,26 +1050,26 @@ export default function HumanResources() {
                       <tr key={a.id} className="hover:bg-slate-50/70 transition-colors">
                         <td className="py-3 px-4 font-bold text-slate-900">{a.empleado}</td>
                         <td className="py-3 px-4">
-                          <p className="font-medium text-slate-700">{a.puesto}</p>
-                          <p className="text-[11px] text-slate-400">Sucursal {a.sucursal}</p>
+                          <p className="font-medium text-slate-700">{trRole(a.puesto)}</p>
+                          <p className="text-[11px] text-slate-400">{L(`Sucursal ${a.sucursal}`, `${trBranch(a.sucursal)} Branch`)}</p>
                         </td>
                         <td className="py-3 px-4 text-slate-500">{a.fecha}</td>
                         <td className="py-3 px-4 font-bold text-slate-700">{formatTime(a.horaEntrada)}</td>
                         <td className="py-3 px-4 text-slate-500">{formatTime(a.horaSalida)}</td>
-                        <td className="py-3 px-4 font-semibold text-slate-600">{a.horasTrabajadas}</td>
+                        <td className="py-3 px-4 font-semibold text-slate-600">{trHoursWorked(a.horasTrabajadas)}</td>
                         <td className="py-3 px-4 text-center">
                           <span className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-extrabold ${
                             a.estado === 'Puntual' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' :
                             a.estado === 'Tarde' ? 'bg-amber-50 text-amber-700 border border-amber-200' :
                             'bg-rose-50 text-rose-700 border border-rose-200'
                           }`}>
-                            {a.estado}
+                            {trAttendanceStatus(a.estado)}
                           </span>
                         </td>
                         <td className="py-3 px-4 text-center">
                           <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-100">
                             <MapPin className="w-3 h-3 text-indigo-600" />
-                            <span>En Sede (a 8m)</span>
+                            <span>{L('En Sede (a 8m)', 'On-Site (8m away)')}</span>
                           </span>
                         </td>
                         <td className="py-3 px-4 text-center">
@@ -955,7 +1081,7 @@ export default function HumanResources() {
                                   onClick={() => handleMarcarEntrada(empObj.id)}
                                   className="px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold rounded-lg text-[10px] border border-emerald-200 transition-colors"
                                 >
-                                  Entrada
+                                  {L('Entrada', 'Clock In')}
                                 </button>
                               ) : a.horaSalida === '---' ? (
                                 <button
@@ -963,10 +1089,10 @@ export default function HumanResources() {
                                   onClick={() => handleMarcarSalida(empObj.id)}
                                   className="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold rounded-lg text-[10px] border border-rose-200 transition-colors"
                                 >
-                                  Salida
+                                  {L('Salida', 'Clock Out')}
                                 </button>
                               ) : (
-                                <span className="text-[10px] text-slate-400 font-medium">Turno completado</span>
+                                <span className="text-[10px] text-slate-400 font-medium">{L('Turno completado', 'Shift completed')}</span>
                               )}
                             </div>
                           )}
@@ -989,28 +1115,28 @@ export default function HumanResources() {
               <Calculator className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-base font-black text-slate-900">Calculadora Laboral de Liquidaciones (Leyes de Guatemala)</h2>
-              <p className="text-xs text-slate-400">Cálculo exacto de Indemnización, Aguinaldo, Bono 14 y Vacaciones</p>
+              <h2 className="text-base font-black text-slate-900">{L('Calculadora Laboral de Liquidaciones (Leyes de Guatemala)', 'Employee Severance & Benefits Calculator')}</h2>
+              <p className="text-xs text-slate-400">{L('Cálculo exacto de Indemnización, Aguinaldo, Bono 14 y Vacaciones', 'Accurate calculation of Severance Pay, Year-End Bonus, Mid-Year Bonus, and Vacation')}</p>
             </div>
           </div>
 
           {/* Formulario de Entrada Idéntico a Laravel Backend */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
             <div>
-              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Colaborador *</label>
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">{L('Colaborador *', 'Employee *')}</label>
               <select
                 value={calcEmpleadoId}
                 onChange={(e) => setCalcEmpleadoId(parseInt(e.target.value))}
                 className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-500"
               >
                 {empleados.map(emp => (
-                  <option key={emp.id} value={emp.id}>{emp.nombre} (Q{emp.salarioBase})</option>
+                  <option key={emp.id} value={emp.id}>{emp.nombre} ({money(emp.salarioBase)})</option>
                 ))}
               </select>
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Fecha de Ingreso</label>
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">{L('Fecha de Ingreso', 'Hire Date')}</label>
               <input
                 type="text"
                 disabled
@@ -1020,7 +1146,7 @@ export default function HumanResources() {
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Fecha de Salida / Baja *</label>
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">{L('Fecha de Salida / Baja *', 'Termination Date *')}</label>
               <input
                 type="date"
                 required
@@ -1031,15 +1157,15 @@ export default function HumanResources() {
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Motivo de Salida *</label>
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">{L('Motivo de Salida *', 'Separation Reason *')}</label>
               <select
                 value={calcMotivo}
                 onChange={(e) => setCalcMotivo(e.target.value as any)}
                 className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-500"
               >
-                <option value="despido_injustificado">Despido Injustificado (Con Indemnización)</option>
-                <option value="despido_justificado">Despido Justificado (Solo Prestaciones)</option>
-                <option value="renuncia">Renuncia Voluntaria (Solo Prestaciones)</option>
+                <option value="despido_injustificado">{L('Despido Injustificado (Con Indemnización)', 'Termination Without Cause (With Severance)')}</option>
+                <option value="despido_justificado">{L('Despido Justificado (Solo Prestaciones)', 'Termination For Cause (Accrued Benefits Only)')}</option>
+                <option value="renuncia">{L('Renuncia Voluntaria (Solo Prestaciones)', 'Voluntary Resignation (Accrued Benefits Only)')}</option>
               </select>
             </div>
           </div>
@@ -1048,53 +1174,56 @@ export default function HumanResources() {
           <div className="mb-6 p-4 rounded-2xl bg-purple-50/70 border border-purple-200 flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="w-9 h-9 rounded-xl bg-purple-600 text-white flex items-center justify-center font-black text-xs shadow-sm">
-                GT
+                {L('GT', 'HR')}
               </div>
               <div>
-                <p className="text-xs font-black text-purple-900">Tiempo de Servicio Computado:</p>
+                <p className="text-xs font-black text-purple-900">{L('Tiempo de Servicio Computado:', 'Computed Length of Service:')}</p>
                 <p className="text-sm font-extrabold text-purple-700">
-                  {anosLaborados} años, {mesesLaborados} meses y {diasLaborados} días
+                  {L(
+                    `${anosLaborados} años, ${mesesLaborados} meses y ${diasLaborados} días`,
+                    `${anosLaborados} years, ${mesesLaborados} months, and ${diasLaborados} days`
+                  )}
                 </p>
               </div>
             </div>
             <span className="text-[11px] font-bold text-purple-600 bg-white px-3 py-1 rounded-full border border-purple-200 shadow-sm">
-              Código de Trabajo GT (Art. 82)
+              {L('Código de Trabajo GT (Art. 82)', 'Labor Code (Art. 82)')}
             </span>
           </div>
 
           {/* Desglose de Prestaciones de Ley */}
           <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200 space-y-2.5 text-xs">
             <div className="flex justify-between py-1 text-slate-600">
-              <span>Salario Base Mensual Registrado:</span>
-              <span className="font-bold text-slate-900">Q {salario.toFixed(2)}</span>
+              <span>{L('Salario Base Mensual Registrado:', 'Registered Monthly Base Salary:')}</span>
+              <span className="font-bold text-slate-900">{money(salario)}</span>
             </div>
             <div className="flex justify-between py-1 text-slate-600">
-              <span>Salario Diario (Base / 30 días):</span>
-              <span className="font-bold text-slate-900">Q {salarioDiario.toFixed(2)}</span>
+              <span>{L('Salario Diario (Base / 30 días):', 'Daily Rate (Base / 30 days):')}</span>
+              <span className="font-bold text-slate-900">{money(salarioDiario)}</span>
             </div>
             <div className="flex justify-between py-1.5 border-t border-slate-200/60">
-              <span className="text-slate-700 font-medium">1. Indemnización por Tiempo Servido:</span>
-              <span className="font-bold text-slate-900">Q {indemnizacion.toFixed(2)}</span>
+              <span className="text-slate-700 font-medium">{L('1. Indemnización por Tiempo Servido:', '1. Severance Pay for Time Served:')}</span>
+              <span className="font-bold text-slate-900">{money(indemnizacion)}</span>
             </div>
             <div className="flex justify-between py-1 text-slate-600">
-              <span>2. Aguinaldo Proporcional (Decreto 76-78):</span>
-              <span className="font-bold text-slate-900">Q {aguinaldoProporcional.toFixed(2)}</span>
+              <span>{L('2. Aguinaldo Proporcional (Decreto 76-78):', '2. Pro-Rated Year-End Bonus:')}</span>
+              <span className="font-bold text-slate-900">{money(aguinaldoProporcional)}</span>
             </div>
             <div className="flex justify-between py-1 text-slate-600">
-              <span>3. Bono 14 Proporcional (Decreto 42-92):</span>
-              <span className="font-bold text-slate-900">Q {bono14Proporcional.toFixed(2)}</span>
+              <span>{L('3. Bono 14 Proporcional (Decreto 42-92):', '3. Pro-Rated Mid-Year Bonus:')}</span>
+              <span className="font-bold text-slate-900">{money(bono14Proporcional)}</span>
             </div>
             <div className="flex justify-between py-1 text-slate-600">
-              <span>4. Vacaciones Proporcionales (15 días hábiles):</span>
-              <span className="font-bold text-slate-900">Q {vacacionesProporcionales.toFixed(2)}</span>
+              <span>{L('4. Vacaciones Proporcionales (15 días hábiles):', '4. Pro-Rated Vacation Payout (15 business days):')}</span>
+              <span className="font-bold text-slate-900">{money(vacacionesProporcionales)}</span>
             </div>
             <div className="flex justify-between py-1 text-slate-600">
-              <span>5. Salario Pendiente ({diasEnMesSalida} días trabajados en mes de salida):</span>
-              <span className="font-bold text-slate-900">Q {salarioPendienteMes.toFixed(2)}</span>
+              <span>{L(`5. Salario Pendiente (${diasEnMesSalida} días trabajados en mes de salida):`, `5. Pending Wages (${diasEnMesSalida} days worked in final month):`)}</span>
+              <span className="font-bold text-slate-900">{money(salarioPendienteMes)}</span>
             </div>
             <div className="flex justify-between pt-3 border-t-2 border-slate-300 text-sm font-black text-slate-900">
-              <span>TOTAL NETO DE LIQUIDACIÓN / FINIQUITO:</span>
-              <span className="text-purple-700 text-lg">Q {totalLiquidacion.toFixed(2)}</span>
+              <span>{L('TOTAL NETO DE LIQUIDACIÓN / FINIQUITO:', 'TOTAL NET SEVERANCE PAYOUT:')}</span>
+              <span className="text-purple-700 text-lg">{money(totalLiquidacion)}</span>
             </div>
           </div>
         </div>
@@ -1107,10 +1236,13 @@ export default function HumanResources() {
             <div>
               <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
                 <FileSpreadsheet className="w-5 h-5 text-purple-600" />
-                Planilla de Sueldos Quincenal (Código de Trabajo & IGSS Guatemala)
+                {L('Planilla de Sueldos Quincenal (Código de Trabajo & IGSS Guatemala)', 'Bi-Weekly Payroll Sheet (Labor & Social Security Compliance)')}
               </h2>
               <p className="text-xs text-slate-500 mt-0.5">
-                Cálculo de Salario Base, Bonificación Incentivo legal (Dcto. 78-89 Q250), Retención Laboral IGSS (4.83%) y Retención ISR Asalariados.
+                {L(
+                  `Cálculo de Salario Base, Bonificación Incentivo legal (Dcto. 78-89 ${money(250)}), Retención Laboral IGSS (4.83%) y Retención ISR Asalariados.`,
+                  `Calculation of Base Salary, Statutory Incentive Bonus (${money(250)}), Employee Social Security (4.83%), and Employee Income Tax Withholding.`
+                )}
               </p>
             </div>
 
@@ -1121,7 +1253,7 @@ export default function HumanResources() {
                 className="px-4 py-2 bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 font-bold text-xs rounded-xl flex items-center gap-2 shadow-sm"
               >
                 <Printer className="w-4 h-4" />
-                Imprimir Planilla
+                {L('Imprimir Planilla', 'Print Payroll')}
               </button>
             </div>
           </div>
@@ -1130,15 +1262,15 @@ export default function HumanResources() {
             <table className="w-full text-left text-xs">
               <thead className="bg-slate-50 text-slate-700 font-semibold uppercase text-[10px] tracking-wider border-b border-slate-200">
                 <tr>
-                  <th className="py-3 px-4">Colaborador / Puesto</th>
-                  <th className="py-3 px-4 text-right">Sueldo Base</th>
-                  <th className="py-3 px-4 text-right">Bono Incentivo (Q250)</th>
-                  <th className="py-3 px-4 text-right">Comisiones / Extras</th>
-                  <th className="py-3 px-4 text-right">Total Devengado</th>
-                  <th className="py-3 px-4 text-right text-rose-600">IGSS (4.83%)</th>
-                  <th className="py-3 px-4 text-right text-amber-600">Retención ISR</th>
-                  <th className="py-3 px-4 text-right font-black text-purple-700">Líquido a Recibir</th>
-                  <th className="py-3 px-4 text-center">Estado</th>
+                  <th className="py-3 px-4">{L('Colaborador / Puesto', 'Employee / Role')}</th>
+                  <th className="py-3 px-4 text-right">{L('Sueldo Base', 'Base Salary')}</th>
+                  <th className="py-3 px-4 text-right">{L(`Bono Incentivo (${currencySymbol}250)`, `Incentive Bonus (${currencySymbol}250)`)}</th>
+                  <th className="py-3 px-4 text-right">{L('Comisiones / Extras', 'Commissions / Overtime')}</th>
+                  <th className="py-3 px-4 text-right">{L('Total Devengado', 'Gross Earnings')}</th>
+                  <th className="py-3 px-4 text-right text-rose-600">{L('IGSS (4.83%)', 'Social Security (4.83%)')}</th>
+                  <th className="py-3 px-4 text-right text-amber-600">{L('Retención ISR', 'Income Tax')}</th>
+                  <th className="py-3 px-4 text-right font-black text-purple-700">{L('Líquido a Recibir', 'Net Pay')}</th>
+                  <th className="py-3 px-4 text-center">{L('Estado', 'Status')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -1146,22 +1278,22 @@ export default function HumanResources() {
                   <tr key={nom.id_pago} className="hover:bg-slate-50/80">
                     <td className="py-3.5 px-4">
                       <div className="font-bold text-slate-900">{nom.empleado_nombre}</div>
-                      <div className="text-[10px] text-slate-400">{nom.puesto}</div>
+                      <div className="text-[10px] text-slate-400">{trRole(nom.puesto)}</div>
                     </td>
-                    <td className="py-3.5 px-4 text-right font-medium">Q{nom.salario_base.toFixed(2)}</td>
-                    <td className="py-3.5 px-4 text-right font-semibold text-emerald-600">Q{nom.bonificacion_incentivo.toFixed(2)}</td>
-                    <td className="py-3.5 px-4 text-right text-slate-600">Q{nom.comisiones_extras.toFixed(2)}</td>
-                    <td className="py-3.5 px-4 text-right font-bold text-slate-800">Q{nom.total_devengado.toFixed(2)}</td>
-                    <td className="py-3.5 px-4 text-right font-semibold text-rose-600">(Q{nom.descuento_igss.toFixed(2)})</td>
+                    <td className="py-3.5 px-4 text-right font-medium">{money(nom.salario_base)}</td>
+                    <td className="py-3.5 px-4 text-right font-semibold text-emerald-600">{money(nom.bonificacion_incentivo)}</td>
+                    <td className="py-3.5 px-4 text-right text-slate-600">{money(nom.comisiones_extras)}</td>
+                    <td className="py-3.5 px-4 text-right font-bold text-slate-800">{money(nom.total_devengado)}</td>
+                    <td className="py-3.5 px-4 text-right font-semibold text-rose-600">({money(nom.descuento_igss)})</td>
                     <td className="py-3.5 px-4 text-right font-semibold text-amber-600">
-                      {nom.retencion_isr > 0 ? `(Q${nom.retencion_isr.toFixed(2)})` : '-'}
+                      {nom.retencion_isr > 0 ? `(${money(nom.retencion_isr)})` : '-'}
                     </td>
                     <td className="py-3.5 px-4 text-right font-black text-purple-700 text-sm">
-                      Q{nom.liquido_a_recibir.toFixed(2)}
+                      {money(nom.liquido_a_recibir)}
                     </td>
                     <td className="py-3.5 px-4 text-center">
                       <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700">
-                        {nom.estado === 'pagado' ? 'Pagado Banco' : 'En Proceso'}
+                        {nom.estado === 'pagado' ? L('Pagado Banco', 'Paid via Bank') : L('En Proceso', 'Processing')}
                       </span>
                     </td>
                   </tr>
@@ -1169,15 +1301,15 @@ export default function HumanResources() {
               </tbody>
               <tfoot className="bg-slate-50 font-bold border-t-2 border-slate-200 text-xs text-slate-900">
                 <tr>
-                  <td className="py-3 px-4">TOTAL PLANILLA:</td>
-                  <td className="py-3 px-4 text-right">Q{nominas.reduce((a, b) => a + b.salario_base, 0).toFixed(2)}</td>
-                  <td className="py-3 px-4 text-right text-emerald-600">Q{nominas.reduce((a, b) => a + b.bonificacion_incentivo, 0).toFixed(2)}</td>
-                  <td className="py-3 px-4 text-right">Q{nominas.reduce((a, b) => a + b.comisiones_extras, 0).toFixed(2)}</td>
-                  <td className="py-3 px-4 text-right">Q{nominas.reduce((a, b) => a + b.total_devengado, 0).toFixed(2)}</td>
-                  <td className="py-3 px-4 text-right text-rose-600">(Q{nominas.reduce((a, b) => a + b.descuento_igss, 0).toFixed(2)})</td>
-                  <td className="py-3 px-4 text-right text-amber-600">(Q{nominas.reduce((a, b) => a + b.retencion_isr, 0).toFixed(2)})</td>
+                  <td className="py-3 px-4">{L('TOTAL PLANILLA:', 'TOTAL PAYROLL:')}</td>
+                  <td className="py-3 px-4 text-right">{money(nominas.reduce((a, b) => a + b.salario_base, 0))}</td>
+                  <td className="py-3 px-4 text-right text-emerald-600">{money(nominas.reduce((a, b) => a + b.bonificacion_incentivo, 0))}</td>
+                  <td className="py-3 px-4 text-right">{money(nominas.reduce((a, b) => a + b.comisiones_extras, 0))}</td>
+                  <td className="py-3 px-4 text-right">{money(nominas.reduce((a, b) => a + b.total_devengado, 0))}</td>
+                  <td className="py-3 px-4 text-right text-rose-600">({money(nominas.reduce((a, b) => a + b.descuento_igss, 0))})</td>
+                  <td className="py-3 px-4 text-right text-amber-600">({money(nominas.reduce((a, b) => a + b.retencion_isr, 0))})</td>
                   <td className="py-3 px-4 text-right text-purple-700 font-black text-sm">
-                    Q{nominas.reduce((a, b) => a + b.liquido_a_recibir, 0).toFixed(2)}
+                    {money(nominas.reduce((a, b) => a + b.liquido_a_recibir, 0))}
                   </td>
                   <td></td>
                 </tr>
@@ -1194,10 +1326,13 @@ export default function HumanResources() {
             <div>
               <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
                 <AlertTriangle className="w-5 h-5 text-amber-500" />
-                Control de Suspensiones Laborales & Subsidios IGSS
+                {L('Control de Suspensiones Laborales & Subsidios IGSS', 'Work Suspensions & Social Security Leave')}
               </h2>
               <p className="text-xs text-slate-500 mt-0.5">
-                Registro de incapacidades temporales emitidas por el IGSS (enfermedad común, maternidad, accidentes) y suspensiones disciplinarias.
+                {L(
+                  'Registro de incapacidades temporales emitidas por el IGSS (enfermedad común, maternidad, accidentes) y suspensiones disciplinarias.',
+                  'Track temporary medical leave covered by Social Security (illness, maternity, accidents) and disciplinary suspensions.'
+                )}
               </p>
             </div>
 
@@ -1207,7 +1342,7 @@ export default function HumanResources() {
               className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs rounded-xl flex items-center gap-2 shadow-sm"
             >
               <Plus className="w-4 h-4" />
-              Registrar Suspensión
+              {L('Registrar Suspensión', 'Record Suspension')}
             </button>
           </div>
 
@@ -1215,13 +1350,13 @@ export default function HumanResources() {
             <table className="w-full text-left text-xs text-slate-600">
               <thead className="bg-slate-50 text-slate-700 font-semibold uppercase text-[10px] tracking-wider border-b border-slate-200">
                 <tr>
-                  <th className="py-3 px-4">Colaborador</th>
-                  <th className="py-3 px-4">Motivo Suspensión</th>
-                  <th className="py-3 px-4">Fecha Inicio</th>
-                  <th className="py-3 px-4">Fecha Fin</th>
-                  <th className="py-3 px-4 text-center">Días de Baja</th>
-                  <th className="py-3 px-4">Observaciones / Dictamen</th>
-                  <th className="py-3 px-4 text-center">Estado</th>
+                  <th className="py-3 px-4">{L('Colaborador', 'Employee')}</th>
+                  <th className="py-3 px-4">{L('Motivo Suspensión', 'Suspension Reason')}</th>
+                  <th className="py-3 px-4">{L('Fecha Inicio', 'Start Date')}</th>
+                  <th className="py-3 px-4">{L('Fecha Fin', 'End Date')}</th>
+                  <th className="py-3 px-4 text-center">{L('Días de Baja', 'Leave Days')}</th>
+                  <th className="py-3 px-4">{L('Observaciones / Dictamen', 'Notes / Medical Report')}</th>
+                  <th className="py-3 px-4 text-center">{L('Estado', 'Status')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -1230,18 +1365,18 @@ export default function HumanResources() {
                     <td className="py-3.5 px-4 font-bold text-slate-900">{susp.empleado_nombre}</td>
                     <td className="py-3.5 px-4">
                       <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-100 text-amber-800">
-                        {susp.motivo}
+                        {trSuspensionReason(susp.motivo)}
                       </span>
                     </td>
                     <td className="py-3.5 px-4">{susp.fecha_inicio}</td>
                     <td className="py-3.5 px-4">{susp.fecha_fin}</td>
-                    <td className="py-3.5 px-4 text-center font-bold text-slate-800">{susp.dias_suspension} días</td>
-                    <td className="py-3.5 px-4 text-slate-500 max-w-xs">{susp.descripcion}</td>
+                    <td className="py-3.5 px-4 text-center font-bold text-slate-800">{susp.dias_suspension} {L('días', 'days')}</td>
+                    <td className="py-3.5 px-4 text-slate-500 max-w-xs">{trSuspensionDesc(susp.descripcion)}</td>
                     <td className="py-3.5 px-4 text-center">
                       <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${
                         susp.estado === 'activa' ? 'bg-rose-100 text-rose-700' : 'bg-slate-100 text-slate-600'
                       }`}>
-                        {susp.estado === 'activa' ? 'Activa / En Subsidio' : 'Finalizada'}
+                        {susp.estado === 'activa' ? L('Activa / En Subsidio', 'Active / On Leave') : L('Finalizada', 'Completed')}
                       </span>
                     </td>
                   </tr>
@@ -1259,10 +1394,13 @@ export default function HumanResources() {
             <div>
               <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
                 <Clock3 className="w-5 h-5 text-indigo-600" />
-                Catálogo de Turnos & Horarios Laborales
+                {L('Catálogo de Turnos & Horarios Laborales', 'Work Shifts & Schedules Catalog')}
               </h2>
               <p className="text-xs text-slate-500 mt-0.5">
-                Configuración de jornadas legales diurnas (44 hrs semanales) y turnos rotativos por sucursal.
+                {L(
+                  'Configuración de jornadas legales diurnas (44 hrs semanales) y turnos rotativos por sucursal.',
+                  'Configure standard daytime workweeks (44 hrs/week) and rotating branch shifts.'
+                )}
               </p>
             </div>
 
@@ -1271,10 +1409,10 @@ export default function HumanResources() {
                 type="button"
                 onClick={toggleTimeFormat}
                 className="px-3 py-2 bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 font-bold text-xs rounded-xl flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
-                title="Cambiar formato de hora (12h AM/PM vs 24h)"
+                title={L('Cambiar formato de hora (12h AM/PM vs 24h)', 'Switch time format (12h AM/PM vs 24h)')}
               >
                 <Clock className="w-3.5 h-3.5 text-indigo-600" />
-                <span>{timeFormat === '12h' ? 'Formato: 12H (AM/PM)' : 'Formato: 24 Horas'}</span>
+                <span>{timeFormat === '12h' ? L('Formato: 12H (AM/PM)', 'Format: 12H (AM/PM)') : L('Formato: 24 Horas', 'Format: 24-Hour')}</span>
               </button>
 
               <button
@@ -1283,7 +1421,7 @@ export default function HumanResources() {
                 className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl flex items-center gap-2 shadow-sm cursor-pointer"
               >
                 <Plus className="w-4 h-4" />
-                Nuevo Turno
+                {L('Nuevo Turno', 'New Shift')}
               </button>
             </div>
           </div>
@@ -1294,32 +1432,32 @@ export default function HumanResources() {
                 <div>
                   <div className="flex items-center justify-between">
                     <span className="px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-indigo-100 text-indigo-700">
-                      {hor.horas_semanales} hrs / semana
+                      {hor.horas_semanales} {L('hrs / semana', 'hrs / week')}
                     </span>
-                    <span className="text-xs font-bold text-slate-500">{hor.empleados_asignados} asignados</span>
+                    <span className="text-xs font-bold text-slate-500">{hor.empleados_asignados} {L('asignados', 'assigned')}</span>
                   </div>
-                  <h3 className="font-bold text-slate-900 text-sm mt-2">{hor.nombre_turno}</h3>
-                  <p className="text-xs text-slate-500 mt-1">{hor.dias_laborales}</p>
+                  <h3 className="font-bold text-slate-900 text-sm mt-2">{trShiftName(hor.nombre_turno)}</h3>
+                  <p className="text-xs text-slate-500 mt-1">{trWorkDays(hor.dias_laborales)}</p>
                 </div>
 
                 <div className="pt-3 border-t border-slate-200 space-y-2">
                   <div className="flex items-center justify-between text-xs">
                     <div>
-                      <span className="text-slate-400 block text-[10px] font-semibold">Entrada ({timeFormat.toUpperCase()}):</span>
+                      <span className="text-slate-400 block text-[10px] font-semibold">{L('Entrada', 'Start')} ({timeFormat.toUpperCase()}):</span>
                       <span className="font-black text-slate-900 font-mono text-xs">{formatTime(hor.hora_entrada)}</span>
                     </div>
                     <div className="text-right">
-                      <span className="text-slate-400 block text-[10px] font-semibold">Salida ({timeFormat.toUpperCase()}):</span>
+                      <span className="text-slate-400 block text-[10px] font-semibold">{L('Salida', 'End')} ({timeFormat.toUpperCase()}):</span>
                       <span className="font-black text-slate-900 font-mono text-xs">{formatTime(hor.hora_salida)}</span>
                     </div>
                   </div>
 
                   <div className="flex items-center justify-between text-[11px] pt-1.5 border-t border-slate-100 text-slate-500">
                     <span className="font-medium">
-                      ⏱️ Jornada: <strong className="font-bold text-slate-800">{hor.horas_diarias || calculateTimeDifference(hor.hora_entrada, hor.hora_salida).formatted}</strong>
+                      ⏱️ {L('Jornada:', 'Shift:')} <strong className="font-bold text-slate-800">{hor.horas_diarias || calculateTimeDifference(hor.hora_entrada, hor.hora_salida).formatted}</strong>
                     </span>
                     <span className="font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-100 text-[10px]">
-                      ±{hor.tolerancia_minutos || 10}m tol.
+                      ±{hor.tolerancia_minutos || 10}m {L('tol.', 'grace')}
                     </span>
                   </div>
                 </div>
@@ -1336,7 +1474,7 @@ export default function HumanResources() {
             <div className="p-5 border-b border-slate-100 flex items-center justify-between">
               <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
                 <AlertTriangle className="w-5 h-5 text-amber-500" />
-                Registrar Suspensión Laboral
+                {L('Registrar Suspensión Laboral', 'Record Work Suspension')}
               </h3>
               <button onClick={() => setShowNewSuspensionModal(false)} className="p-1 text-slate-400 hover:text-slate-600 rounded-lg">
                 <X className="w-4 h-4" />
@@ -1345,36 +1483,36 @@ export default function HumanResources() {
 
             <form onSubmit={handleSaveSuspension} className="p-5 space-y-4 text-xs">
               <div>
-                <label className="block font-bold text-slate-700 mb-1">Colaborador:</label>
+                <label className="block font-bold text-slate-700 mb-1">{L('Colaborador:', 'Employee:')}</label>
                 <select
                   value={newSuspension.id_empleado}
                   onChange={(e) => setNewSuspension({ ...newSuspension, id_empleado: Number(e.target.value) })}
                   className="w-full px-3 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:outline-none"
                 >
                   {empleados.map(emp => (
-                    <option key={emp.id} value={emp.id}>{emp.nombre} - {emp.puesto}</option>
+                    <option key={emp.id} value={emp.id}>{emp.nombre} - {trRole(emp.puesto)}</option>
                   ))}
                 </select>
               </div>
 
               <div>
-                <label className="block font-bold text-slate-700 mb-1">Motivo:</label>
+                <label className="block font-bold text-slate-700 mb-1">{L('Motivo:', 'Reason:')}</label>
                 <select
                   value={newSuspension.motivo}
                   onChange={(e) => setNewSuspension({ ...newSuspension, motivo: e.target.value as any })}
                   className="w-full px-3 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:outline-none"
                 >
-                  <option value="IGSS Enfermedad Común">IGSS Enfermedad Común</option>
-                  <option value="IGSS Accidente">IGSS Accidente</option>
-                  <option value="IGSS Maternidad">IGSS Maternidad</option>
-                  <option value="Sanción Disciplinaria">Sanción Disciplinaria (Sin goce)</option>
-                  <option value="Permiso sin goce de sueldo">Permiso sin goce de sueldo</option>
+                  <option value="IGSS Enfermedad Común">{L('IGSS Enfermedad Común', 'Social Security - Common Illness')}</option>
+                  <option value="IGSS Accidente">{L('IGSS Accidente', 'Social Security - Accident')}</option>
+                  <option value="IGSS Maternidad">{L('IGSS Maternidad', 'Social Security - Maternity')}</option>
+                  <option value="Sanción Disciplinaria">{L('Sanción Disciplinaria (Sin goce)', 'Disciplinary Action (Unpaid)')}</option>
+                  <option value="Permiso sin goce de sueldo">{L('Permiso sin goce de sueldo', 'Unpaid Leave of Absence')}</option>
                 </select>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">Fecha Inicio:</label>
+                  <label className="block font-bold text-slate-700 mb-1">{L('Fecha Inicio:', 'Start Date:')}</label>
                   <input
                     type="date"
                     required
@@ -1384,7 +1522,7 @@ export default function HumanResources() {
                   />
                 </div>
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">Fecha Fin:</label>
+                  <label className="block font-bold text-slate-700 mb-1">{L('Fecha Fin:', 'End Date:')}</label>
                   <input
                     type="date"
                     required
@@ -1396,7 +1534,7 @@ export default function HumanResources() {
               </div>
 
               <div>
-                <label className="block font-bold text-slate-700 mb-1">Días de Suspensión:</label>
+                <label className="block font-bold text-slate-700 mb-1">{L('Días de Suspensión:', 'Suspension Days:')}</label>
                 <input
                   type="number"
                   min="1"
@@ -1408,10 +1546,10 @@ export default function HumanResources() {
               </div>
 
               <div>
-                <label className="block font-bold text-slate-700 mb-1">Observaciones / No. Boleta IGSS:</label>
+                <label className="block font-bold text-slate-700 mb-1">{L('Observaciones / No. Boleta IGSS:', 'Notes / Social Security Slip #:')}</label>
                 <input
                   type="text"
-                  placeholder="Ej. Constancia de reposo IGSS #7841"
+                  placeholder={L('Ej. Constancia de reposo IGSS #7841', 'e.g. Medical rest certificate #7841')}
                   value={newSuspension.descripcion}
                   onChange={(e) => setNewSuspension({ ...newSuspension, descripcion: e.target.value })}
                   className="w-full px-3 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:outline-none"
@@ -1424,13 +1562,13 @@ export default function HumanResources() {
                   onClick={() => setShowNewSuspensionModal(false)}
                   className="px-4 py-2 border border-slate-200 text-slate-600 font-bold rounded-xl"
                 >
-                  Cancelar
+                  {L('Cancelar', 'Cancel')}
                 </button>
                 <button
                   type="submit"
                   className="px-5 py-2 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-xl shadow-sm"
                 >
-                  Guardar Suspensión
+                  {L('Guardar Suspensión', 'Save Suspension')}
                 </button>
               </div>
             </form>
@@ -1445,7 +1583,7 @@ export default function HumanResources() {
             <div className="p-5 border-b border-slate-100 flex items-center justify-between">
               <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
                 <Clock3 className="w-5 h-5 text-indigo-600" />
-                Registrar Nuevo Turno & Horario
+                {L('Registrar Nuevo Turno & Horario', 'Create New Shift & Schedule')}
               </h3>
               <button onClick={() => setShowNewHorarioModal(false)} className="p-1 text-slate-400 hover:text-slate-600 rounded-lg">
                 <X className="w-4 h-4" />
@@ -1455,80 +1593,80 @@ export default function HumanResources() {
             <form onSubmit={handleSaveHorario} className="p-5 space-y-4 text-xs">
               {/* Plantillas Rápidas de Horarios */}
               <div className="space-y-1">
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Plantillas Predefinidas:</span>
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">{L('Plantillas Predefinidas:', 'Preset Templates:')}</span>
                 <div className="grid grid-cols-2 gap-1.5">
                   <button
                     type="button"
                     onClick={() => setNewHorario({
-                      nombre_turno: 'Turno Diurno Completo (Administrativo)',
+                      nombre_turno: L('Turno Diurno Completo (Administrativo)', 'Full Day Shift (Administrative)'),
                       hora_entrada: '08:00',
                       hora_salida: '17:00',
-                      dias_laborales: 'Lunes a Viernes',
+                      dias_laborales: L('Lunes a Viernes', 'Monday to Friday'),
                       horas_semanales: 40,
                       tolerancia_minutos: 10
                     })}
                     className="p-2 text-left bg-slate-50 hover:bg-indigo-50 hover:border-indigo-200 border border-slate-200 rounded-xl text-[10px] transition-colors cursor-pointer"
                   >
-                    <span className="font-bold text-slate-800 block">Oficina / Administrativo</span>
+                    <span className="font-bold text-slate-800 block">{L('Oficina / Administrativo', 'Office / Administrative')}</span>
                     <span className="text-slate-400">8:00 AM - 5:00 PM (40 hrs)</span>
                   </button>
 
                   <button
                     type="button"
                     onClick={() => setNewHorario({
-                      nombre_turno: 'Turno Tienda / POS Rotativo',
+                      nombre_turno: L('Turno Tienda / POS Rotativo', 'Rotating Store / POS Shift'),
                       hora_entrada: '08:30',
                       hora_salida: '18:30',
-                      dias_laborales: 'Lunes a Sábado',
+                      dias_laborales: L('Lunes a Sábado', 'Monday to Saturday'),
                       horas_semanales: 44,
                       tolerancia_minutos: 15
                     })}
                     className="p-2 text-left bg-slate-50 hover:bg-indigo-50 hover:border-indigo-200 border border-slate-200 rounded-xl text-[10px] transition-colors cursor-pointer"
                   >
-                    <span className="font-bold text-slate-800 block">Tienda / POS Rotativo</span>
+                    <span className="font-bold text-slate-800 block">{L('Tienda / POS Rotativo', 'Rotating Store / POS')}</span>
                     <span className="text-slate-400">8:30 AM - 6:30 PM (44 hrs)</span>
                   </button>
 
                   <button
                     type="button"
                     onClick={() => setNewHorario({
-                      nombre_turno: 'Turno Bodega / Despacho Matutino',
+                      nombre_turno: L('Turno Bodega / Despacho Matutino', 'Morning Warehouse / Dispatch Shift'),
                       hora_entrada: '06:00',
                       hora_salida: '15:00',
-                      dias_laborales: 'Lunes a Viernes',
+                      dias_laborales: L('Lunes a Viernes', 'Monday to Friday'),
                       horas_semanales: 40,
                       tolerancia_minutos: 5
                     })}
                     className="p-2 text-left bg-slate-50 hover:bg-indigo-50 hover:border-indigo-200 border border-slate-200 rounded-xl text-[10px] transition-colors cursor-pointer"
                   >
-                    <span className="font-bold text-slate-800 block">Bodega Matutina</span>
+                    <span className="font-bold text-slate-800 block">{L('Bodega Matutina', 'Morning Warehouse')}</span>
                     <span className="text-slate-400">6:00 AM - 3:00 PM (40 hrs)</span>
                   </button>
 
                   <button
                     type="button"
                     onClick={() => setNewHorario({
-                      nombre_turno: 'Turno Cierre Nocturno',
+                      nombre_turno: L('Turno Cierre Nocturno', 'Evening Closing Shift'),
                       hora_entrada: '13:00',
                       hora_salida: '21:30',
-                      dias_laborales: 'Lunes a Sábado',
+                      dias_laborales: L('Lunes a Sábado', 'Monday to Saturday'),
                       horas_semanales: 44,
                       tolerancia_minutos: 10
                     })}
                     className="p-2 text-left bg-slate-50 hover:bg-indigo-50 hover:border-indigo-200 border border-slate-200 rounded-xl text-[10px] transition-colors cursor-pointer"
                   >
-                    <span className="font-bold text-slate-800 block">Cierre Nocturno</span>
+                    <span className="font-bold text-slate-800 block">{L('Cierre Nocturno', 'Evening Closing')}</span>
                     <span className="text-slate-400">1:00 PM - 9:30 PM (44 hrs)</span>
                   </button>
                 </div>
               </div>
 
               <div>
-                <label className="block font-bold text-slate-700 mb-1">Nombre del Turno:</label>
+                <label className="block font-bold text-slate-700 mb-1">{L('Nombre del Turno:', 'Shift Name:')}</label>
                 <input
                   type="text"
                   required
-                  placeholder="Ej. Turno Vespertino Tienda"
+                  placeholder={L('Ej. Turno Vespertino Tienda', 'e.g. Afternoon Store Shift')}
                   value={newHorario.nombre_turno}
                   onChange={(e) => setNewHorario({ ...newHorario, nombre_turno: e.target.value })}
                   className="w-full px-3 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none"
@@ -1538,19 +1676,19 @@ export default function HumanResources() {
               {/* Selectores Específicos de Entrada y Salida */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <SpecificTimePicker
-                  label="Hora de Entrada"
+                  label={L('Hora de Entrada', 'Start Time')}
                   required
                   value={newHorario.hora_entrada}
                   onChange={(val) => setNewHorario({ ...newHorario, hora_entrada: val })}
-                  helperText="Inicio exacto del turno"
+                  helperText={L('Inicio exacto del turno', 'Exact shift start')}
                 />
 
                 <SpecificTimePicker
-                  label="Hora de Salida"
+                  label={L('Hora de Salida', 'End Time')}
                   required
                   value={newHorario.hora_salida}
                   onChange={(val) => setNewHorario({ ...newHorario, hora_salida: val })}
-                  helperText="Fin exacto del turno"
+                  helperText={L('Fin exacto del turno', 'Exact shift end')}
                 />
               </div>
 
@@ -1558,29 +1696,29 @@ export default function HumanResources() {
               <div className="p-3 bg-indigo-50/70 border border-indigo-100 rounded-xl flex items-center justify-between text-xs">
                 <div className="flex items-center gap-2 text-indigo-900 font-semibold">
                   <Clock className="w-4 h-4 text-indigo-600" />
-                  <span>Jornada diaria estimada: <strong className="text-indigo-950 font-black">{horarioCalculado.formatted}</strong></span>
+                  <span>{L('Jornada diaria estimada:', 'Estimated daily shift:')} <strong className="text-indigo-950 font-black">{horarioCalculado.formatted}</strong></span>
                 </div>
                 {horarioCalculado.isOvernight && (
                   <span className="text-[10px] font-bold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-md">
-                    Cruza medianoche
+                    {L('Cruza medianoche', 'Overnight shift')}
                   </span>
                 )}
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">Días Laborales:</label>
+                  <label className="block font-bold text-slate-700 mb-1">{L('Días Laborales:', 'Work Days:')}</label>
                   <input
                     type="text"
                     required
-                    placeholder="Lunes a Sábado"
+                    placeholder={L('Lunes a Sábado', 'Monday to Saturday')}
                     value={newHorario.dias_laborales}
                     onChange={(e) => setNewHorario({ ...newHorario, dias_laborales: e.target.value })}
                     className="w-full px-3 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none"
                   />
                 </div>
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">Horas Semanales:</label>
+                  <label className="block font-bold text-slate-700 mb-1">{L('Horas Semanales:', 'Weekly Hours:')}</label>
                   <input
                     type="number"
                     min="1"
@@ -1596,7 +1734,7 @@ export default function HumanResources() {
               {/* Tolerancia de Entrada (Laravel: tolerancia_entrada) */}
               <div>
                 <label className="block font-bold text-slate-700 mb-1">
-                  Tolerancia de Entrada (Cortesía de puntualidad):
+                  {L('Tolerancia de Entrada (Cortesía de puntualidad):', 'Clock-In Grace Period (Punctuality buffer):')}
                 </label>
                 <div className="grid grid-cols-4 gap-2">
                   {[5, 10, 15, 20].map((mins) => (
@@ -1615,7 +1753,10 @@ export default function HumanResources() {
                   ))}
                 </div>
                 <p className="text-[10px] text-slate-400 mt-1">
-                  Minutos después de la hora de entrada antes de calificar como "Tarde" en el reloj checador.
+                  {L(
+                    'Minutos después de la hora de entrada antes de calificar como "Tarde" en el reloj checador.',
+                    'Minutes past start time before marking as "Late" on the time clock.'
+                  )}
                 </p>
               </div>
 
@@ -1625,13 +1766,13 @@ export default function HumanResources() {
                   onClick={() => setShowNewHorarioModal(false)}
                   className="px-4 py-2 border border-slate-200 text-slate-600 font-bold rounded-xl hover:bg-slate-50 transition-colors"
                 >
-                  Cancelar
+                  {L('Cancelar', 'Cancel')}
                 </button>
                 <button
                   type="submit"
                   className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-md shadow-indigo-600/20 transition-all cursor-pointer"
                 >
-                  Guardar Horario
+                  {L('Guardar Horario', 'Save Schedule')}
                 </button>
               </div>
             </form>
@@ -1646,7 +1787,7 @@ export default function HumanResources() {
             <div className="p-5 border-b border-slate-100 flex items-center justify-between">
               <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
                 <Clock className="w-5 h-5 text-indigo-600" />
-                Ajuste / Marcaje Manual de Asistencia
+                {L('Ajuste / Marcaje Manual de Asistencia', 'Manual Attendance Entry / Adjustment')}
               </h3>
               <button onClick={() => setShowManualAttendanceModal(false)} className="p-1 text-slate-400 hover:text-slate-600 rounded-lg cursor-pointer">
                 <X className="w-4 h-4" />
@@ -1655,21 +1796,21 @@ export default function HumanResources() {
 
             <form onSubmit={handleSaveManualAttendance} className="p-5 space-y-4 text-xs">
               <div>
-                <label className="block font-bold text-slate-700 mb-1">Colaborador:</label>
+                <label className="block font-bold text-slate-700 mb-1">{L('Colaborador:', 'Employee:')}</label>
                 <select
                   value={manualAttendance.id_empleado}
                   onChange={(e) => setManualAttendance({ ...manualAttendance, id_empleado: Number(e.target.value) })}
                   className="w-full px-3 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-slate-50 font-semibold"
                 >
                   {empleados.map(emp => (
-                    <option key={emp.id} value={emp.id}>{emp.nombre} — {emp.puesto}</option>
+                    <option key={emp.id} value={emp.id}>{emp.nombre} — {trRole(emp.puesto)}</option>
                   ))}
                 </select>
               </div>
 
               <div>
                 <DateInputWithCalendar
-                  label="Fecha de la Asistencia"
+                  label={L('Fecha de la Asistencia', 'Attendance Date')}
                   required
                   value={manualAttendance.fecha}
                   onChange={(val) => setManualAttendance({ ...manualAttendance, fecha: val })}
@@ -1678,25 +1819,25 @@ export default function HumanResources() {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <SpecificTimePicker
-                  label="Hora de Entrada"
+                  label={L('Hora de Entrada', 'Clock-In Time')}
                   required
                   value={manualAttendance.horaEntrada}
                   onChange={(val) => setManualAttendance({ ...manualAttendance, horaEntrada: val })}
-                  helperText="Hora exacta de ingreso"
+                  helperText={L('Hora exacta de ingreso', 'Exact clock-in time')}
                 />
 
                 <SpecificTimePicker
-                  label="Hora de Salida"
+                  label={L('Hora de Salida', 'Clock-Out Time')}
                   required
                   value={manualAttendance.horaSalida}
                   onChange={(val) => setManualAttendance({ ...manualAttendance, horaSalida: val })}
-                  helperText="Hora exacta de salida"
+                  helperText={L('Hora exacta de salida', 'Exact clock-out time')}
                 />
               </div>
 
               {/* Cálculo en vivo de la jornada */}
               <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between text-xs text-slate-600 font-medium">
-                <span>Tiempo computado:</span>
+                <span>{L('Tiempo computado:', 'Computed duration:')}</span>
                 <span className="font-bold text-indigo-700 font-mono">
                   {calculateTimeDifference(manualAttendance.horaEntrada, manualAttendance.horaSalida).formatted}
                 </span>
@@ -1708,13 +1849,13 @@ export default function HumanResources() {
                   onClick={() => setShowManualAttendanceModal(false)}
                   className="px-4 py-2 border border-slate-200 text-slate-600 font-bold rounded-xl hover:bg-slate-50 transition-colors cursor-pointer"
                 >
-                  Cancelar
+                  {L('Cancelar', 'Cancel')}
                 </button>
                 <button
                   type="submit"
                   className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-md shadow-indigo-600/20 transition-all cursor-pointer"
                 >
-                  Registrar Asistencia
+                  {L('Registrar Asistencia', 'Save Attendance')}
                 </button>
               </div>
             </form>
@@ -1725,7 +1866,7 @@ export default function HumanResources() {
         <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="max-w-lg w-full bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
             <div className="p-5 border-b border-slate-100 flex items-center justify-between">
-              <h3 className="text-base font-black text-slate-900">Registrar Nuevo Colaborador</h3>
+              <h3 className="text-base font-black text-slate-900">{L('Registrar Nuevo Colaborador', 'Register New Employee')}</h3>
               <button onClick={() => setShowNewEmployeeModal(false)} className="p-1 text-slate-400 hover:text-slate-600 rounded-lg">
                 <X className="w-4 h-4" />
               </button>
@@ -1736,7 +1877,7 @@ export default function HumanResources() {
               <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-3">
                 <div className="flex items-center justify-between">
                   <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
-                    Fotografía del Colaborador *
+                    {L('Fotografía del Colaborador *', 'Employee Photo *')}
                   </label>
                   {/* Selector de modo */}
                   <div className="flex items-center gap-1 bg-slate-200/60 p-0.5 rounded-lg text-[10px] font-bold">
@@ -1750,7 +1891,7 @@ export default function HumanResources() {
                       }`}
                     >
                       <Upload className="w-3 h-3" />
-                      <span>Subir de PC</span>
+                      <span>{L('Subir de PC', 'Upload File')}</span>
                     </button>
                     <button
                       type="button"
@@ -1762,7 +1903,7 @@ export default function HumanResources() {
                       }`}
                     >
                       <LinkIcon className="w-3 h-3" />
-                      <span>Enlace Web</span>
+                      <span>{L('Enlace Web', 'Web URL')}</span>
                     </button>
                   </div>
                 </div>
@@ -1772,10 +1913,10 @@ export default function HumanResources() {
                   <div 
                     onClick={() => fileInputRef.current?.click()}
                     className="w-16 h-16 rounded-2xl bg-white border-2 border-purple-200 overflow-hidden shrink-0 shadow-sm cursor-pointer relative group/avatar"
-                    title="Haz clic para seleccionar foto de tu equipo"
+                    title={L('Haz clic para seleccionar foto de tu equipo', 'Click to select a photo from your device')}
                   >
                     {newEmployee.avatar ? (
-                      <img src={newEmployee.avatar} alt="Foto previa" className="w-full h-full object-cover" />
+                      <img src={newEmployee.avatar} alt={L('Foto previa', 'Photo preview')} className="w-full h-full object-cover" />
                     ) : (
                       <div className="w-full h-full flex flex-col items-center justify-center text-slate-300">
                         <Camera className="w-6 h-6" />
@@ -1783,7 +1924,7 @@ export default function HumanResources() {
                     )}
                     <div className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover/avatar:opacity-100 transition-opacity flex flex-col items-center justify-center text-white text-[9px] font-bold">
                       <Camera className="w-3.5 h-3.5 mb-0.5" />
-                      Cambiar
+                      {L('Cambiar', 'Change')}
                     </div>
                   </div>
 
@@ -1805,20 +1946,20 @@ export default function HumanResources() {
                           className="w-full py-2.5 px-3 bg-white hover:bg-purple-50 hover:border-purple-300 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 transition-all flex items-center justify-center gap-2 shadow-sm cursor-pointer"
                         >
                           <Upload className="w-4 h-4 text-purple-600" />
-                          <span>Seleccionar Foto desde mi Computadora</span>
+                          <span>{L('Seleccionar Foto desde mi Computadora', 'Select Photo from Computer')}</span>
                         </button>
-                        <p className="text-[10px] text-slate-400">Formatos soportados: JPG, PNG, WEBP de tu disco local</p>
+                        <p className="text-[10px] text-slate-400">{L('Formatos soportados: JPG, PNG, WEBP de tu disco local', 'Supported formats: JPG, PNG, WEBP from local storage')}</p>
                       </div>
                     ) : (
                       <div>
                         <input
                           type="url"
-                          placeholder="https://ejemplo.com/foto.jpg"
+                          placeholder={L('https://ejemplo.com/foto.jpg', 'https://example.com/photo.jpg')}
                           value={newEmployee.avatar}
                           onChange={(e) => setNewEmployee({ ...newEmployee, avatar: e.target.value })}
                           className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-purple-500"
                         />
-                        <span className="text-[10px] text-slate-400 block mt-1">Pega el link directo a una imagen</span>
+                        <span className="text-[10px] text-slate-400 block mt-1">{L('Pega el link directo a una imagen', 'Paste a direct image link')}</span>
                       </div>
                     )}
                   </div>
@@ -1828,11 +1969,11 @@ export default function HumanResources() {
               {/* Nombre y DPI */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="sm:col-span-2">
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Nombre Completo *</label>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">{L('Nombre Completo *', 'Full Name *')}</label>
                   <input
                     type="text"
                     required
-                    placeholder="Ej. Carlos Roberto Méndez"
+                    placeholder={L('Ej. Carlos Roberto Méndez', 'e.g. Alex Robert Morgan')}
                     value={newEmployee.nombre}
                     onChange={(e) => setNewEmployee({ ...newEmployee, nombre: e.target.value })}
                     className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-500"
@@ -1840,7 +1981,7 @@ export default function HumanResources() {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">DPI / CUI *</label>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">{L('DPI / CUI *', 'National ID *')}</label>
                   <input
                     type="text"
                     required
@@ -1852,11 +1993,11 @@ export default function HumanResources() {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Puesto Operativo *</label>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">{L('Puesto Operativo *', 'Job Title *')}</label>
                   <input
                     type="text"
                     required
-                    placeholder="Ej. Vendedor / Cajero"
+                    placeholder={L('Ej. Vendedor / Cajero', 'e.g. Sales Rep / Cashier')}
                     value={newEmployee.puesto}
                     onChange={(e) => setNewEmployee({ ...newEmployee, puesto: e.target.value })}
                     className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-500"
@@ -1867,20 +2008,20 @@ export default function HumanResources() {
               {/* Sucursal y Salario */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Sucursal Asignada *</label>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">{L('Sucursal Asignada *', 'Assigned Branch *')}</label>
                   <select
                     value={newEmployee.sucursal}
                     onChange={(e) => setNewEmployee({ ...newEmployee, sucursal: e.target.value })}
                     className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-500"
                   >
-                    <option value="Sucursal Central">Sucursal Central</option>
-                    <option value="Sucursal Norte">Sucursal Norte</option>
-                    <option value="Sucursal Sur">Sucursal Sur</option>
+                    <option value="Sucursal Central">{L('Sucursal Central', 'Central Branch')}</option>
+                    <option value="Sucursal Norte">{L('Sucursal Norte', 'North Branch')}</option>
+                    <option value="Sucursal Sur">{L('Sucursal Sur', 'South Branch')}</option>
                   </select>
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Salario Base Mensual (Q) *</label>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">{L(`Salario Base Mensual (${currencySymbol}) *`, `Monthly Base Salary (${currencySymbol}) *`)}</label>
                   <input
                     type="number"
                     step="0.01"
@@ -1896,10 +2037,10 @@ export default function HumanResources() {
               {/* Teléfono y Correo Electrónico */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Teléfono de Contacto</label>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">{L('Teléfono de Contacto', 'Contact Phone')}</label>
                   <input
                     type="text"
-                    placeholder="+502 5555-1234"
+                    placeholder={L('+502 5555-1234', '+1 (555) 555-1234')}
                     value={newEmployee.telefono}
                     onChange={(e) => setNewEmployee({ ...newEmployee, telefono: e.target.value })}
                     className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-500"
@@ -1907,10 +2048,10 @@ export default function HumanResources() {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Correo Electrónico</label>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">{L('Correo Electrónico', 'Email Address')}</label>
                   <input
                     type="email"
-                    placeholder="ejemplo@integrapro.com"
+                    placeholder={L('ejemplo@integrapro.com', 'example@integrapro.com')}
                     value={newEmployee.email}
                     onChange={(e) => setNewEmployee({ ...newEmployee, email: e.target.value })}
                     className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-500"
@@ -1921,20 +2062,20 @@ export default function HumanResources() {
               {/* Fechas Laborales: Ingreso y Salida con auto-formato de diagonal y calendario integrado */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
                 <DateInputWithCalendar
-                  label="Fecha de Ingreso"
+                  label={L('Fecha de Ingreso', 'Hire Date')}
                   required
                   value={newEmployee.fechaIngreso}
                   onChange={(val) => setNewEmployee({ ...newEmployee, fechaIngreso: val })}
-                  placeholder="DD/MM/AAAA"
-                  helperText="Ingreso a la empresa"
+                  placeholder={L('DD/MM/AAAA', 'DD/MM/YYYY')}
+                  helperText={L('Ingreso a la empresa', 'Company start date')}
                 />
 
                 <DateInputWithCalendar
-                  label="Fecha de Salida / Baja"
+                  label={L('Fecha de Salida / Baja', 'Termination Date')}
                   value={newEmployee.fechaSalida}
                   onChange={(val) => setNewEmployee({ ...newEmployee, fechaSalida: val })}
-                  placeholder="DD/MM/AAAA (Opcional)"
-                  helperText="Opcional. Si se define, marcará estado Baja"
+                  placeholder={L('DD/MM/AAAA (Opcional)', 'DD/MM/YYYY (Optional)')}
+                  helperText={L('Opcional. Si se define, marcará estado Baja', 'Optional. If set, status becomes Terminated')}
                   allowClear
                 />
               </div>
@@ -1945,13 +2086,13 @@ export default function HumanResources() {
                   onClick={() => setShowNewEmployeeModal(false)}
                   className="px-4 py-2.5 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors"
                 >
-                  Cancelar
+                  {L('Cancelar', 'Cancel')}
                 </button>
                 <button
                   type="submit"
                   className="px-5 py-2.5 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-xl shadow-md shadow-purple-600/25 transition-all"
                 >
-                  Guardar y Emitir Carnet
+                  {L('Guardar y Emitir Carnet', 'Save & Issue ID Badge')}
                 </button>
               </div>
             </form>
@@ -1963,17 +2104,17 @@ export default function HumanResources() {
       {showSettlementModal && (
         <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="max-w-md w-full bg-white rounded-3xl shadow-2xl border border-slate-200 p-6 animate-in fade-in zoom-in-95 duration-150">
-            <h3 className="text-base font-black text-slate-900 mb-2">Simulación de Finiquito</h3>
-            <p className="text-xs text-slate-500 mb-4">Colaborador: <span className="font-bold text-slate-800">{selectedEmpleado.nombre}</span></p>
+            <h3 className="text-base font-black text-slate-900 mb-2">{L('Simulación de Finiquito', 'Severance Simulation')}</h3>
+            <p className="text-xs text-slate-500 mb-4">{L('Colaborador:', 'Employee:')} <span className="font-bold text-slate-800">{selectedEmpleado.nombre}</span></p>
 
             <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 text-xs space-y-1.5 mb-4">
-              <div className="flex justify-between"><span>Indemnización:</span><span className="font-bold">Q {indemnizacion.toFixed(2)}</span></div>
-              <div className="flex justify-between"><span>Aguinaldo:</span><span className="font-bold">Q {aguinaldoProporcional.toFixed(2)}</span></div>
-              <div className="flex justify-between"><span>Bono 14:</span><span className="font-bold">Q {bono14Proporcional.toFixed(2)}</span></div>
-              <div className="flex justify-between"><span>Vacaciones:</span><span className="font-bold">Q {vacacionesProporcionales.toFixed(2)}</span></div>
+              <div className="flex justify-between"><span>{L('Indemnización:', 'Severance Pay:')}</span><span className="font-bold">{money(indemnizacion)}</span></div>
+              <div className="flex justify-between"><span>{L('Aguinaldo:', 'Year-End Bonus:')}</span><span className="font-bold">{money(aguinaldoProporcional)}</span></div>
+              <div className="flex justify-between"><span>{L('Bono 14:', 'Mid-Year Bonus:')}</span><span className="font-bold">{money(bono14Proporcional)}</span></div>
+              <div className="flex justify-between"><span>{L('Vacaciones:', 'Vacation Payout:')}</span><span className="font-bold">{money(vacacionesProporcionales)}</span></div>
               <div className="flex justify-between pt-2 border-t border-slate-200 font-black text-sm text-purple-700">
-                <span>TOTAL A PAGAR:</span>
-                <span>Q {totalLiquidacion.toFixed(2)}</span>
+                <span>{L('TOTAL A PAGAR:', 'TOTAL PAYABLE:')}</span>
+                <span>{money(totalLiquidacion)}</span>
               </div>
             </div>
 
@@ -1981,7 +2122,7 @@ export default function HumanResources() {
               onClick={() => setShowSettlementModal(false)}
               className="w-full py-2.5 bg-slate-900 text-white rounded-xl text-xs font-bold hover:bg-slate-800 transition-colors"
             >
-              Cerrar Simulación
+              {L('Cerrar Simulación', 'Close Simulation')}
             </button>
           </div>
         </div>
@@ -2007,10 +2148,10 @@ export default function HumanResources() {
                   <h3 className="text-sm font-black text-slate-900">{enlargedEmployee.nombre}</h3>
                   <div className="flex items-center gap-2 mt-0.5">
                     <span className="text-[10px] font-extrabold text-purple-700 bg-purple-50 px-2 py-0.5 rounded">
-                      {enlargedEmployee.puesto}
+                      {trRole(enlargedEmployee.puesto)}
                     </span>
                     <span className="text-[10px] text-slate-400">
-                      {enlargedEmployee.sucursal}
+                      {trBranch(enlargedEmployee.sucursal)}
                     </span>
                   </div>
                 </div>
@@ -2020,7 +2161,7 @@ export default function HumanResources() {
                 type="button" 
                 onClick={() => setEnlargedEmployee(null)}
                 className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 rounded-xl transition-colors"
-                title="Cerrar imagen"
+                title={L('Cerrar imagen', 'Close image')}
               >
                 <X className="w-5 h-5" />
               </button>
@@ -2038,15 +2179,15 @@ export default function HumanResources() {
             {/* Datos Clave del Colaborador */}
             <div className="p-4 bg-slate-50 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
               <div className="space-y-1 text-slate-600">
-                <p>DPI: <strong className="text-slate-900">{enlargedEmployee.dpi}</strong> • Ingreso: <strong className="text-slate-900">{enlargedEmployee.fechaIngreso}</strong></p>
-                <p>Salario Base: <strong className="text-purple-700">Q {enlargedEmployee.salarioBase.toFixed(2)}</strong> • Tel: <strong className="text-slate-800">{enlargedEmployee.telefono}</strong></p>
+                <p>{L('DPI:', 'ID:')} <strong className="text-slate-900">{enlargedEmployee.dpi}</strong> • {L('Ingreso:', 'Hired:')} <strong className="text-slate-900">{enlargedEmployee.fechaIngreso}</strong></p>
+                <p>{L('Salario Base:', 'Base Salary:')} <strong className="text-purple-700">{money(enlargedEmployee.salarioBase)}</strong> • {L('Tel:', 'Phone:')} <strong className="text-slate-800">{enlargedEmployee.telefono}</strong></p>
               </div>
               <button
                 type="button"
                 onClick={() => setEnlargedEmployee(null)}
                 className="w-full sm:w-auto px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition-all shadow-sm"
               >
-                Cerrar
+                {L('Cerrar', 'Close')}
               </button>
             </div>
           </div>

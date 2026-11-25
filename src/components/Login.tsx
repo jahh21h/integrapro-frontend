@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react';
 import { User, UserRole, EmpresaSaaS } from '../types';
 import { authApi } from '../api';
 import { formatRegimenLabel } from '../utils/tax';
+import { useLanguage } from '../context/LanguageContext';
 import {
   Building2,
   Lock,
@@ -45,14 +46,8 @@ const PLAN_PRICES_USD: Record<string, number> = {
   enterprise: 99,
 };
 
-const PRESET_OPTIONS = [
-  { id: 'retail' as const, label: 'Tienda / POS', desc: 'Caja + Inventario + Ventas' },
-  { id: 'admin_only' as const, label: 'Admin (Sin POS)', desc: 'ERP + Compras + Facturas' },
-  { id: 'standard' as const, label: 'PyME Completa', desc: 'POS + Contabilidad + RRHH' },
-  { id: 'live_express' as const, label: 'Solo TikTok Live', desc: 'Canastas + WhatsApp + Stock' },
-];
-
 export default function Login({ onLogin, inactivityNotice }: LoginProps) {
+  const { lang, setLang, isEn, L, money, currencySymbol } = useLanguage();
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [registerStep, setRegisterStep] = useState<1 | 2>(1);
   const [email, setEmail] = useState('');
@@ -64,6 +59,13 @@ export default function Login({ onLogin, inactivityNotice }: LoginProps) {
 
   const stageRef = useRef<HTMLDivElement>(null);
   const spotlightRef = useRef<HTMLDivElement>(null);
+
+  const presetOptions = [
+    { id: 'retail' as const, label: L('Tienda / POS', 'Retail Store / POS'), desc: L('Caja + Inventario + Ventas', 'Register + Inventory + Sales') },
+    { id: 'admin_only' as const, label: L('Admin (Sin POS)', 'Admin (No POS)'), desc: L('ERP + Compras + Facturas', 'ERP + Purchases + Invoices') },
+    { id: 'standard' as const, label: L('PyME Completa', 'Full SMB Suite'), desc: L('POS + Contabilidad + RRHH', 'POS + Accounting + HR') },
+    { id: 'live_express' as const, label: L('Solo TikTok Live', 'TikTok Live Only'), desc: L('Canastas + WhatsApp + Stock', 'Baskets + WhatsApp + Stock') },
+  ];
 
   // Formulario Fase 2: Registro Self-Service (14 días gratis)
   const [regForm, setRegForm] = useState({
@@ -77,14 +79,14 @@ export default function Login({ onLogin, inactivityNotice }: LoginProps) {
     admin_password: '',
   });
 
-  const regCurrency = regForm.pais === 'GT' ? 'GTQ' : 'USD';
+  const regCurrency = !isEn && regForm.pais === 'GT' ? 'GTQ' : 'USD';
   const regSymbol = regCurrency === 'GTQ' ? 'Q' : '$';
   const regBaseMonthly =
     regCurrency === 'GTQ'
       ? (PLAN_PRICES_GTQ[regForm.preset] ?? 299)
       : (PLAN_PRICES_USD[regForm.preset] ?? 39);
   const regPrice = regForm.billing_cycle === 'annual' ? regBaseMonthly * 10 : regBaseMonthly;
-  const selectedPresetMeta = PRESET_OPTIONS.find((p) => p.id === regForm.preset) || PRESET_OPTIONS[0];
+  const selectedPresetMeta = presetOptions.find((p) => p.id === regForm.preset) || presetOptions[0];
 
   const handleStageMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!stageRef.current || !spotlightRef.current) return;
@@ -165,7 +167,10 @@ export default function Login({ onLogin, inactivityNotice }: LoginProps) {
       const msg =
         err.response?.data?.message ||
         err.response?.data?.errors?.email?.[0] ||
-        'No se pudo conectar con el servidor o las credenciales son incorrectas.';
+        L(
+          'No se pudo conectar con el servidor o las credenciales son incorrectas.',
+          'Could not connect to the server or your credentials are incorrect.'
+        );
       setErrorMsg(msg);
     } finally {
       setLoading(false);
@@ -174,7 +179,12 @@ export default function Login({ onLogin, inactivityNotice }: LoginProps) {
 
   const handleNextRegisterStep = () => {
     if (!regForm.nombre.trim()) {
-      setErrorMsg('Ingresa el nombre comercial de tu negocio para continuar.');
+      setErrorMsg(
+        L(
+          'Ingresa el nombre comercial de tu negocio para continuar.',
+          'Enter your business trade name to continue.'
+        )
+      );
       return;
     }
     setErrorMsg(null);
@@ -225,7 +235,13 @@ export default function Login({ onLogin, inactivityNotice }: LoginProps) {
       console.error('Error en registro público:', err);
       const validationErrors = err?.response?.data?.errors;
       const firstErr = validationErrors ? Object.values(validationErrors).flat()[0] : null;
-      setErrorMsg(String(firstErr || err?.response?.data?.message || 'No se pudo crear tu cuenta. Intenta de nuevo.'));
+      setErrorMsg(
+        String(
+          firstErr ||
+            err?.response?.data?.message ||
+            L('No se pudo crear tu cuenta. Intenta de nuevo.', 'Could not create your account. Please try again.')
+        )
+      );
     } finally {
       setLoading(false);
     }
@@ -252,6 +268,41 @@ export default function Login({ onLogin, inactivityNotice }: LoginProps) {
         style={{ background: 'radial-gradient(520px circle at 50% 40%, rgba(99, 102, 241, 0.14), transparent 70%)' }}
       />
 
+      {/* Selector de Idioma ES | EN en la esquina superior derecha */}
+      <div className="absolute top-4 right-4 sm:top-6 sm:right-6 z-20">
+        <div
+          className="inline-flex items-center gap-1 p-1 rounded-full bg-slate-900/75 border border-white/15 backdrop-blur-md shadow-lg"
+          role="group"
+          aria-label={L('Cambiar idioma', 'Switch language')}
+        >
+          <Globe className="w-3.5 h-3.5 text-cyan-300 ml-2 mr-0.5 shrink-0" />
+          <button
+            type="button"
+            onClick={() => setLang('es')}
+            className={`px-2.5 py-1 rounded-full text-[11px] font-black tracking-wide transition-all cursor-pointer ${
+              lang === 'es'
+                ? 'bg-gradient-to-r from-indigo-500 to-cyan-500 text-white shadow-sm'
+                : 'text-slate-300 hover:text-white'
+            }`}
+            title="Español (Q / GTQ)"
+          >
+            ES
+          </button>
+          <button
+            type="button"
+            onClick={() => setLang('en')}
+            className={`px-2.5 py-1 rounded-full text-[11px] font-black tracking-wide transition-all cursor-pointer ${
+              lang === 'en'
+                ? 'bg-gradient-to-r from-emerald-500 to-cyan-500 text-slate-950 shadow-sm'
+                : 'text-slate-300 hover:text-white'
+            }`}
+            title="English ($ / USD)"
+          >
+            EN
+          </button>
+        </div>
+      </div>
+
       {/* Contenedor Principal Split-Screen */}
       <div className="relative z-10 w-full max-w-6xl grid grid-cols-1 lg:grid-cols-12 items-center gap-8 lg:gap-12">
         {/* COLUMNA IZQUIERDA: Marca + HUD de Tarjetas de Cristal Flotantes */}
@@ -261,7 +312,7 @@ export default function Login({ onLogin, inactivityNotice }: LoginProps) {
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
               <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400" />
             </span>
-            <span>Fortexa Cloud OS • Plataforma Empresarial en Vivo</span>
+            <span>{L('Fortexa Cloud OS • Plataforma Empresarial en Vivo', 'Fortexa Cloud OS • Live Business Platform')}</span>
           </div>
 
           <div className="space-y-3">
@@ -271,11 +322,14 @@ export default function Login({ onLogin, inactivityNotice }: LoginProps) {
                 Pro
               </span>
               <span className="block text-2xl xl:text-[28px] text-slate-200 font-extrabold mt-2">
-                Tu negocio en tiempo real.
+                {L('Tu negocio en tiempo real.', 'Your business in real time.')}
               </span>
             </h1>
             <p className="text-sm text-slate-300/90 max-w-lg leading-relaxed">
-              Punto de Venta rápido, inventario multi-sucursal, cuentas por cobrar con abonos parciales y comprobantes PDF elegantes en un entorno 100% privado.
+              {L(
+                'Punto de Venta rápido, inventario multi-sucursal, cuentas por cobrar con abonos parciales y comprobantes PDF elegantes en un entorno 100% privado.',
+                'Fast Point of Sale, multi-branch inventory, accounts receivable with partial payments, and sleek PDF receipts in a 100% private cloud.'
+              )}
             </p>
           </div>
 
@@ -283,12 +337,14 @@ export default function Login({ onLogin, inactivityNotice }: LoginProps) {
           <div className="grid grid-cols-2 gap-4 max-w-lg pt-1">
             <div className="login-glass-chip rounded-2xl p-4 login-hud-float-1">
               <div className="flex items-center justify-between text-[10px] text-slate-300">
-                <span className="font-bold tracking-wider">VENTAS EN VIVO</span>
+                <span className="font-bold tracking-wider">{L('VENTAS EN VIVO', 'LIVE SALES')}</span>
                 <span className="text-emerald-300 font-black px-1.5 py-0.5 rounded-md bg-emerald-500/15 border border-emerald-400/25">
                   +28%
                 </span>
               </div>
-              <div className="text-xl font-black text-white mt-1.5 font-mono">Q 18,450</div>
+              <div className="text-xl font-black text-white mt-1.5 font-mono">
+                {isEn ? `${currencySymbol}18,450` : `${currencySymbol} 18,450`}
+              </div>
               <div className="flex items-end gap-1.5 h-10 mt-2.5">
                 <div className="flex-1 h-full bg-indigo-400/75 rounded-t login-bar-1" />
                 <div className="flex-1 h-full bg-cyan-400/80 rounded-t login-bar-2" />
@@ -301,16 +357,20 @@ export default function Login({ onLogin, inactivityNotice }: LoginProps) {
 
             <div className="login-glass-chip rounded-2xl p-4 login-hud-float-2 flex flex-col justify-between">
               <div className="flex items-center justify-between">
-                <span className="text-[10px] font-bold tracking-wider text-cyan-200">ABONO PARCIAL CxC</span>
+                <span className="text-[10px] font-bold tracking-wider text-cyan-200">
+                  {L('ABONO PARCIAL CxC', 'PARTIAL A/R PAYMENT')}
+                </span>
                 <span className="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_8px_#34d399]" />
               </div>
               <div className="my-2">
-                <div className="text-xs font-black text-white">Comprobante #003217</div>
-                <div className="text-xs text-emerald-300 font-mono font-bold mt-0.5">+ Q 350.00 • PDF 1 hoja</div>
+                <div className="text-xs font-black text-white">{L('Comprobante #003217', 'Receipt #003217')}</div>
+                <div className="text-xs text-emerald-300 font-mono font-bold mt-0.5">
+                  + {money(350)} • {L('PDF 1 hoja', '1-Page PDF')}
+                </div>
               </div>
               <div className="text-[10px] text-slate-300 flex items-center justify-between border-t border-white/10 pt-2">
-                <span>Saldo actualizado</span>
-                <span className="text-emerald-300 font-bold">En línea ✓</span>
+                <span>{L('Saldo actualizado', 'Balance updated')}</span>
+                <span className="text-emerald-300 font-bold">{L('En línea ✓', 'Online ✓')}</span>
               </div>
             </div>
           </div>
@@ -318,13 +378,13 @@ export default function Login({ onLogin, inactivityNotice }: LoginProps) {
           {/* Cápsulas de capacidades clave */}
           <div className="flex flex-wrap items-center gap-2.5 pt-1 text-[11px] font-bold text-slate-200">
             <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/5 border border-white/10">
-              <Zap className="w-3.5 h-3.5 text-amber-300" /> POS Ultrarrápido
+              <Zap className="w-3.5 h-3.5 text-amber-300" /> {L('POS Ultrarrápido', 'Ultra-Fast POS')}
             </span>
             <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/5 border border-white/10">
-              <FileText className="w-3.5 h-3.5 text-emerald-300" /> Comprobante PDF
+              <FileText className="w-3.5 h-3.5 text-emerald-300" /> {L('Comprobante PDF', 'PDF Receipts')}
             </span>
             <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/5 border border-white/10">
-              <CreditCard className="w-3.5 h-3.5 text-cyan-300" /> Abonos CxC
+              <CreditCard className="w-3.5 h-3.5 text-cyan-300" /> {L('Abonos CxC', 'A/R Installments')}
             </span>
           </div>
         </div>
@@ -350,7 +410,7 @@ export default function Login({ onLogin, inactivityNotice }: LoginProps) {
                       </span>
                     </div>
                     <p className="text-[11px] text-slate-300/90 mt-1">
-                      Fortexa Technologies • Cloud Multi-Empresa
+                      {L('Fortexa Technologies • Cloud Multi-Empresa', 'Fortexa Technologies • Multi-Company Cloud')}
                     </p>
                   </div>
                 </div>
@@ -374,7 +434,7 @@ export default function Login({ onLogin, inactivityNotice }: LoginProps) {
                       : 'text-slate-400 hover:text-white'
                   }`}
                 >
-                  Iniciar Sesión
+                  {L('Iniciar Sesión', 'Sign In')}
                 </button>
                 <button
                   type="button"
@@ -390,7 +450,7 @@ export default function Login({ onLogin, inactivityNotice }: LoginProps) {
                   }`}
                 >
                   <Sparkles className="w-3.5 h-3.5" />
-                  <span>Prueba Gratis 14 Días</span>
+                  <span>{L('Prueba Gratis 14 Días', '14-Day Free Trial')}</span>
                 </button>
               </div>
 
@@ -401,7 +461,7 @@ export default function Login({ onLogin, inactivityNotice }: LoginProps) {
                     <Clock className="w-4 h-4" />
                   </div>
                   <div>
-                    <p className="font-bold text-amber-200">Sesión Cerrada por Inactividad</p>
+                    <p className="font-bold text-amber-200">{L('Sesión Cerrada por Inactividad', 'Session Closed Due to Inactivity')}</p>
                     <p className="text-[11px] text-amber-100/85 leading-tight mt-0.5">{inactivityNotice}</p>
                   </div>
                 </div>
@@ -415,7 +475,7 @@ export default function Login({ onLogin, inactivityNotice }: LoginProps) {
                   </div>
                   <div>
                     <p className="font-bold text-rose-200">
-                      {mode === 'login' ? 'Acceso Denegado' : 'No se pudo completar el registro'}
+                      {mode === 'login' ? L('Acceso Denegado', 'Access Denied') : L('No se pudo completar el registro', 'Registration Could Not Be Completed')}
                     </p>
                     <p className="text-[11px] text-rose-100/90 leading-tight mt-0.5">{errorMsg}</p>
                   </div>
@@ -426,7 +486,7 @@ export default function Login({ onLogin, inactivityNotice }: LoginProps) {
                 <form onSubmit={handleSubmit} className="space-y-4">
                   <div>
                     <label className="block text-[11px] font-bold text-slate-300 uppercase tracking-wider mb-1.5">
-                      Correo Corporativo
+                      {L('Correo Corporativo', 'Work Email')}
                     </label>
                     <div className="relative">
                       <Mail className="absolute left-3.5 top-3 w-4 h-4 text-slate-400 pointer-events-none" />
@@ -437,14 +497,14 @@ export default function Login({ onLogin, inactivityNotice }: LoginProps) {
                         required
                         autoComplete="username"
                         className="autofill-dark login-glass-input w-full pl-10 pr-4 py-2.5 rounded-xl text-sm"
-                        placeholder="usuario@empresa.com"
+                        placeholder={L('usuario@empresa.com', 'user@company.com')}
                       />
                     </div>
                   </div>
 
                   <div>
                     <label className="block text-[11px] font-bold text-slate-300 uppercase tracking-wider mb-1.5">
-                      Contraseña
+                      {L('Contraseña', 'Password')}
                     </label>
                     <div className="relative">
                       <Lock className="absolute left-3.5 top-3 w-4 h-4 text-slate-400 pointer-events-none" />
@@ -461,7 +521,7 @@ export default function Login({ onLogin, inactivityNotice }: LoginProps) {
                         type="button"
                         onClick={() => setShowPassword((prev) => !prev)}
                         className="absolute right-3 top-2.5 p-0.5 text-slate-400 hover:text-white transition-colors cursor-pointer"
-                        title={showPassword ? 'Ocultar contraseña' : 'Ver contraseña'}
+                        title={showPassword ? L('Ocultar contraseña', 'Hide password') : L('Ver contraseña', 'Show password')}
                       >
                         {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                       </button>
@@ -474,7 +534,7 @@ export default function Login({ onLogin, inactivityNotice }: LoginProps) {
                     className="relative overflow-hidden w-full mt-2 py-3 px-4 bg-gradient-to-r from-indigo-500 via-blue-500 to-cyan-500 hover:from-indigo-400 hover:via-blue-400 hover:to-cyan-400 text-white font-black text-sm rounded-xl shadow-lg shadow-indigo-500/30 transition-all flex items-center justify-center gap-2 group disabled:opacity-50 cursor-pointer"
                   >
                     <span className="login-shimmer-slow absolute inset-0 w-1/3 bg-gradient-to-r from-transparent via-white/30 to-transparent pointer-events-none" />
-                    <span className="relative">{loading ? 'Accediendo...' : 'Iniciar Sesión'}</span>
+                    <span className="relative">{loading ? L('Accediendo...', 'Signing in...') : L('Iniciar Sesión', 'Sign In')}</span>
                     <ArrowRight className="relative w-4 h-4 group-hover:translate-x-1 transition-transform" />
                   </button>
                 </form>
@@ -483,7 +543,9 @@ export default function Login({ onLogin, inactivityNotice }: LoginProps) {
                   {/* Indicador de Paso (2 pasos limpios) */}
                   <div className="flex items-center justify-between">
                     <span className="text-[11px] font-bold text-cyan-200">
-                      {registerStep === 1 ? 'Paso 1 de 2 • Configura tu Negocio' : 'Paso 2 de 2 • Credenciales de Dueño'}
+                      {registerStep === 1
+                        ? L('Paso 1 de 2 • Configura tu Negocio', 'Step 1 of 2 • Configure Your Business')
+                        : L('Paso 2 de 2 • Credenciales de Dueño', 'Step 2 of 2 • Owner Credentials')}
                     </span>
                     <div className="flex items-center gap-1.5">
                       <span className={`h-1.5 w-6 rounded-full transition-all ${registerStep === 1 ? 'bg-emerald-400' : 'bg-emerald-400/50'}`} />
@@ -495,7 +557,7 @@ export default function Login({ onLogin, inactivityNotice }: LoginProps) {
                     <>
                       <div className="space-y-3">
                         <div>
-                          <label className="block font-semibold text-slate-300 mb-1">Nombre de tu Negocio *</label>
+                          <label className="block font-semibold text-slate-300 mb-1">{L('Nombre de tu Negocio *', 'Business Name *')}</label>
                           <div className="relative">
                             <Building2 className="absolute left-3 top-2.5 w-4 h-4 text-slate-400 pointer-events-none" />
                             <input
@@ -503,14 +565,14 @@ export default function Login({ onLogin, inactivityNotice }: LoginProps) {
                               required
                               value={regForm.nombre}
                               onChange={(e) => setRegForm({ ...regForm, nombre: e.target.value })}
-                              placeholder="Ej. Mi Tienda / Empresa"
+                              placeholder={L('Ej. Mi Tienda / Empresa', 'e.g. My Store / Company')}
                               className="autofill-dark login-glass-input w-full pl-9 pr-3 py-2.5 rounded-xl text-xs"
                             />
                           </div>
                         </div>
 
                         <div>
-                          <label className="block font-semibold text-slate-300 mb-1">País & Moneda *</label>
+                          <label className="block font-semibold text-slate-300 mb-1">{L('País & Moneda *', 'Country & Currency *')}</label>
                           <div className="relative">
                             <Globe className="absolute left-3 top-2.5 w-4 h-4 text-slate-400 pointer-events-none" />
                             <select
@@ -518,14 +580,14 @@ export default function Login({ onLogin, inactivityNotice }: LoginProps) {
                               onChange={(e) => setRegForm({ ...regForm, pais: e.target.value })}
                               className="login-glass-input w-full pl-9 pr-3 py-2.5 rounded-xl text-xs font-semibold"
                             >
-                              <option value="GT" className="bg-slate-900 text-white">🇬🇹 Guatemala — Quetzales (Q / GTQ)</option>
-                              <option value="SV" className="bg-slate-900 text-white">🇸🇻 El Salvador — Dólares ($ / USD)</option>
-                              <option value="HN" className="bg-slate-900 text-white">🇭🇳 Honduras — Dólares ($ / USD)</option>
-                              <option value="CR" className="bg-slate-900 text-white">🇨🇷 Costa Rica — Dólares ($ / USD)</option>
-                              <option value="PA" className="bg-slate-900 text-white">🇵🇦 Panamá — Dólares ($ / USD)</option>
-                              <option value="MX" className="bg-slate-900 text-white">🇲🇽 México — Dólares ($ / USD)</option>
-                              <option value="US" className="bg-slate-900 text-white">🇺🇸 Estados Unidos — Dólares ($ / USD)</option>
-                              <option value="OT" className="bg-slate-900 text-white">🌎 Otro País — Dólares ($ / USD)</option>
+                              <option value="GT" className="bg-slate-900 text-white">{L('🇬🇹 Guatemala — Quetzales (Q / GTQ)', '🇬🇹 Guatemala — US Dollars ($ / USD)')}</option>
+                              <option value="SV" className="bg-slate-900 text-white">{L('🇸🇻 El Salvador — Dólares ($ / USD)', '🇸🇻 El Salvador — US Dollars ($ / USD)')}</option>
+                              <option value="HN" className="bg-slate-900 text-white">{L('🇭🇳 Honduras — Dólares ($ / USD)', '🇭🇳 Honduras — US Dollars ($ / USD)')}</option>
+                              <option value="CR" className="bg-slate-900 text-white">{L('🇨🇷 Costa Rica — Dólares ($ / USD)', '🇨🇷 Costa Rica — US Dollars ($ / USD)')}</option>
+                              <option value="PA" className="bg-slate-900 text-white">{L('🇵🇦 Panamá — Dólares ($ / USD)', '🇵🇦 Panama — US Dollars ($ / USD)')}</option>
+                              <option value="MX" className="bg-slate-900 text-white">{L('🇲🇽 México — Dólares ($ / USD)', '🇲🇽 Mexico — US Dollars ($ / USD)')}</option>
+                              <option value="US" className="bg-slate-900 text-white">{L('🇺🇸 Estados Unidos — Dólares ($ / USD)', '🇺🇸 United States — US Dollars ($ / USD)')}</option>
+                              <option value="OT" className="bg-slate-900 text-white">{L('🌎 Otro País — Dólares ($ / USD)', '🌎 Other Country — US Dollars ($ / USD)')}</option>
                             </select>
                           </div>
                         </div>
@@ -533,9 +595,9 @@ export default function Login({ onLogin, inactivityNotice }: LoginProps) {
 
                       {/* Perfil del Negocio */}
                       <div>
-                        <label className="block font-semibold text-slate-300 mb-1.5">¿Cómo usarás IntegraPro?</label>
+                        <label className="block font-semibold text-slate-300 mb-1.5">{L('¿Cómo usarás IntegraPro?', 'How will you use IntegraPro?')}</label>
                         <div className="grid grid-cols-2 gap-2">
-                          {PRESET_OPTIONS.map((opt) => (
+                          {presetOptions.map((opt) => (
                             <button
                               key={opt.id}
                               type="button"
@@ -558,10 +620,15 @@ export default function Login({ onLogin, inactivityNotice }: LoginProps) {
                         <div>
                           <p className="font-black text-emerald-300 text-xs flex items-center gap-1">
                             <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
-                            <span>Hoy pagas {regSymbol} 0.00 (14 días gratis)</span>
+                            <span>
+                              {L(`Hoy pagas ${regSymbol} 0.00 (14 días gratis)`, `Pay ${regSymbol}0.00 today (14-day free trial)`)}
+                            </span>
                           </p>
                           <p className="text-[10.5px] text-emerald-100/80 mt-0.5">
-                            Luego: <strong>{regSymbol} {regPrice}.00 {regCurrency} / {regForm.billing_cycle === 'annual' ? 'año' : 'mes'}</strong>
+                            {L('Luego:', 'Then:')}{' '}
+                            <strong>
+                              {regSymbol} {regPrice}.00 {regCurrency} / {regForm.billing_cycle === 'annual' ? L('año', 'year') : L('mes', 'month')}
+                            </strong>
                           </p>
                         </div>
                         <div className="flex gap-1 bg-slate-950/65 p-1 rounded-xl border border-white/15 shrink-0">
@@ -572,7 +639,7 @@ export default function Login({ onLogin, inactivityNotice }: LoginProps) {
                               regForm.billing_cycle === 'monthly' ? 'bg-emerald-500 text-slate-950' : 'text-slate-300'
                             }`}
                           >
-                            Mensual
+                            {L('Mensual', 'Monthly')}
                           </button>
                           <button
                             type="button"
@@ -581,7 +648,7 @@ export default function Login({ onLogin, inactivityNotice }: LoginProps) {
                               regForm.billing_cycle === 'annual' ? 'bg-emerald-500 text-slate-950' : 'text-slate-300'
                             }`}
                           >
-                            Anual (-2m)
+                            {L('Anual (-2m)', 'Annual (-2mo)')}
                           </button>
                         </div>
                       </div>
@@ -592,7 +659,7 @@ export default function Login({ onLogin, inactivityNotice }: LoginProps) {
                         className="relative overflow-hidden w-full py-3 px-4 bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 hover:from-emerald-400 hover:to-cyan-400 text-slate-950 font-black text-xs rounded-xl shadow-lg shadow-emerald-500/25 transition-all flex items-center justify-center gap-2 group cursor-pointer"
                       >
                         <span className="login-shimmer-slow absolute inset-0 w-1/3 bg-gradient-to-r from-transparent via-white/40 to-transparent pointer-events-none" />
-                        <span className="relative">Continuar: Tus Datos de Acceso</span>
+                        <span className="relative">{L('Continuar: Tus Datos de Acceso', 'Continue: Your Login Details')}</span>
                         <ArrowRight className="relative w-4 h-4 group-hover:translate-x-1 transition-transform" />
                       </button>
                     </>
@@ -603,7 +670,11 @@ export default function Login({ onLogin, inactivityNotice }: LoginProps) {
                         <div className="min-w-0">
                           <p className="font-bold text-white truncate">{regForm.nombre}</p>
                           <p className="text-[10.5px] text-emerald-300">
-                            {selectedPresetMeta.label} • 14 días gratis (luego {regSymbol} {regPrice}/{regForm.billing_cycle === 'annual' ? 'año' : 'mes'})
+                            {selectedPresetMeta.label} •{' '}
+                            {L(
+                              `14 días gratis (luego ${regSymbol} ${regPrice}/${regForm.billing_cycle === 'annual' ? 'año' : 'mes'})`,
+                              `14 days free (then ${regSymbol}${regPrice}/${regForm.billing_cycle === 'annual' ? 'yr' : 'mo'})`
+                            )}
                           </p>
                         </div>
                         <button
@@ -614,13 +685,13 @@ export default function Login({ onLogin, inactivityNotice }: LoginProps) {
                           }}
                           className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/15 text-cyan-200 font-bold text-[11px] shrink-0 cursor-pointer"
                         >
-                          <ArrowLeft className="w-3 h-3" /> Cambiar
+                          <ArrowLeft className="w-3 h-3" /> {L('Cambiar', 'Change')}
                         </button>
                       </div>
 
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
-                          <label className="block font-semibold text-slate-300 mb-1">Tu Nombre *</label>
+                          <label className="block font-semibold text-slate-300 mb-1">{L('Tu Nombre *', 'Your Name *')}</label>
                           <div className="relative">
                             <UserIcon className="absolute left-3 top-2.5 w-4 h-4 text-slate-400 pointer-events-none" />
                             <input
@@ -629,26 +700,26 @@ export default function Login({ onLogin, inactivityNotice }: LoginProps) {
                               autoFocus
                               value={regForm.admin_name}
                               onChange={(e) => setRegForm({ ...regForm, admin_name: e.target.value })}
-                              placeholder="Nombre completo"
+                              placeholder={L('Nombre completo', 'Full name')}
                               className="autofill-dark login-glass-input w-full pl-9 pr-3 py-2.5 rounded-xl text-xs"
                             />
                           </div>
                         </div>
                         <div>
-                          <label className="block font-semibold text-slate-300 mb-1">WhatsApp / Teléfono</label>
+                          <label className="block font-semibold text-slate-300 mb-1">{L('WhatsApp / Teléfono', 'WhatsApp / Phone')}</label>
                           <div className="relative">
                             <Phone className="absolute left-3 top-2.5 w-4 h-4 text-slate-400 pointer-events-none" />
                             <input
                               type="text"
                               value={regForm.telefono}
                               onChange={(e) => setRegForm({ ...regForm, telefono: e.target.value })}
-                              placeholder={regForm.pais === 'GT' ? '5555-1234' : '+1 555-1234'}
+                              placeholder={!isEn && regForm.pais === 'GT' ? '5555-1234' : '+1 555-1234'}
                               className="autofill-dark login-glass-input w-full pl-9 pr-3 py-2.5 rounded-xl text-xs"
                             />
                           </div>
                         </div>
                         <div>
-                          <label className="block font-semibold text-slate-300 mb-1">Correo Electrónico *</label>
+                          <label className="block font-semibold text-slate-300 mb-1">{L('Correo Electrónico *', 'Email Address *')}</label>
                           <div className="relative">
                             <Mail className="absolute left-3 top-2.5 w-4 h-4 text-slate-400 pointer-events-none" />
                             <input
@@ -657,13 +728,13 @@ export default function Login({ onLogin, inactivityNotice }: LoginProps) {
                               autoComplete="email"
                               value={regForm.admin_email}
                               onChange={(e) => setRegForm({ ...regForm, admin_email: e.target.value })}
-                              placeholder="tu@negocio.com"
+                              placeholder={L('tu@negocio.com', 'you@business.com')}
                               className="autofill-dark login-glass-input w-full pl-9 pr-3 py-2.5 rounded-xl text-xs"
                             />
                           </div>
                         </div>
                         <div>
-                          <label className="block font-semibold text-slate-300 mb-1">Contraseña (mín. 6) *</label>
+                          <label className="block font-semibold text-slate-300 mb-1">{L('Contraseña (mín. 6) *', 'Password (min. 6) *')}</label>
                           <div className="relative">
                             <Lock className="absolute left-3 top-2.5 w-4 h-4 text-slate-400 pointer-events-none" />
                             <input
@@ -680,6 +751,7 @@ export default function Login({ onLogin, inactivityNotice }: LoginProps) {
                               type="button"
                               onClick={() => setShowRegPassword((prev) => !prev)}
                               className="absolute right-2.5 top-2.5 text-slate-400 hover:text-white cursor-pointer"
+                              title={showRegPassword ? L('Ocultar contraseña', 'Hide password') : L('Ver contraseña', 'Show password')}
                             >
                               {showRegPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                             </button>
@@ -693,7 +765,9 @@ export default function Login({ onLogin, inactivityNotice }: LoginProps) {
                         className="relative overflow-hidden w-full py-3 px-4 bg-gradient-to-r from-emerald-500 via-teal-400 to-cyan-500 hover:from-emerald-400 hover:to-cyan-400 text-slate-950 font-black text-xs rounded-xl shadow-lg shadow-emerald-500/25 transition-all flex items-center justify-center gap-2 group disabled:opacity-50 cursor-pointer"
                       >
                         <span className="login-shimmer-slow absolute inset-0 w-1/3 bg-gradient-to-r from-transparent via-white/45 to-transparent pointer-events-none" />
-                        <span className="relative">{loading ? 'Creando tu espacio privado...' : 'Crear Cuenta Gratis (14 Días)'}</span>
+                        <span className="relative">
+                          {loading ? L('Creando tu espacio privado...', 'Creating your private workspace...') : L('Crear Cuenta Gratis (14 Días)', 'Create Free Account (14 Days)')}
+                        </span>
                         <ArrowRight className="relative w-4 h-4 group-hover:translate-x-1 transition-transform" />
                       </button>
                     </>
@@ -704,11 +778,11 @@ export default function Login({ onLogin, inactivityNotice }: LoginProps) {
               {/* Badges de seguridad */}
               <div className="pt-2 border-t border-white/10 flex items-center justify-center gap-3 text-[11px] text-slate-300/80">
                 <span className="flex items-center gap-1">
-                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" /> Cifrado 256-bit
+                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" /> {L('Cifrado 256-bit', '256-bit Encryption')}
                 </span>
                 <span className="text-white/25">•</span>
                 <span className="flex items-center gap-1">
-                  <Store className="w-3.5 h-3.5 text-cyan-300" /> Multi-Tenancy Aislado
+                  <Store className="w-3.5 h-3.5 text-cyan-300" /> {L('Multi-Tenancy Aislado', 'Isolated Multi-Tenancy')}
                 </span>
               </div>
             </div>

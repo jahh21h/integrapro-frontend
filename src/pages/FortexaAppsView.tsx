@@ -41,6 +41,7 @@ import {
 import { SoftwareLicenseItem, SignedLicenseItem, EmpresaSaaS } from '../types';
 import { softwareLicenseApi, empresaApi } from '../api';
 import { isOwnerOperableEmpresa } from '../utils/tenant';
+import { useLanguage } from '../context/LanguageContext';
 
 export interface RutaFuelSubscription {
   id: string | number;
@@ -81,6 +82,39 @@ export default function FortexaAppsView({
   onDeleteEmpresa,
   onSelectEmpresa
 }: FortexaAppsViewProps) {
+  const { L, money, currencySymbol, currencyCode, locale, taxIdLabel, trRegime, trTaxId } = useLanguage();
+  const deleteKeyword = L('ELIMINAR', 'DELETE');
+
+  const trRutaFuelPlan = (plan: string) => {
+    switch (plan) {
+      case 'Pro Individual (Anual)':
+        return L('Pro Individual (Anual)', 'Individual Pro (Annual)');
+      case 'Flotas B2B Pro (Anual)':
+        return L('Flotas B2B Pro (Anual)', 'B2B Fleets Pro (Annual)');
+      case 'Flotas Enterprise (Anual)':
+        return L('Flotas Enterprise (Anual)', 'Enterprise Fleets (Annual)');
+      case 'Conductor Particular (Freemium)':
+        return L('Conductor Particular (Freemium)', 'Personal Driver (Freemium)');
+      case 'Quantum POS Anual':
+        return L('Quantum POS Anual', 'Quantum POS Annual');
+      default:
+        return plan;
+    }
+  };
+
+  const trSubPayMethod = (method: string) => {
+    switch (method) {
+      case 'Tarjeta BAC (Débito Automático Anual)':
+        return L('Tarjeta BAC (Débito Automático Anual)', 'BAC Card (Annual Auto-Debit)');
+      case 'Transferencia Bancaria':
+        return L('Transferencia Bancaria', 'Bank Transfer');
+      case 'Tarjeta de Crédito Online':
+        return L('Tarjeta de Crédito Online', 'Online Credit Card');
+      default:
+        return method;
+    }
+  };
+
   const [activeSubTab, setActiveSubTab] = useState<'rutafuel' | 'quantum' | 'integrapro' | 'live_commerce'>('integrapro');
   const [licenses, setLicenses] = useState<SoftwareLicenseItem[]>([]);
   const [signedLicenses, setSignedLicenses] = useState<SignedLicenseItem[]>([]);
@@ -280,7 +314,7 @@ export default function FortexaAppsView({
         billing: updatedBilling,
       }).catch(err => {
         console.error('Error guardando plan/módulos en servidor:', err);
-        showToast(`⚠️ Cambio aplicado localmente pero falló sincronización en BD: ${err?.response?.data?.message || err.message}`);
+        showToast(L(`⚠️ Cambio aplicado localmente pero falló sincronización en BD: ${err?.response?.data?.message || err.message}`, `⚠️ Applied locally, but database sync failed: ${err?.response?.data?.message || err.message}`));
       });
     }
 
@@ -290,9 +324,14 @@ export default function FortexaAppsView({
 
     setSaasEmpresas(prev => prev.map(e => e.id === updatedEmpresa.id ? updatedEmpresa : e));
 
-    showToast(`✅ Suscripción de ${updatedEmpresa.nombre} guardada en MySQL: ${
-      isForceLiveOnly ? 'Plan Solo Live Express (Q199/m)' : `Plan ${saasPlanForm.plan.toUpperCase()} ${saasPlanForm.hasLiveAddon ? '+ Add-on Live' : ''}`
-    }`);
+    showToast(
+      isForceLiveOnly
+        ? L(`✅ Suscripción de ${updatedEmpresa.nombre} guardada en MySQL: Plan Solo Live Express (${money(199)}/m)`, `✅ Subscription for ${updatedEmpresa.nombre} saved: Live Express Only (${money(199)}/mo)`)
+        : L(
+            `✅ Suscripción de ${updatedEmpresa.nombre} guardada en MySQL: Plan ${saasPlanForm.plan.toUpperCase()} ${saasPlanForm.hasLiveAddon ? '+ Add-on Live' : ''}`,
+            `✅ Subscription for ${updatedEmpresa.nombre} saved: ${saasPlanForm.plan.toUpperCase()} Plan ${saasPlanForm.hasLiveAddon ? '+ Live Add-on' : ''}`
+          )
+    );
 
     setEditingEmpresaSaaS(null);
     return updatedEmpresa;
@@ -483,7 +522,7 @@ export default function FortexaAppsView({
   const handleCreateNewTenant = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTenantForm.nombre.trim() || !newTenantForm.admin_name.trim() || !newTenantForm.admin_email.trim()) {
-      setTenantCreateError('Completa el nombre de la empresa, el nombre del administrador y su correo.');
+      setTenantCreateError(L('Completa el nombre de la empresa, el nombre del administrador y su correo.', 'Please fill in the company name, administrator name, and email address.'));
       return;
     }
 
@@ -582,13 +621,13 @@ export default function FortexaAppsView({
         sucursalNombre: res?.sucursal?.nombre || newTenantForm.sucursal_nombre.trim() || 'Sucursal Principal',
       });
 
-      showToast(`🚀 Inquilino "${mappedEmp.nombre}" (#${mappedEmp.id}) creado y activado en MySQL.`);
+      showToast(L(`🚀 Inquilino "${mappedEmp.nombre}" (#${mappedEmp.id}) creado y activado en MySQL.`, `🚀 Tenant "${mappedEmp.nombre}" (#${mappedEmp.id}) created and activated.`));
     } catch (err: any) {
       console.error('Error creando nuevo inquilino:', err);
       const validationErrors = err?.response?.data?.errors;
       const firstErr = validationErrors ? Object.values(validationErrors).flat()[0] : null;
       setTenantCreateError(
-        String(firstErr || err?.response?.data?.message || 'No se pudo crear la empresa en el servidor.')
+        String(firstErr || err?.response?.data?.message || L('No se pudo crear la empresa en el servidor.', 'Could not create the company on the server.'))
       );
     } finally {
       setIsCreatingTenant(false);
@@ -597,12 +636,14 @@ export default function FortexaAppsView({
 
   const handleToggleEmpresaStatus = async (emp: EmpresaSaaS) => {
     if (emp.id === 1 || emp.id === 22) {
-      showToast('⚠️ Las empresas base del sistema (Fortexa y Fashion Styles) no se pueden suspender.');
+      showToast(L('⚠️ Las empresas base del sistema (Fortexa y Fashion Styles) no se pueden suspender.', '⚠️ Core system companies (Fortexa and Fashion Styles) cannot be suspended.'));
       return;
     }
     const nextActive = !emp.activa;
-    const actionLabel = nextActive ? 'reactivar' : 'suspender (y cerrar sesiones activas)';
-    if (!window.confirm(`¿Seguro que deseas ${actionLabel} el acceso de "${emp.nombre}" (#${emp.id})?`)) {
+    const actionLabel = nextActive
+      ? L('reactivar', 'reactivate')
+      : L('suspender (y cerrar sesiones activas)', 'suspend (and terminate active sessions)');
+    if (!window.confirm(L(`¿Seguro que deseas ${actionLabel} el acceso de "${emp.nombre}" (#${emp.id})?`, `Are you sure you want to ${actionLabel} access for "${emp.nombre}" (#${emp.id})?`))) {
       return;
     }
 
@@ -621,11 +662,11 @@ export default function FortexaAppsView({
       }
       showToast(
         nextActive
-          ? `✅ Servicio reactivado para "${emp.nombre}".`
-          : `⛔ Servicio suspendido para "${emp.nombre}". Sus sesiones activas fueron cerradas.`
+          ? L(`✅ Servicio reactivado para "${emp.nombre}".`, `✅ Service reactivated for "${emp.nombre}".`)
+          : L(`⛔ Servicio suspendido para "${emp.nombre}". Sus sesiones activas fueron cerradas.`, `⛔ Service suspended for "${emp.nombre}". Active sessions have been terminated.`)
       );
     } catch (err: any) {
-      showToast(`⚠️ Error actualizando estado: ${err?.response?.data?.message || err.message}`);
+      showToast(L(`⚠️ Error actualizando estado: ${err?.response?.data?.message || err.message}`, `⚠️ Error updating status: ${err?.response?.data?.message || err.message}`));
     } finally {
       setTogglingTenantId(null);
     }
@@ -642,7 +683,10 @@ export default function FortexaAppsView({
     const baseDate = currentDate && currentDate > todayStr ? currentDate : todayStr;
     const nextDate = computeNextBillingDate('active', cycle, 0, baseDate);
 
-    if (!window.confirm(`¿Registrar pago (${sym} ${amount.toFixed(2)} ${cycle === 'annual' ? 'Anual' : 'Mensual'}) y renovar "${emp.nombre}" hasta ${nextDate}?`)) {
+    if (!window.confirm(L(
+      `¿Registrar pago (${sym} ${amount.toFixed(2)} ${cycle === 'annual' ? 'Anual' : 'Mensual'}) y renovar "${emp.nombre}" hasta ${nextDate}?`,
+      `Record payment (${sym}${amount.toFixed(2)} ${cycle === 'annual' ? 'Annual' : 'Monthly'}) and renew "${emp.nombre}" through ${nextDate}?`
+    ))) {
       return;
     }
 
@@ -673,9 +717,9 @@ export default function FortexaAppsView({
       if (onUpdateEmpresa) {
         onUpdateEmpresa(updatedEmp);
       }
-      showToast(`💳 Pago registrado para "${emp.nombre}". Próximo cobro: ${nextDate}.`);
+      showToast(L(`💳 Pago registrado para "${emp.nombre}". Próximo cobro: ${nextDate}.`, `💳 Payment recorded for "${emp.nombre}". Next billing date: ${nextDate}.`));
     } catch (err: any) {
-      showToast(`⚠️ Error renovando suscripción: ${err?.response?.data?.message || err.message}`);
+      showToast(L(`⚠️ Error renovando suscripción: ${err?.response?.data?.message || err.message}`, `⚠️ Error renewing subscription: ${err?.response?.data?.message || err.message}`));
     } finally {
       setTogglingTenantId(null);
     }
@@ -685,18 +729,21 @@ export default function FortexaAppsView({
     const cur = emp.billing?.currency || getCurrencyForCountry(emp.pais);
     const sym = getCurrencySymbol(cur, emp.pais);
     const amt = emp.billing?.amount ?? 0;
-    const cyc = emp.billing?.cycle === 'annual' ? 'Anual' : 'Mensual';
-    const nextDate = emp.billing?.next_billing_date?.slice(0, 10) || 'Próximo corte';
+    const cyc = emp.billing?.cycle === 'annual' ? L('Anual', 'Annual') : L('Mensual', 'Monthly');
+    const nextDate = emp.billing?.next_billing_date?.slice(0, 10) || L('Próximo corte', 'Upcoming billing date');
     const msg = [
-      `Hola equipo de *${emp.nombre}* 👋`,
-      `Te saludamos de *Fortexa Technologies (IntegraPro Cloud)*.`,
+      L(`Hola equipo de *${emp.nombre}* 👋`, `Hello *${emp.nombre}* team 👋`),
+      L(`Te saludamos de *Fortexa Technologies (IntegraPro Cloud)*.`, `Greetings from *Fortexa Technologies (IntegraPro Cloud)*.`),
       ``,
-      `📅 *Recordatorio de Renovación de Suscripción*`,
-      `• *Plan:* ${(emp.plan || 'Estándar').toUpperCase()} (${cyc})`,
-      `• *Cuota:* *${sym} ${amt.toFixed(2)} ${cur}*`,
-      `• *Fecha de Corte:* ${nextDate}`,
+      L(`📅 *Recordatorio de Renovación de Suscripción*`, `📅 *Subscription Renewal Reminder*`),
+      L(`• *Plan:* ${(emp.plan || 'Estándar').toUpperCase()} (${cyc})`, `• *Plan:* ${(emp.plan || 'Standard').toUpperCase()} (${cyc})`),
+      L(`• *Cuota:* *${sym} ${amt.toFixed(2)} ${cur}*`, `• *Fee:* *${sym}${amt.toFixed(2)} ${cur}*`),
+      L(`• *Fecha de Corte:* ${nextDate}`, `• *Billing Cutoff Date:* ${nextDate}`),
       ``,
-      `Por favor compártenos tu comprobante de pago por este medio para renovar tu servicio sin interrupciones. ¡Gracias por tu confianza! 🚀`,
+      L(
+        `Por favor compártenos tu comprobante de pago por este medio para renovar tu servicio sin interrupciones. ¡Gracias por tu confianza! 🚀`,
+        `Please share your payment receipt here so we can renew your service without interruption. Thank you for your trust! 🚀`
+      ),
     ].join('\n');
     const rawPhone = (emp.telefono || '').replace(/\D/g, '');
     const waPhone = rawPhone ? (emp.pais === 'GT' && !rawPhone.startsWith('502') ? `502${rawPhone}` : rawPhone) : '';
@@ -708,7 +755,7 @@ export default function FortexaAppsView({
 
   const handleOpenDeleteModal = (emp: EmpresaSaaS) => {
     if (emp.id === 1 || emp.id === 22 || emp.id === 25) {
-      showToast('⚠️ Las empresas base del sistema (Fortexa, Fashion Styles y Demo QA) están protegidas.');
+      showToast(L('⚠️ Las empresas base del sistema (Fortexa, Fashion Styles y Demo QA) están protegidas.', '⚠️ Core system companies (Fortexa, Fashion Styles, and QA Demo) are protected.'));
       return;
     }
     setDeletingEmpresa(emp);
@@ -718,8 +765,9 @@ export default function FortexaAppsView({
 
   const handleConfirmDeleteEmpresa = async () => {
     if (!deletingEmpresa) return;
-    if (deleteConfirmText.trim().toUpperCase() !== 'ELIMINAR') {
-      setDeleteEmpresaError('Escribe la palabra ELIMINAR para confirmar.');
+    const upperConfirm = deleteConfirmText.trim().toUpperCase();
+    if (upperConfirm !== 'ELIMINAR' && upperConfirm !== 'DELETE') {
+      setDeleteEmpresaError(L('Escribe la palabra ELIMINAR para confirmar.', 'Type DELETE to confirm.'));
       return;
     }
 
@@ -737,10 +785,10 @@ export default function FortexaAppsView({
       }
       setDeletingEmpresa(null);
       setDeleteConfirmText('');
-      showToast(`🗑️ Empresa "${targetName}" (#${targetId}) eliminada permanentemente de MySQL.`);
+      showToast(L(`🗑️ Empresa "${targetName}" (#${targetId}) eliminada permanentemente de MySQL.`, `🗑️ Company "${targetName}" (#${targetId}) permanently deleted.`));
     } catch (err: any) {
       setDeleteEmpresaError(
-        err?.response?.data?.message || err?.message || 'No se pudo eliminar la empresa en el servidor.'
+        err?.response?.data?.message || err?.message || L('No se pudo eliminar la empresa en el servidor.', 'Could not delete the company on the server.')
       );
     } finally {
       setIsDeletingEmpresa(false);
@@ -751,22 +799,25 @@ export default function FortexaAppsView({
     if (!createdTenantResult) return '';
     const b = createdTenantResult.empresa.billing;
     const sym = getCurrencySymbol(b?.currency, createdTenantResult.empresa.pais);
-    const cycleLabel = b?.cycle === 'annual' ? 'Anual' : 'Mensual';
+    const cycleLabel = b?.cycle === 'annual' ? L('Anual', 'Annual') : L('Mensual', 'Monthly');
     const billingLine = b && b.amount > 0
-      ? `💳 *Suscripción:* ${sym} ${Number(b.amount).toFixed(2)} ${b.currency} (${cycleLabel})${b.next_billing_date ? ` • Próximo cobro: ${b.next_billing_date}` : ''}`
+      ? L(
+          `💳 *Suscripción:* ${sym} ${Number(b.amount).toFixed(2)} ${b.currency} (${cycleLabel})${b.next_billing_date ? ` • Próximo cobro: ${b.next_billing_date}` : ''}`,
+          `💳 *Subscription:* ${sym}${Number(b.amount).toFixed(2)} ${b.currency} (${cycleLabel})${b.next_billing_date ? ` • Next billing: ${b.next_billing_date}` : ''}`
+        )
       : '';
     return [
-      `🚀 *¡Bienvenido a IntegraPro Cloud!*`,
-      `Tu espacio privado ya está activo y configurado por *Fortexa Technologies*.`,
+      L(`🚀 *¡Bienvenido a IntegraPro Cloud!*`, `🚀 *Welcome to IntegraPro Cloud!*`),
+      L(`Tu espacio privado ya está activo y configurado por *Fortexa Technologies*.`, `Your private workspace is now live and configured by *Fortexa Technologies*.`),
       ``,
-      `🏢 *Empresa:* ${createdTenantResult.empresa.nombre} (ID #${createdTenantResult.empresa.id})`,
-      `📍 *Sucursal Inicial:* ${createdTenantResult.sucursalNombre}`,
+      L(`🏢 *Empresa:* ${createdTenantResult.empresa.nombre} (ID #${createdTenantResult.empresa.id})`, `🏢 *Company:* ${createdTenantResult.empresa.nombre} (ID #${createdTenantResult.empresa.id})`),
+      L(`📍 *Sucursal Inicial:* ${createdTenantResult.sucursalNombre}`, `📍 *Main Branch:* ${createdTenantResult.sucursalNombre}`),
       ...(billingLine ? [billingLine] : []),
-      `🌐 *Enlace de Acceso:* https://app.integrapro.app`,
-      `👤 *Usuario:* ${createdTenantResult.adminEmail}`,
-      `🔑 *Contraseña Temporal:* ${createdTenantResult.plainPassword}`,
+      L(`🌐 *Enlace de Acceso:* https://app.integrapro.app`, `🌐 *Login URL:* https://app.integrapro.app`),
+      L(`👤 *Usuario:* ${createdTenantResult.adminEmail}`, `👤 *Username:* ${createdTenantResult.adminEmail}`),
+      L(`🔑 *Contraseña Temporal:* ${createdTenantResult.plainPassword}`, `🔑 *Temporary Password:* ${createdTenantResult.plainPassword}`),
       ``,
-      `🔒 _Tu empresa opera en un entorno 100% aislado y privado._`,
+      L(`🔒 _Tu empresa opera en un entorno 100% aislado y privado._`, `🔒 _Your company operates in a 100% isolated and private environment._`),
     ].join('\n');
   };
 
@@ -1017,7 +1068,7 @@ export default function FortexaAppsView({
     navigator.clipboard.writeText(code);
     setCopiedCode(code);
     setTimeout(() => setCopiedCode(null), 2000);
-    showToast('Código copiado al portapapeles');
+    showToast(L('Código copiado al portapapeles', 'Code copied to clipboard'));
   };
 
   // Helper para calcular con precisión los días restantes y estado de corte según Laravel
@@ -1025,9 +1076,9 @@ export default function FortexaAppsView({
     if (!expiresAtStr) {
       return {
         daysRemaining: 999,
-        formattedDate: 'Sin fecha de corte',
+        formattedDate: L('Sin fecha de corte', 'No cutoff date'),
         badgeColor: 'slate',
-        badgeText: 'Sin Corte Programado',
+        badgeText: L('Sin Corte Programado', 'No Scheduled Cutoff'),
         isOverdue: false,
         isNearCutoff: false,
         reminderNotice: null
@@ -1039,7 +1090,7 @@ export default function FortexaAppsView({
     const diffTime = cutoffDate.getTime() - now.getTime();
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
     
-    const formattedDate = cutoffDate.toLocaleDateString('es-GT', {
+    const formattedDate = cutoffDate.toLocaleDateString(locale, {
       day: '2-digit',
       month: 'short',
       year: 'numeric'
@@ -1052,10 +1103,10 @@ export default function FortexaAppsView({
         daysRemaining: diffDays,
         formattedDate,
         badgeColor: 'rose',
-        badgeText: 'Servicio Cortado',
+        badgeText: L('Servicio Cortado', 'Service Suspended'),
         isOverdue: true,
         isNearCutoff: false,
-        reminderNotice: 'Servicio suspendido en la base de datos de producción.'
+        reminderNotice: L('Servicio suspendido en la base de datos de producción.', 'Service suspended in production database.')
       };
     }
 
@@ -1065,10 +1116,10 @@ export default function FortexaAppsView({
         daysRemaining: diffDays,
         formattedDate,
         badgeColor: 'rose',
-        badgeText: `Corte Vencido (${pastDays}d)`,
+        badgeText: L(`Corte Vencido (${pastDays}d)`, `Overdue (${pastDays}d)`),
         isOverdue: true,
         isNearCutoff: false,
-        reminderNotice: `Fecha de corte expirada hace ${pastDays} días. Acceso bloqueado en app.`
+        reminderNotice: L(`Fecha de corte expirada hace ${pastDays} días. Acceso bloqueado en app.`, `Cutoff expired ${pastDays} days ago. App access locked.`)
       };
     }
 
@@ -1078,10 +1129,10 @@ export default function FortexaAppsView({
         daysRemaining: diffDays,
         formattedDate,
         badgeColor: 'amber',
-        badgeText: diffDays === 0 ? '¡Corte HOY!' : `¡Corte en ${diffDays}d!`,
+        badgeText: diffDays === 0 ? L('¡Corte HOY!', 'Due TODAY!') : L(`¡Corte en ${diffDays}d!`, `Due in ${diffDays}d!`),
         isOverdue: false,
         isNearCutoff: true,
-        reminderNotice: 'Recordatorio automático de Laravel enviado al correo del usuario (5 días antes del corte).'
+        reminderNotice: L('Recordatorio automático enviado al correo del usuario (5 días antes del corte).', 'Automated reminder email sent to user (5 days before cutoff).')
       };
     }
 
@@ -1089,7 +1140,7 @@ export default function FortexaAppsView({
       daysRemaining: diffDays,
       formattedDate,
       badgeColor: 'emerald',
-      badgeText: `Al Día (${diffDays} días)`,
+      badgeText: L(`Al Día (${diffDays} días)`, `Current (${diffDays} days)`),
       isOverdue: false,
       isNearCutoff: false,
       reminderNotice: null
@@ -1125,9 +1176,9 @@ export default function FortexaAppsView({
         expires_at: newExpiresAt,
         status: 'active'
       });
-      showToast(`🔄 ¡Corte anual de ${sub.email} renovado +${daysToAdd} días (${newDateStr}) en el Droplet MySQL!`);
+      showToast(L(`🔄 ¡Corte anual de ${sub.email} renovado +${daysToAdd} días (${newDateStr}) en el servidor!`, `🔄 Subscription for ${sub.email} renewed +${daysToAdd} days (${newDateStr})!`));
     } catch {
-      showToast(`🔄 Corte renovado exitosamente a ${newDateStr} (+${daysToAdd} días)`);
+      showToast(L(`🔄 Corte renovado exitosamente a ${newDateStr} (+${daysToAdd} días)`, `🔄 Cutoff renewed successfully to ${newDateStr} (+${daysToAdd} days)`));
     }
   };
 
@@ -1150,9 +1201,9 @@ export default function FortexaAppsView({
         status: 'active'
       });
       setLicenses(prev => prev.map(l => l.id === lic.id ? { ...l, expires_at: newExpiresAt, status: 'active' } : l));
-      showToast(`🔄 ¡Licencia de Quantum (${lic.email}) renovada +${daysToAdd} días hasta ${newDateStr} en MySQL!`);
+      showToast(L(`🔄 ¡Licencia de Quantum (${lic.email}) renovada +${daysToAdd} días hasta ${newDateStr}!`, `🔄 Quantum license (${lic.email}) renewed +${daysToAdd} days through ${newDateStr}!`));
     } catch {
-      showToast(`⚠️ ERROR: no se pudo renovar la licencia en el servidor.`);
+      showToast(L(`⚠️ ERROR: no se pudo renovar la licencia en el servidor.`, `⚠️ ERROR: Could not renew license on the server.`));
     }
   };
 
@@ -1161,9 +1212,9 @@ export default function FortexaAppsView({
     try {
       await softwareLicenseApi.update(lic.id, { hwid: null });
       setLicenses(prev => prev.map(l => l.id === lic.id ? { ...l, hwid: null } : l));
-      showToast(`🔓 HWID liberado para ${lic.email}. El cliente puede activar su nueva máquina.`);
+      showToast(L(`🔓 HWID liberado para ${lic.email}. El cliente puede activar su nueva máquina.`, `🔓 HWID unbound for ${lic.email}. Customer can now activate on a new machine.`));
     } catch {
-      showToast(`⚠️ ERROR: no se pudo liberar el HWID en el servidor.`);
+      showToast(L(`⚠️ ERROR: no se pudo liberar el HWID en el servidor.`, `⚠️ ERROR: Could not unbind HWID on the server.`));
     }
   };
 
@@ -1174,10 +1225,13 @@ export default function FortexaAppsView({
     try {
       await softwareLicenseApi.update(lic.id, { status: newStat });
       setLicenses(prev => prev.map(l => l.id === lic.id ? { ...l, status: newStat } : l));
-      showToast(`Licencia de ${lic.email} ${newStat === 'active' ? 'reactivada' : 'suspendida/cortada'} en MySQL.`);
+      showToast(L(
+        `Licencia de ${lic.email} ${newStat === 'active' ? 'reactivada' : 'suspendida/cortada'} en MySQL.`,
+        `License for ${lic.email} ${newStat === 'active' ? 'reactivated' : 'suspended'} successfully.`
+      ));
     } catch {
       setLicenses(prev => prev.map(l => l.id === lic.id ? { ...l, status: newStat } : l));
-      showToast(`Estado cambiado a ${newStat}`);
+      showToast(L(`Estado cambiado a ${newStat === 'active' ? 'Activo' : 'Suspendido'}`, `Status changed to ${newStat === 'active' ? 'Active' : 'Suspended'}`));
     }
   };
 
@@ -1201,9 +1255,9 @@ export default function FortexaAppsView({
         expires_at: fullExpiresAt,
         status: 'active'
       });
-      showToast(`✅ Fecha de corte de ${editingCutoffSub.email} actualizada a ${newCutoffDate} en Droplet MySQL.`);
+      showToast(L(`✅ Fecha de corte de ${editingCutoffSub.email} actualizada a ${newCutoffDate} en el servidor.`, `✅ Cutoff date for ${editingCutoffSub.email} updated to ${newCutoffDate}.`));
     } catch {
-      showToast(`✅ Fecha de corte actualizada a ${newCutoffDate}`);
+      showToast(L(`✅ Fecha de corte actualizada a ${newCutoffDate}`, `✅ Cutoff date updated to ${newCutoffDate}`));
     }
 
     setEditingCutoffSub(null);
@@ -1227,9 +1281,15 @@ export default function FortexaAppsView({
       await softwareLicenseApi.update(targetId, {
         status: newStatus
       });
-      showToast(`Estado de ${sub.email} actualizado a: ${newStatus === 'active' ? 'ACTIVO' : 'CORTADO / REVOCADO'} en el Droplet.`);
+      showToast(L(
+        `Estado de ${sub.email} actualizado a: ${newStatus === 'active' ? 'ACTIVO' : 'CORTADO / REVOCADO'}.`,
+        `Status for ${sub.email} updated to: ${newStatus === 'active' ? 'ACTIVE' : 'SUSPENDED / REVOKED'}.`
+      ));
     } catch {
-      showToast(`Estado de ${sub.email} cambiado a: ${newStatus === 'active' ? 'Activo' : 'Cortado / Revocado'}`);
+      showToast(L(
+        `Estado de ${sub.email} cambiado a: ${newStatus === 'active' ? 'Activo' : 'Cortado / Revocado'}`,
+        `Status for ${sub.email} changed to: ${newStatus === 'active' ? 'Active' : 'Suspended / Revoked'}`
+      ));
     }
   };
 
@@ -1282,9 +1342,9 @@ export default function FortexaAppsView({
       if (res?.data?.id) {
         created.droplet_id = res.data.id;
       }
-      showToast(`✅ ¡Suscripción Anual de ${newSubForm.email} creada y sincronizada en el Droplet MySQL!`);
+      showToast(L(`✅ ¡Suscripción Anual de ${newSubForm.email} creada y sincronizada en el servidor!`, `✅ Annual subscription for ${newSubForm.email} created and synced!`));
     } catch {
-      showToast(`✅ Suscripción de ${newSubForm.cliente} creada con éxito`);
+      showToast(L(`✅ Suscripción de ${newSubForm.cliente} creada con éxito`, `✅ Subscription for ${newSubForm.cliente} created successfully`));
     }
 
     setShowSubModal(false);
@@ -1338,7 +1398,11 @@ export default function FortexaAppsView({
         expires_at: expiresAt,
         hwid: null
       });
-      showToast(`✅ ¡Licencia ${isSub ? 'de Suscripción (' + newLicForm.sub_cycle + ')' : 'Perpetua (Vitalicia)'} emitida y guardada en MySQL!`);
+      showToast(
+        isSub
+          ? L(`✅ ¡Licencia de Suscripción (${newLicForm.sub_cycle}) emitida y guardada!`, `✅ Subscription license (${newLicForm.sub_cycle === 'anual' ? 'Annual' : 'Monthly'}) issued and saved!`)
+          : L('✅ ¡Licencia Perpetua (Vitalicia) emitida y guardada!', '✅ Perpetual (Lifetime) license issued and saved!')
+      );
       setShowCreateModal(false);
       setNewLicForm({
         app_name: 'Quantum POS',
@@ -1353,7 +1417,7 @@ export default function FortexaAppsView({
       });
       loadData();
     } catch (err: any) {
-      showToast('⚠️ Error al crear licencia: ' + err.message);
+      showToast(L('⚠️ Error al crear licencia: ', '⚠️ Error creating license: ') + err.message);
     }
   };
 
@@ -1434,11 +1498,13 @@ export default function FortexaAppsView({
               <span className="text-xs text-slate-400 font-mono">Tenant ID: 22</span>
             </div>
             <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-white flex items-center gap-3">
-              Catálogo de Aplicaciones & Suscripciones
+              {L('Catálogo de Aplicaciones & Suscripciones', 'Apps & Subscriptions Catalog')}
             </h1>
             <p className="text-xs sm:text-sm text-slate-300 max-w-2xl leading-relaxed">
-              Panel central de administración para las aplicaciones desarrolladas por <strong>Fortexa Technologies</strong>: 
-              control de usuarios, planes y <strong>corte de fechas</strong> de <strong>RutaFuel Pro</strong>, licencias de <strong>Quantum Store POS</strong> y contratos de <strong>IntegraPro</strong>.
+              {L(
+                'Panel central de administración para las aplicaciones desarrolladas por Fortexa Technologies: control de usuarios, planes y corte de fechas de RutaFuel Pro, licencias de Quantum Store POS y contratos de IntegraPro.',
+                'Central administration hub for Fortexa Technologies applications: manage users, plans, and billing cutoffs for RutaFuel Pro, Quantum Store POS licenses, and IntegraPro SaaS tenants.'
+              )}
             </p>
           </div>
 
@@ -1449,7 +1515,7 @@ export default function FortexaAppsView({
                 className="px-5 py-2.5 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white font-bold text-xs rounded-xl shadow-lg shadow-orange-600/30 active:scale-95 transition-all flex items-center gap-2 cursor-pointer"
               >
                 <Plus className="w-4 h-4" />
-                <span>+ Nueva Suscripción</span>
+                <span>{L('+ Nueva Suscripción', '+ New Subscription')}</span>
               </button>
             ) : (
               <button
@@ -1457,7 +1523,7 @@ export default function FortexaAppsView({
                 className="px-5 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold text-xs rounded-xl shadow-lg shadow-indigo-600/30 active:scale-95 transition-all flex items-center gap-2 cursor-pointer"
               >
                 <Plus className="w-4 h-4" />
-                <span>+ Nueva Licencia</span>
+                <span>{L('+ Nueva Licencia', '+ New License')}</span>
               </button>
             )}
             <a
@@ -1467,7 +1533,7 @@ export default function FortexaAppsView({
               className="px-4 py-2.5 bg-white/10 hover:bg-white/15 border border-white/20 text-white font-semibold text-xs rounded-xl transition-all flex items-center gap-1.5 cursor-pointer backdrop-blur-md"
             >
               <Globe className="w-3.5 h-3.5" />
-              <span>Ver Landing Hotmart</span>
+              <span>{L('Ver Landing Hotmart', 'View Hotmart Landing')}</span>
               <ExternalLink className="w-3 h-3 text-slate-400" />
             </a>
           </div>
@@ -1489,16 +1555,16 @@ export default function FortexaAppsView({
               </div>
               <div>
                 <p className="text-xs font-black">RutaFuel Pro</p>
-                <p className="text-[11px] text-slate-400">Control de Suscripciones & Cortes</p>
+                <p className="text-[11px] text-slate-400">{L('Control de Suscripciones & Cortes', 'Subscriptions & Billing Cutoffs')}</p>
               </div>
             </div>
             <div className="flex flex-col items-end gap-1">
               <span className="text-xs font-black bg-amber-500/20 px-2 py-0.5 rounded-lg text-amber-300">
-                {rutafuelSubs.length} usuarios
+                {rutafuelSubs.length} {L('usuarios', 'users')}
               </span>
               {nearCutoffSubs.length > 0 && (
                 <span className="text-[9px] font-black bg-amber-500 text-slate-950 px-1.5 py-0.2 rounded-md animate-pulse">
-                  {nearCutoffSubs.length} en corte
+                  {nearCutoffSubs.length} {L('en corte', 'due soon')}
                 </span>
               )}
             </div>
@@ -1518,11 +1584,11 @@ export default function FortexaAppsView({
               </div>
               <div>
                 <p className="text-xs font-black">Quantum Store POS</p>
-                <p className="text-[11px] text-slate-400">Licencias & Hotmart</p>
+                <p className="text-[11px] text-slate-400">{L('Licencias & Hotmart', 'Licenses & Hotmart')}</p>
               </div>
             </div>
             <span className="text-xs font-black bg-purple-500/20 px-2 py-0.5 rounded-lg text-purple-300">
-              {licenses.length} activas
+              {licenses.length} {L('activas', 'active')}
             </span>
           </button>
 
@@ -1540,11 +1606,11 @@ export default function FortexaAppsView({
               </div>
               <div>
                 <p className="text-xs font-black">IntegraPro ERP</p>
-                <p className="text-[11px] text-slate-400">Planes & Empresas SaaS</p>
+                <p className="text-[11px] text-slate-400">{L('Planes & Empresas SaaS', 'SaaS Plans & Tenants')}</p>
               </div>
             </div>
             <span className="text-xs font-black bg-blue-500/20 px-2 py-0.5 rounded-lg text-blue-300">
-              {allEmpresas.length} empresas
+              {allEmpresas.length} {L('empresas', 'companies')}
             </span>
           </button>
 
@@ -1567,12 +1633,12 @@ export default function FortexaAppsView({
                     Express
                   </span>
                 </p>
-                <p className="text-[11px] text-slate-400">Social Selling & Canastas</p>
+                <p className="text-[11px] text-slate-400">{L('Social Selling & Canastas', 'Social Selling & Live Carts')}</p>
               </div>
             </div>
             <div className="flex flex-col items-end gap-1">
               <span className="text-xs font-black bg-rose-500/20 px-2 py-0.5 rounded-lg text-rose-300">
-                {liveEnabledCount} activas
+                {liveEnabledCount} {L('activas', 'active')}
               </span>
               <span className="text-[9px] font-bold text-slate-400">
                 Plan + Add-on
@@ -1596,13 +1662,16 @@ export default function FortexaAppsView({
                 </div>
                 <div>
                   <h2 className="text-base font-black text-slate-900 flex items-center gap-2">
-                    RutaFuel Pro • Control de Suscripciones & Fechas de Corte
+                    {L('RutaFuel Pro • Control de Suscripciones & Fechas de Corte', 'RutaFuel Pro • Subscriptions & Cutoff Management')}
                     <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-amber-100 text-amber-800 border border-amber-200">
-                      Laravel Cron Sync
+                      {L('Sincronización Cron', 'Automated Cron Sync')}
                     </span>
                   </h2>
                   <p className="text-xs text-slate-500">
-                    Control de los usuarios que pagan su suscripción, planes contratados, fechas límites de corte (<code>expires_at</code>) y recordatorios automáticos de pago (5 días antes).
+                    {L(
+                      'Control de los usuarios que pagan su suscripción, planes contratados, fechas límites de corte (expires_at) y recordatorios automáticos de pago (5 días antes).',
+                      'Track paying subscribers, active plans, billing cutoff dates (expires_at), and automated renewal reminders (5 days in advance).'
+                    )}
                   </p>
                 </div>
               </div>
@@ -1613,7 +1682,7 @@ export default function FortexaAppsView({
                   className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl shadow-sm transition-all flex items-center gap-2 cursor-pointer"
                 >
                   <Plus className="w-3.5 h-3.5" />
-                  <span>+ Registrar Suscripción</span>
+                  <span>{L('+ Registrar Suscripción', '+ Register Subscription')}</span>
                 </button>
               </div>
             </div>
@@ -1623,17 +1692,17 @@ export default function FortexaAppsView({
               {/* Métrica 1: Recaudación ARR Anual */}
               <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200/60">
                 <span className="text-[11px] font-bold text-slate-500 flex items-center gap-1">
-                  <TrendingUp className="w-3.5 h-3.5 text-emerald-600" /> ARR Recurrente Anual
+                  <TrendingUp className="w-3.5 h-3.5 text-emerald-600" /> {L('ARR Recurrente Anual', 'Annual Recurring Revenue (ARR)')}
                 </span>
                 <p className="text-2xl font-black text-slate-900 mt-1">
-                  Q {totalARR.toLocaleString('es-GT', { minimumFractionDigits: 2 })}
+                  {money(totalARR)}
                 </p>
                 <div className="flex items-center gap-1.5 mt-1">
                   <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-100/60 px-2 py-0.5 rounded inline-block">
-                    {rutafuelSubs.length} suscripciones
+                    {rutafuelSubs.length} {L('suscripciones', 'subscriptions')}
                   </span>
                   <span className="text-[9.5px] text-slate-400 font-mono">
-                    (Q {totalMRR.toLocaleString('es-GT', { minimumFractionDigits: 0 })}/mes)
+                    ({money(Math.round(totalMRR))}/{L('mes', 'mo')})
                   </span>
                 </div>
               </div>
@@ -1641,39 +1710,39 @@ export default function FortexaAppsView({
               {/* Métrica 2: Usuarios Suscritos & Flotas */}
               <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200/60">
                 <span className="text-[11px] font-bold text-slate-500 flex items-center gap-1">
-                  <Users className="w-3.5 h-3.5 text-blue-600" /> Usuarios / Cuentas Anuales
+                  <Users className="w-3.5 h-3.5 text-blue-600" /> {L('Usuarios / Cuentas Anuales', 'Annual Users / Accounts')}
                 </span>
                 <p className="text-2xl font-black text-slate-900 mt-1">
-                  {activeSubs.length} <span className="text-xs text-slate-400 font-normal">Cuentas</span>
+                  {activeSubs.length} <span className="text-xs text-slate-400 font-normal">{L('Cuentas', 'Accounts')}</span>
                 </p>
                 <span className="text-[10px] font-semibold text-blue-700 bg-blue-100/60 px-2 py-0.5 rounded mt-1 inline-block">
-                  {totalVehiculosMonitoreados} vehículos activos
+                  {totalVehiculosMonitoreados} {L('vehículos activos', 'active vehicles')}
                 </span>
               </div>
 
               {/* Métrica 3: Próximos a Corte (Alerta 5 días según Laravel) */}
               <div className="bg-amber-50/70 rounded-2xl p-4 border border-amber-200/80">
                 <span className="text-[11px] font-bold text-amber-800 flex items-center gap-1">
-                  <Bell className="w-3.5 h-3.5 text-amber-600 animate-bounce" /> Próximos a Corte (≤ 5 Días)
+                  <Bell className="w-3.5 h-3.5 text-amber-600 animate-bounce" /> {L('Próximos a Corte (≤ 5 Días)', 'Due Soon (≤ 5 Days)')}
                 </span>
                 <p className="text-2xl font-black text-amber-900 mt-1">
-                  {nearCutoffSubs.length} <span className="text-xs text-amber-700 font-normal">Usuarios</span>
+                  {nearCutoffSubs.length} <span className="text-xs text-amber-700 font-normal">{L('Usuarios', 'Users')}</span>
                 </p>
                 <span className="text-[10px] font-black text-amber-800 bg-amber-100 px-2 py-0.5 rounded mt-1 inline-block border border-amber-300">
-                  Recordatorio Laravel enviado
+                  {L('Recordatorio automático enviado', 'Automated reminder sent')}
                 </span>
               </div>
 
               {/* Métrica 4: Cortes Vencidos / Revocados */}
               <div className="bg-rose-50/70 rounded-2xl p-4 border border-rose-200/80">
                 <span className="text-[11px] font-bold text-rose-800 flex items-center gap-1">
-                  <ShieldAlert className="w-3.5 h-3.5 text-rose-600" /> En Corte / Vencidos
+                  <ShieldAlert className="w-3.5 h-3.5 text-rose-600" /> {L('En Corte / Vencidos', 'Suspended / Overdue')}
                 </span>
                 <p className="text-2xl font-black text-rose-900 mt-1">
-                  {overdueSubs.length} <span className="text-xs text-rose-700 font-normal">Cuentas</span>
+                  {overdueSubs.length} <span className="text-xs text-rose-700 font-normal">{L('Cuentas', 'Accounts')}</span>
                 </p>
                 <span className="text-[10px] font-black text-rose-800 bg-rose-100 px-2 py-0.5 rounded mt-1 inline-block border border-rose-300">
-                  Servicio suspendido en app
+                  {L('Servicio suspendido en app', 'Service suspended in app')}
                 </span>
               </div>
             </div>
@@ -1684,61 +1753,61 @@ export default function FortexaAppsView({
             <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-sm space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-[10px] font-black uppercase tracking-wider text-slate-500 bg-slate-100 px-2.5 py-1 rounded-lg">
-                  Plan 01 // Particular
+                  {L('Plan 01 // Particular', 'Plan 01 // Personal')}
                 </span>
                 <span className="text-xs font-bold text-emerald-600">Freemium</span>
               </div>
-              <h3 className="text-sm font-black text-slate-900">Conductor Particular</h3>
+              <h3 className="text-sm font-black text-slate-900">{L('Conductor Particular', 'Personal Driver')}</h3>
               <p className="text-xs text-slate-500 leading-relaxed">
-                Para autos o motos de uso diario. Bitácora de combustible, odómetro y recordatorios de servicio.
+                {L('Para autos o motos de uso diario. Bitácora de combustible, odómetro y recordatorios de servicio.', 'For everyday cars or motorcycles. Fuel log, odometer tracking, and maintenance reminders.')}
               </p>
               <div className="pt-2 border-t border-slate-100 flex items-baseline justify-between">
-                <span className="text-lg font-black text-slate-900">Gratis</span>
-                <span className="text-[11px] text-slate-400">1 Vehículo</span>
+                <span className="text-lg font-black text-slate-900">{L('Gratis', 'Free')}</span>
+                <span className="text-[11px] text-slate-400">{L('1 Vehículo', '1 Vehicle')}</span>
               </div>
             </div>
 
             <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-sm space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-[10px] font-black uppercase tracking-wider text-amber-800 bg-amber-100 px-2.5 py-1 rounded-lg">
-                  Plan 02 // Pro Anual
+                  {L('Plan 02 // Pro Anual', 'Plan 02 // Pro Annual')}
                 </span>
                 <span className="text-[10px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
-                  Uber / Reparto
+                  {L('Uber / Reparto', 'Rideshare / Delivery')}
                 </span>
               </div>
-              <h3 className="text-sm font-black text-slate-900">Pro Individual (Anual)</h3>
+              <h3 className="text-sm font-black text-slate-900">{L('Pro Individual (Anual)', 'Individual Pro (Annual)')}</h3>
               <p className="text-xs text-slate-600 leading-relaxed">
-                Cálculo de ganancia neta por turno, costo real por km y reportes para hasta 3 vehículos.
+                {L('Cálculo de ganancia neta por turno, costo real por km y reportes para hasta 3 vehículos.', 'Net profit calculation per shift, true cost per km/mile, and reports for up to 3 vehicles.')}
               </p>
               <div className="pt-2 border-t border-amber-200/60 flex items-baseline justify-between">
                 <div>
-                  <span className="text-lg font-black text-amber-900">Q 590.00</span>
-                  <span className="text-xs text-amber-700"> / año</span>
+                  <span className="text-lg font-black text-amber-900">{money(590)}</span>
+                  <span className="text-xs text-amber-700"> / {L('año', 'yr')}</span>
                 </div>
-                <span className="text-[10px] font-semibold text-slate-500 font-mono">(Q 49/mes)</span>
+                <span className="text-[10px] font-semibold text-slate-500 font-mono">({money(49)}/{L('mes', 'mo')})</span>
               </div>
             </div>
 
             <div className="bg-gradient-to-br from-amber-500/5 to-orange-500/10 rounded-2xl border border-amber-300 p-5 shadow-sm space-y-2 relative overflow-hidden">
               <div className="flex items-center justify-between">
                 <span className="text-[10px] font-black uppercase tracking-wider text-amber-900 bg-amber-100 px-2.5 py-1 rounded-lg">
-                  Plan 03 // B2B Anual
+                  {L('Plan 03 // B2B Anual', 'Plan 03 // B2B Annual')}
                 </span>
                 <span className="text-xs font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
-                  Más Popular
+                  {L('Más Popular', 'Most Popular')}
                 </span>
               </div>
-              <h3 className="text-sm font-black text-slate-900">Flotas B2B Pro (Anual)</h3>
+              <h3 className="text-sm font-black text-slate-900">{L('Flotas B2B Pro (Anual)', 'B2B Fleets Pro (Annual)')}</h3>
               <p className="text-xs text-slate-600 leading-relaxed">
-                Base 10 unidades. Auditoría de cargas sospechosas, mantenimiento preventivo y app choferes.
+                {L('Base 10 unidades. Auditoría de cargas sospechosas, mantenimiento preventivo y app choferes.', 'Base 10 vehicles. Suspicious fill-up auditing, preventive maintenance, and driver mobile app.')}
               </p>
               <div className="pt-2 border-t border-amber-200/60 flex items-baseline justify-between">
                 <div>
-                  <span className="text-lg font-black text-slate-900">Q 6,500.00</span>
-                  <span className="text-xs text-slate-500"> / año</span>
+                  <span className="text-lg font-black text-slate-900">{money(6500)}</span>
+                  <span className="text-xs text-slate-500"> / {L('año', 'yr')}</span>
                 </div>
-                <span className="text-[10px] font-semibold text-slate-500 font-mono">(Q 541/mes)</span>
+                <span className="text-[10px] font-semibold text-slate-500 font-mono">({money(541)}/{L('mes', 'mo')})</span>
               </div>
             </div>
 
@@ -1747,18 +1816,18 @@ export default function FortexaAppsView({
                 <span className="text-[10px] font-black uppercase tracking-wider text-purple-700 bg-purple-50 px-2.5 py-1 rounded-lg">
                   Plan 04 // Enterprise
                 </span>
-                <span className="text-xs font-bold text-purple-600">Corporativo</span>
+                <span className="text-xs font-bold text-purple-600">{L('Corporativo', 'Corporate')}</span>
               </div>
-              <h3 className="text-sm font-black text-slate-900">Flotas Enterprise (Anual)</h3>
+              <h3 className="text-sm font-black text-slate-900">{L('Flotas Enterprise (Anual)', 'Enterprise Fleets (Annual)')}</h3>
               <p className="text-xs text-slate-500 leading-relaxed">
-                25+ unidades. Telemetría GPS OBD-II, integración ERP IntegraPro y soporte prioritario 24/7.
+                {L('25+ unidades. Telemetría GPS OBD-II, integración ERP IntegraPro y soporte prioritario 24/7.', '25+ vehicles. GPS OBD-II telemetry, IntegraPro ERP integration, and 24/7 priority support.')}
               </p>
               <div className="pt-2 border-t border-purple-100 flex items-baseline justify-between">
                 <div>
-                  <span className="text-lg font-black text-purple-900">Q 12,000.00</span>
-                  <span className="text-xs text-purple-600"> / año</span>
+                  <span className="text-lg font-black text-purple-900">{money(12000)}</span>
+                  <span className="text-xs text-purple-600"> / {L('año', 'yr')}</span>
                 </div>
-                <span className="text-[10px] font-semibold text-slate-500 font-mono">(Q 1,000/mes)</span>
+                <span className="text-[10px] font-semibold text-slate-500 font-mono">({money(1000)}/{L('mes', 'mo')})</span>
               </div>
             </div>
           </div>
@@ -1769,10 +1838,10 @@ export default function FortexaAppsView({
               <div>
                 <h3 className="text-sm font-black text-slate-900 flex items-center gap-2">
                   <CreditCard className="w-4 h-4 text-amber-600" />
-                  Control de Usuarios, Tipos de Suscripción & Cortes
+                  {L('Control de Usuarios, Tipos de Suscripción & Cortes', 'Subscribers, Plans & Billing Cutoffs')}
                 </h3>
                 <p className="text-xs text-slate-500">
-                  Control exacto de los usuarios que pagan suscripción en Laravel (<code>software_licenses</code>), tipo de plan y semáforo de corte.
+                  {L('Control exacto de los usuarios que pagan suscripción, tipo de plan y semáforo de corte.', 'Exact tracking of paying subscribers, plan tiers, and billing cutoff status.')}
                 </p>
               </div>
 
@@ -1786,7 +1855,7 @@ export default function FortexaAppsView({
                       filterStatus === 'todos' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500 hover:text-slate-900'
                     }`}
                   >
-                    Todos ({rutafuelSubs.length})
+                    {L('Todos', 'All')} ({rutafuelSubs.length})
                   </button>
                   <button
                     type="button"
@@ -1798,7 +1867,7 @@ export default function FortexaAppsView({
                     }`}
                   >
                     <Bell className="w-3 h-3" />
-                    <span>Corte ≤ 5d ({nearCutoffSubs.length})</span>
+                    <span>{L('Corte ≤ 5d', 'Due ≤ 5d')} ({nearCutoffSubs.length})</span>
                   </button>
                   <button
                     type="button"
@@ -1810,7 +1879,7 @@ export default function FortexaAppsView({
                     }`}
                   >
                     <ShieldAlert className="w-3 h-3" />
-                    <span>Vencidos ({overdueSubs.length})</span>
+                    <span>{L('Vencidos', 'Overdue')} ({overdueSubs.length})</span>
                   </button>
                   <button
                     type="button"
@@ -1819,7 +1888,7 @@ export default function FortexaAppsView({
                       filterStatus === 'activa' ? 'bg-emerald-600 text-white shadow-xs' : 'text-emerald-700 hover:bg-emerald-100'
                     }`}
                   >
-                    Al Día
+                    {L('Al Día', 'Current')}
                   </button>
                 </div>
 
@@ -1827,7 +1896,7 @@ export default function FortexaAppsView({
                   <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                   <input
                     type="text"
-                    placeholder="Buscar usuario, email, código..."
+                    placeholder={L('Buscar usuario, email, código...', 'Search user, email, code...')}
                     value={subscriptionSearch}
                     onChange={(e) => setSubscriptionSearch(e.target.value)}
                     className="w-full pl-9 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-500"
@@ -1838,21 +1907,21 @@ export default function FortexaAppsView({
 
             {filteredSubs.length === 0 ? (
               <div className="py-12 text-center text-xs text-slate-400">
-                No se encontraron usuarios o suscripciones con los filtros seleccionados.
+                {L('No se encontraron usuarios o suscripciones con los filtros seleccionados.', 'No users or subscriptions found matching the selected filters.')}
               </div>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-xs">
                   <thead className="bg-slate-50 text-slate-500 font-bold border-b border-slate-100">
                     <tr>
-                      <th className="py-3 px-3">Usuario Pagador / Contacto</th>
-                      <th className="py-3 px-3">Aplicación & Plan</th>
-                      <th className="py-3 px-3">Cuota Recurrente</th>
-                      <th className="py-3 px-3">Fecha de Corte (expires_at)</th>
-                      <th className="py-3 px-3">Días para el Corte / Alerta</th>
-                      <th className="py-3 px-3">Dispositivo (HWID)</th>
-                      <th className="py-3 px-3">Estado</th>
-                      <th className="py-3 px-3 text-right">Acciones de Cobro</th>
+                      <th className="py-3 px-3">{L('Usuario Pagador / Contacto', 'Billing User / Contact')}</th>
+                      <th className="py-3 px-3">{L('Aplicación & Plan', 'App & Plan')}</th>
+                      <th className="py-3 px-3">{L('Cuota Recurrente', 'Recurring Fee')}</th>
+                      <th className="py-3 px-3">{L('Fecha de Corte (expires_at)', 'Cutoff Date (expires_at)')}</th>
+                      <th className="py-3 px-3">{L('Días para el Corte / Alerta', 'Days Until Cutoff / Alert')}</th>
+                      <th className="py-3 px-3">{L('Dispositivo (HWID)', 'Device (HWID)')}</th>
+                      <th className="py-3 px-3">{L('Estado', 'Status')}</th>
+                      <th className="py-3 px-3 text-right">{L('Acciones de Cobro', 'Billing Actions')}</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
@@ -1904,10 +1973,10 @@ export default function FortexaAppsView({
                                   ? 'bg-amber-100 text-amber-900 border border-amber-200'
                                   : 'bg-blue-100 text-blue-900 border border-blue-200'
                               }`}>
-                                {sub.plan}
+                                {trRutaFuelPlan(sub.plan)}
                               </span>
                               <p className="text-[10px] text-slate-400">
-                                {sub.vehiculos_activos} / {sub.vehiculos_contratados} veh. activos
+                                {sub.vehiculos_activos} / {sub.vehiculos_contratados} {L('veh. activos', 'active vehicles')}
                               </p>
                             </div>
                           </td>
@@ -1915,18 +1984,18 @@ export default function FortexaAppsView({
                           {/* Columna 3: Cuota Recurrente */}
                           <td className="py-3 px-3 font-mono">
                             <p className="font-black text-slate-900 text-sm">
-                              Q {sub.cuota.toFixed(2)}
+                              {money(sub.cuota)}
                             </p>
                             <span className="text-[10px] font-bold text-amber-800 bg-amber-50 px-1.5 py-0.5 rounded font-sans inline-block mt-0.5 border border-amber-200/60">
-                              {sub.ciclo === 'Anual' ? 'Suscripción Anual' : 'Mensual'}
+                              {sub.ciclo === 'Anual' ? L('Suscripción Anual', 'Annual Subscription') : L('Mensual', 'Monthly')}
                             </span>
                             {sub.ciclo === 'Anual' && sub.cuota > 0 && (
                               <span className="text-[9.5px] text-slate-400 font-sans block mt-0.5">
-                                (Q {(sub.cuota / 12).toFixed(2)} / mes)
+                                ({money(sub.cuota / 12)} / {L('mes', 'mo')})
                               </span>
                             )}
-                            <span className="text-[9px] text-slate-400 font-sans truncate max-w-[120px] block mt-0.5" title={sub.metodo_pago}>
-                              {sub.metodo_pago}
+                            <span className="text-[9px] text-slate-400 font-sans truncate max-w-[120px] block mt-0.5" title={trSubPayMethod(sub.metodo_pago)}>
+                              {trSubPayMethod(sub.metodo_pago)}
                             </span>
                           </td>
 
@@ -1946,7 +2015,7 @@ export default function FortexaAppsView({
                                 className="text-[10px] font-bold text-indigo-700 hover:text-indigo-900 hover:underline flex items-center gap-1 cursor-pointer"
                               >
                                 <Edit3 className="w-2.5 h-2.5" />
-                                <span>Cambiar fecha de corte</span>
+                                <span>{L('Cambiar fecha de corte', 'Change cutoff date')}</span>
                               </button>
                             </div>
                           </td>
@@ -1993,7 +2062,7 @@ export default function FortexaAppsView({
                               ) : (
                                 <span className="text-[10px] italic text-slate-400 flex items-center gap-1">
                                   <Smartphone className="w-3 h-3 text-slate-300" />
-                                  Pendiente vinculación
+                                  {L('Pendiente vinculación', 'Pending binding')}
                                 </span>
                               )}
                               <div className="flex items-center gap-1 font-mono text-[9px] text-slate-400">
@@ -2002,7 +2071,7 @@ export default function FortexaAppsView({
                                   type="button"
                                   onClick={() => handleCopy(sub.codigo_licencia)}
                                   className="text-slate-400 hover:text-slate-700"
-                                  title="Copiar código de activación"
+                                  title={L('Copiar código de activación', 'Copy activation code')}
                                 >
                                   <Copy className="w-2.5 h-2.5" />
                                 </button>
@@ -2019,7 +2088,7 @@ export default function FortexaAppsView({
                                 ? 'bg-blue-100 text-blue-800'
                                 : 'bg-emerald-100 text-emerald-800'
                             }`}>
-                              {isRevoked ? 'Revocada / Corte' : sub.estado === 'trial' ? 'En Prueba' : 'Activa'}
+                              {isRevoked ? L('Revocada / Corte', 'Revoked / Cut Off') : sub.estado === 'trial' ? L('En Prueba', 'Trial') : L('Activa', 'Active')}
                             </span>
                           </td>
 
@@ -2030,18 +2099,18 @@ export default function FortexaAppsView({
                               <button
                                 type="button"
                                 onClick={() => handleRenewCutoff(sub, 365)}
-                                title="Registrar pago y renovar suscripción anual (+365 días)"
+                                title={L('Registrar pago y renovar suscripción anual (+365 días)', 'Record payment and renew annual subscription (+365 days)')}
                                 className="px-3 py-1.5 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white text-[11px] font-bold rounded-xl shadow-xs transition-all flex items-center gap-1 cursor-pointer active:scale-95"
                               >
                                 <RefreshCw className="w-3 h-3 text-white" />
-                                <span>+1 Año</span>
+                                <span>{L('+1 Año', '+1 Year')}</span>
                               </button>
 
                               {/* Botón Auxiliar +30 Días */}
                               <button
                                 type="button"
                                 onClick={() => handleRenewCutoff(sub, 30)}
-                                title="Extender corte 30 días adicionales"
+                                title={L('Extender corte 30 días adicionales', 'Extend cutoff by 30 additional days')}
                                 className="px-2 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-[10px] font-bold rounded-xl transition-all flex items-center gap-0.5 cursor-pointer"
                               >
                                 <span>+30d</span>
@@ -2051,14 +2120,14 @@ export default function FortexaAppsView({
                               <button
                                 type="button"
                                 onClick={() => handleToggleStatus(sub)}
-                                title={isRevoked ? 'Reactivar servicio' : 'Cortar servicio por falta de pago'}
+                                title={isRevoked ? L('Reactivar servicio', 'Reactivate service') : L('Cortar servicio por falta de pago', 'Suspend service for non-payment')}
                                 className={`p-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer border ${
                                   isRevoked
                                     ? 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border-emerald-200'
                                     : 'bg-rose-50 hover:bg-rose-100 text-rose-700 border-rose-200'
                                 }`}
                               >
-                                {isRevoked ? 'Reactivar' : 'Cortar'}
+                                {isRevoked ? L('Reactivar', 'Reactivate') : L('Cortar', 'Suspend')}
                               </button>
                             </div>
                           </td>
@@ -2088,20 +2157,20 @@ export default function FortexaAppsView({
                   <h2 className="text-base font-black text-slate-900 flex items-center gap-2">
                     Quantum Store POS
                     <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-amber-100 text-amber-800 border border-amber-200">
-                      Ventas Hotmart
+                      {L('Ventas Hotmart', 'Hotmart Sales')}
                     </span>
                   </h2>
                   <p className="text-xs text-slate-500">
-                    Sistema de facturación y punto de venta de escritorio para tiendas retail, minimarkets y boutiques.
+                    {L('Sistema de facturación y punto de venta de escritorio para tiendas retail, minimarkets y boutiques.', 'Desktop point-of-sale and billing system for retail stores, mini-markets, and boutiques.')}
                   </p>
                 </div>
               </div>
 
               <div className="flex items-center gap-2">
                 <div className="text-right pr-3 border-r border-slate-200 hidden sm:block">
-                  <p className="text-[10px] font-bold text-slate-400 uppercase">Integración Hotmart</p>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase">{L('Integración Hotmart', 'Hotmart Integration')}</p>
                   <p className="text-xs font-black text-emerald-600 flex items-center gap-1 justify-end">
-                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" /> Webhook Activo
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" /> {L('Webhook Activo', 'Webhook Active')}
                   </p>
                 </div>
                 <button
@@ -2109,44 +2178,44 @@ export default function FortexaAppsView({
                   className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl transition-all flex items-center gap-2 cursor-pointer"
                 >
                   <Plus className="w-3.5 h-3.5" />
-                  <span>Emitir Licencia</span>
+                  <span>{L('Emitir Licencia', 'Issue License')}</span>
                 </button>
               </div>
             </div>
 
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-6">
               <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200/60">
-                <span className="text-[11px] font-bold text-slate-500">Total Licencias Registradas</span>
+                <span className="text-[11px] font-bold text-slate-500">{L('Total Licencias Registradas', 'Total Registered Licenses')}</span>
                 <p className="text-2xl font-black text-slate-900 mt-1">{licenses.length}</p>
                 <span className="text-[10px] font-semibold text-purple-600 bg-purple-50 px-2 py-0.5 rounded mt-1 inline-block">
-                  Droplet MySQL Sync
+                  {L('Sincronización MySQL', 'Cloud MySQL Sync')}
                 </span>
               </div>
               <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200/60">
-                <span className="text-[11px] font-bold text-slate-500">Tipo Perpetua (Vitalicia)</span>
+                <span className="text-[11px] font-bold text-slate-500">{L('Tipo Perpetua (Vitalicia)', 'Perpetual (Lifetime)')}</span>
                 <p className="text-2xl font-black text-slate-900 mt-1">
                   {licenses.filter(l => l.license_type?.toLowerCase().includes('perpetual') || l.license_type?.toLowerCase().includes('vitalicia')).length}
                 </p>
                 <span className="text-[10px] font-semibold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded mt-1 inline-block">
-                  Pago Único
+                  {L('Pago Único', 'One-Time Payment')}
                 </span>
               </div>
               <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200/60">
-                <span className="text-[11px] font-bold text-slate-500">Suscripción / Anual</span>
+                <span className="text-[11px] font-bold text-slate-500">{L('Suscripción / Anual', 'Subscription / Annual')}</span>
                 <p className="text-2xl font-black text-slate-900 mt-1">
                   {licenses.filter(l => l.license_type?.toLowerCase().includes('sub')).length}
                 </p>
                 <span className="text-[10px] font-semibold text-blue-600 bg-blue-50 px-2 py-0.5 rounded mt-1 inline-block">
-                  Recurrente
+                  {L('Recurrente', 'Recurring')}
                 </span>
               </div>
               <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200/60">
-                <span className="text-[11px] font-bold text-slate-500">Activaciones con HWID</span>
+                <span className="text-[11px] font-bold text-slate-500">{L('Activaciones con HWID', 'HWID Activations')}</span>
                 <p className="text-2xl font-black text-slate-900 mt-1">
                   {licenses.filter(l => Boolean(l.hwid)).length}
                 </p>
                 <span className="text-[10px] font-semibold text-amber-600 bg-amber-50 px-2 py-0.5 rounded mt-1 inline-block">
-                  Hardware Vinculado
+                  {L('Hardware Vinculado', 'Bound Hardware')}
                 </span>
               </div>
             </div>
@@ -2157,10 +2226,10 @@ export default function FortexaAppsView({
               <div>
                 <h3 className="text-sm font-black text-slate-900 flex items-center gap-2">
                   <Key className="w-4 h-4 text-purple-600" />
-                  Licencias de Software Emitidas
+                  {L('Licencias de Software Emitidas', 'Issued Software Licenses')}
                 </h3>
                 <p className="text-xs text-slate-500">
-                  Códigos de activación sincronizados desde el webhook de compras de Hotmart y emitidos manualmente.
+                  {L('Códigos de activación sincronizados desde el webhook de compras de Hotmart y emitidos manualmente.', 'Activation codes synced from Hotmart purchase webhooks and manually issued keys.')}
                 </p>
               </div>
 
@@ -2168,7 +2237,7 @@ export default function FortexaAppsView({
                 <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                 <input
                   type="text"
-                  placeholder="Buscar por código, email..."
+                  placeholder={L('Buscar por código, email...', 'Search by code, email...')}
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="w-full pl-9 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-500"
@@ -2178,23 +2247,23 @@ export default function FortexaAppsView({
 
             {loading ? (
               <div className="py-12 text-center text-xs text-slate-400">
-                Cargando licencias desde la base de datos de producción...
+                {L('Cargando licencias desde la base de datos de producción...', 'Loading licenses from production database...')}
               </div>
             ) : filteredLicenses.length === 0 ? (
               <div className="py-12 text-center text-xs text-slate-400">
-                No se encontraron licencias registradas para esta búsqueda.
+                {L('No se encontraron licencias registradas para esta búsqueda.', 'No licenses found for this search.')}
               </div>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-xs">
                   <thead className="bg-slate-50 text-slate-500 font-bold border-b border-slate-100">
                     <tr>
-                      <th className="py-3 px-3">Aplicación & Titular</th>
-                      <th className="py-3 px-3">Código de Licencia</th>
-                      <th className="py-3 px-3">Modelo Comercial & Corte</th>
-                      <th className="py-3 px-3">Dispositivo (HWID)</th>
-                      <th className="py-3 px-3">Estado</th>
-                      <th className="py-3 px-3 text-right">Gestión de Licencia</th>
+                      <th className="py-3 px-3">{L('Aplicación & Titular', 'App & Holder')}</th>
+                      <th className="py-3 px-3">{L('Código de Licencia', 'License Code')}</th>
+                      <th className="py-3 px-3">{L('Modelo Comercial & Corte', 'Commercial Model & Cutoff')}</th>
+                      <th className="py-3 px-3">{L('Dispositivo (HWID)', 'Device (HWID)')}</th>
+                      <th className="py-3 px-3">{L('Estado', 'Status')}</th>
+                      <th className="py-3 px-3 text-right">{L('Gestión de Licencia', 'License Management')}</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
@@ -2232,7 +2301,7 @@ export default function FortexaAppsView({
                               <button
                                 onClick={() => handleCopy(lic.license_code)}
                                 className="p-1 hover:bg-slate-200 rounded text-slate-400 hover:text-slate-700 transition-colors cursor-pointer"
-                                title="Copiar código de activación"
+                                title={L('Copiar código de activación', 'Copy activation code')}
                               >
                                 {copiedCode === lic.license_code ? (
                                   <Check className="w-3.5 h-3.5 text-emerald-600" />
@@ -2249,7 +2318,7 @@ export default function FortexaAppsView({
                               {isSub ? (
                                 <>
                                   <span className="px-2 py-0.5 rounded-lg text-[10px] font-black uppercase bg-blue-100 text-blue-800 border border-blue-200 inline-block">
-                                    Mensualidad / Suscripción
+                                    {L('Mensualidad / Suscripción', 'Monthly / Subscription')}
                                   </span>
                                   {cutoff && (
                                     <div className="flex items-center gap-1.5">
@@ -2261,7 +2330,7 @@ export default function FortexaAppsView({
                                           : 'bg-rose-50 text-rose-800 border border-rose-300'
                                       }`}>
                                         <Calendar className="w-3 h-3" />
-                                        <span>Corte: {cutoff.formattedDate}</span>
+                                        <span>{L('Corte:', 'Cutoff:')} {cutoff.formattedDate}</span>
                                       </span>
                                     </div>
                                   )}
@@ -2270,10 +2339,10 @@ export default function FortexaAppsView({
                                 <>
                                   <span className="px-2 py-0.5 rounded-lg text-[10px] font-black uppercase bg-purple-100 text-purple-800 border border-purple-200 inline-flex items-center gap-1">
                                     <Infinity className="w-3 h-3 text-purple-700" />
-                                    <span>Licencia Perpetua</span>
+                                    <span>{L('Licencia Perpetua', 'Perpetual License')}</span>
                                   </span>
                                   <p className="text-[10px] text-slate-400 font-medium">
-                                    Pago Único • Sin fecha de corte
+                                    {L('Pago Único • Sin fecha de corte', 'One-Time Payment • No expiration')}
                                   </p>
                                 </>
                               )}
@@ -2290,7 +2359,7 @@ export default function FortexaAppsView({
                                   </span>
                                   <button
                                     onClick={() => handleResetQuantumHWID(lic)}
-                                    title="Liberar HWID para permitir reinstalación en nueva PC"
+                                    title={L('Liberar HWID para permitir reinstalación en nueva PC', 'Unbind HWID to allow reactivation on a new PC')}
                                     className="p-1 hover:bg-amber-100 text-amber-700 rounded transition-colors cursor-pointer"
                                   >
                                     <Unlock className="w-3 h-3" />
@@ -2298,7 +2367,7 @@ export default function FortexaAppsView({
                                 </div>
                               ) : (
                                 <span className="italic text-slate-400 text-[10.5px]">
-                                  Pendiente de vinculación
+                                  {L('Pendiente de vinculación', 'Pending binding')}
                                 </span>
                               )}
                             </div>
@@ -2312,7 +2381,7 @@ export default function FortexaAppsView({
                                 : 'bg-rose-100 text-rose-800'
                             }`}>
                               <span className={`w-1.5 h-1.5 rounded-full ${isAct ? 'bg-emerald-500' : 'bg-rose-500'}`} />
-                              {isAct ? 'Activa' : 'Suspendida'}
+                              {isAct ? L('Activa', 'Active') : L('Suspendida', 'Suspended')}
                             </span>
                           </td>
 
@@ -2324,7 +2393,7 @@ export default function FortexaAppsView({
                                   <button
                                     type="button"
                                     onClick={() => handleRenewQuantumLicense(lic, 30)}
-                                    title="Renovar mensualidad (+30 días)"
+                                    title={L('Renovar mensualidad (+30 días)', 'Renew monthly (+30 days)')}
                                     className="px-2.5 py-1 bg-slate-900 hover:bg-slate-800 text-white text-[10.5px] font-bold rounded-lg shadow-xs transition-all flex items-center gap-1 cursor-pointer"
                                   >
                                     <RefreshCw className="w-3 h-3 text-emerald-400" />
@@ -2333,10 +2402,10 @@ export default function FortexaAppsView({
                                   <button
                                     type="button"
                                     onClick={() => handleRenewQuantumLicense(lic, 365)}
-                                    title="Renovar suscripción anual (+1 año)"
+                                    title={L('Renovar suscripción anual (+1 año)', 'Renew annual subscription (+1 year)')}
                                     className="px-2.5 py-1 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-[10.5px] font-bold rounded-lg shadow-xs transition-all flex items-center gap-1 cursor-pointer"
                                   >
-                                    <span>+1 Año</span>
+                                    <span>{L('+1 Año', '+1 Year')}</span>
                                   </button>
                                 </>
                               ) : (
@@ -2344,11 +2413,11 @@ export default function FortexaAppsView({
                                   <button
                                     type="button"
                                     onClick={() => handleResetQuantumHWID(lic)}
-                                    title="Desvincular hardware actual para permitir activación en otra máquina"
+                                    title={L('Desvincular hardware actual para permitir activación en otra máquina', 'Unbind current hardware to allow activation on another machine')}
                                     className="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 text-[10.5px] font-bold rounded-lg transition-all flex items-center gap-1 cursor-pointer"
                                   >
                                     <Unlock className="w-3 h-3" />
-                                    <span>Liberar PC</span>
+                                    <span>{L('Liberar PC', 'Unbind PC')}</span>
                                   </button>
                                 )
                               )}
@@ -2356,14 +2425,14 @@ export default function FortexaAppsView({
                               <button
                                 type="button"
                                 onClick={() => handleToggleQuantumStatus(lic)}
-                                title={isAct ? 'Pausar/Suspender licencia' : 'Reactivar licencia'}
+                                title={isAct ? L('Pausar/Suspender licencia', 'Pause/Suspend license') : L('Reactivar licencia', 'Reactivate license')}
                                 className={`px-2 py-1 rounded-lg text-[10.5px] font-bold transition-all cursor-pointer border ${
                                   isAct
                                     ? 'bg-rose-50 hover:bg-rose-100 text-rose-700 border-rose-200'
                                     : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border-emerald-200'
                                 }`}
                               >
-                                {isAct ? 'Cortar' : 'Reactivar'}
+                                {isAct ? L('Cortar', 'Suspend') : L('Reactivar', 'Reactivate')}
                               </button>
                             </div>
                           </td>
@@ -2397,7 +2466,7 @@ export default function FortexaAppsView({
                     </span>
                   </h2>
                   <p className="text-xs text-slate-500">
-                    Suite empresarial en la nube con facturación SAT FEL, inventarios, Kiosco biométrico y administración multi-sucursal.
+                    {L('Suite empresarial en la nube con facturación SAT FEL, inventarios, Kiosco biométrico y administración multi-sucursal.', 'Cloud enterprise suite with E-Invoicing, multi-warehouse inventory, biometric Time Clock, and multi-branch management.')}
                   </p>
                 </div>
               </div>
@@ -2405,7 +2474,7 @@ export default function FortexaAppsView({
               <div className="text-right">
                 <span className="px-3 py-1 rounded-xl bg-slate-900 text-white font-bold text-xs flex items-center gap-1.5">
                   <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                  <span>{allEmpresas.length} Tenants en MySQL</span>
+                  <span>{allEmpresas.length} {L('Tenants en MySQL', 'Cloud Tenants')}</span>
                 </span>
               </div>
             </div>
@@ -2417,7 +2486,7 @@ export default function FortexaAppsView({
               <div className="bg-gradient-to-br from-rose-500/5 via-pink-500/10 to-purple-500/10 rounded-2xl border-2 border-rose-300 p-5 space-y-2 relative overflow-hidden shadow-xs">
                 <div className="flex items-center justify-between">
                   <span className="text-[10px] font-black uppercase tracking-wider text-rose-700 bg-rose-100 px-2.5 py-0.5 rounded-lg border border-rose-200">
-                    Solo Live
+                    {L('Solo Live', 'Live Only')}
                   </span>
                   <span className="text-[10px] font-bold text-pink-700 bg-pink-50 px-2 py-0.5 rounded border border-pink-200 animate-pulse">
                     Social Commerce
@@ -2428,11 +2497,11 @@ export default function FortexaAppsView({
                   TikTok Live Express
                 </h3>
                 <p className="text-xs text-slate-600 leading-relaxed">
-                  Venta en vivo, canastas automáticas, catálogo con scraper Shein/Temu, envíos Guatex/Forza y WhatsApp. 0 facturación SAT ni contabilidad.
+                  {L('Venta en vivo, canastas automáticas, catálogo con scraper Shein/Temu, envíos Guatex/Forza y WhatsApp. 0 facturación SAT ni contabilidad.', 'Live selling, automated carts, Shein/Temu catalog scraper, courier shipping, and WhatsApp checkout. No tax filing or accounting clutter.')}
                 </p>
                 <div className="pt-2 border-t border-rose-200 flex items-baseline justify-between font-mono">
-                  <span className="text-lg font-black text-rose-700">Q 199.00</span>
-                  <span className="text-xs text-rose-600 font-sans">/ mes</span>
+                  <span className="text-lg font-black text-rose-700">{money(199)}</span>
+                  <span className="text-xs text-rose-600 font-sans">/ {L('mes', 'mo')}</span>
                 </div>
               </div>
 
@@ -2440,17 +2509,17 @@ export default function FortexaAppsView({
               <div className="bg-slate-50 rounded-2xl border border-slate-200/80 p-5 space-y-2">
                 <div className="flex items-center justify-between">
                   <span className="text-[10px] font-black uppercase tracking-wider text-slate-600 bg-slate-200/60 px-2.5 py-0.5 rounded-lg">
-                    Plan Básico
+                    {L('Plan Básico', 'Starter Plan')}
                   </span>
-                  <span className="text-xs font-bold text-blue-600">Comercio</span>
+                  <span className="text-xs font-bold text-blue-600">{L('Comercio', 'Retail')}</span>
                 </div>
-                <h3 className="text-sm font-black text-slate-900">IntegraPro PyME</h3>
+                <h3 className="text-sm font-black text-slate-900">{L('IntegraPro PyME', 'IntegraPro SMB')}</h3>
                 <p className="text-xs text-slate-500 leading-relaxed">
-                  Hasta 2 sucursales, facturación SAT FEL ilimitada, inventarios e informes básicos de ventas.
+                  {L('Hasta 2 sucursales, facturación SAT FEL ilimitada, inventarios e informes básicos de ventas.', 'Up to 2 branches, unlimited E-Invoicing, inventory control, and essential sales reports.')}
                 </p>
                 <div className="pt-2 border-t border-slate-200/60 flex items-baseline justify-between font-mono">
-                  <span className="text-lg font-black text-slate-900">Q 299.00</span>
-                  <span className="text-xs text-slate-500 font-sans">/ mes</span>
+                  <span className="text-lg font-black text-slate-900">{money(299)}</span>
+                  <span className="text-xs text-slate-500 font-sans">/ {L('mes', 'mo')}</span>
                 </div>
               </div>
 
@@ -2458,19 +2527,19 @@ export default function FortexaAppsView({
               <div className="bg-gradient-to-br from-blue-500/5 to-indigo-500/10 rounded-2xl border border-blue-300 p-5 space-y-2 relative overflow-hidden">
                 <div className="flex items-center justify-between">
                   <span className="text-[10px] font-black uppercase tracking-wider text-blue-900 bg-blue-100 px-2.5 py-0.5 rounded-lg">
-                    Plan Estándar
+                    {L('Plan Estándar', 'Standard Plan')}
                   </span>
                   <span className="text-[10px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
-                    Más Elegido
+                    {L('Más Elegido', 'Most Popular')}
                   </span>
                 </div>
-                <h3 className="text-sm font-black text-slate-900">IntegraPro Comercial</h3>
+                <h3 className="text-sm font-black text-slate-900">{L('IntegraPro Comercial', 'IntegraPro Business')}</h3>
                 <p className="text-xs text-slate-600 leading-relaxed">
-                  Hasta 5 sucursales, Kiosco biométrico de RRHH, traslados entre bodegas y cuentas por cobrar.
+                  {L('Hasta 5 sucursales, Kiosco biométrico de RRHH, traslados entre bodegas y cuentas por cobrar.', 'Up to 5 branches, biometric HR Time Clock, warehouse transfers, and Accounts Receivable.')}
                 </p>
                 <div className="pt-2 border-t border-blue-200/60 flex items-baseline justify-between font-mono">
-                  <span className="text-lg font-black text-slate-900">Q 699.00</span>
-                  <span className="text-xs text-blue-700 font-sans">/ mes</span>
+                  <span className="text-lg font-black text-slate-900">{money(699)}</span>
+                  <span className="text-xs text-blue-700 font-sans">/ {L('mes', 'mo')}</span>
                 </div>
               </div>
 
@@ -2478,17 +2547,17 @@ export default function FortexaAppsView({
               <div className="bg-slate-50 rounded-2xl border border-slate-200/80 p-5 space-y-2">
                 <div className="flex items-center justify-between">
                   <span className="text-[10px] font-black uppercase tracking-wider text-purple-700 bg-purple-100 px-2.5 py-0.5 rounded-lg">
-                    Plan Enterprise
+                    {L('Plan Enterprise', 'Enterprise Plan')}
                   </span>
-                  <span className="text-xs font-bold text-purple-600">Corporativo</span>
+                  <span className="text-xs font-bold text-purple-600">{L('Corporativo', 'Corporate')}</span>
                 </div>
-                <h3 className="text-sm font-black text-slate-900">IntegraPro Corporativo</h3>
+                <h3 className="text-sm font-black text-slate-900">{L('IntegraPro Corporativo', 'IntegraPro Enterprise')}</h3>
                 <p className="text-xs text-slate-500 leading-relaxed">
-                  Sucursales ilimitadas, multi-empresa, API contable en tiempo real y soporte dedicado 24/7.
+                  {L('Sucursales ilimitadas, multi-empresa, API contable en tiempo real y soporte dedicado 24/7.', 'Unlimited branches, multi-company support, real-time accounting API, and 24/7 dedicated support.')}
                 </p>
                 <div className="pt-2 border-t border-slate-200/60 flex items-baseline justify-between font-mono">
-                  <span className="text-lg font-black text-slate-900">Q 1,499.00</span>
-                  <span className="text-xs text-slate-500 font-sans">/ mes</span>
+                  <span className="text-lg font-black text-slate-900">{money(1499)}</span>
+                  <span className="text-xs text-slate-500 font-sans">/ {L('mes', 'mo')}</span>
                 </div>
               </div>
             </div>
@@ -2498,22 +2567,25 @@ export default function FortexaAppsView({
               <div className="space-y-1">
                 <div className="flex items-center gap-2">
                   <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-rose-600 text-white shadow-xs">
-                    Add-on Extra para ERP
+                    {L('Add-on Extra para ERP', 'ERP Extra Add-on')}
                   </span>
                   <span className="text-xs font-bold text-slate-600">Fortexa Social Commerce Division</span>
                 </div>
                 <h4 className="text-sm font-black text-slate-900">
-                  Módulo Extra: TikTok Live Commerce (+Q 99.00 / mes)
+                  {L(`Módulo Extra: TikTok Live Commerce (+${money(99)} / mes)`, `Extra Module: TikTok Live Commerce (+${money(99)} / mo)`)}
                 </h4>
                 <p className="text-xs text-slate-600 max-w-xl">
-                  Para clientes con Plan PyME, Estándar o Enterprise (como tiendas físicas o cadenas de retail) que desean transmitir en TikTok/Facebook Live y rematar stock conectando directamente con su inventario central.
+                  {L(
+                    'Para clientes con Plan PyME, Estándar o Enterprise (como tiendas físicas o cadenas de retail) que desean transmitir en TikTok/Facebook Live y rematar stock conectando directamente con su inventario central.',
+                    'For SMB, Business, or Enterprise customers (physical stores or retail chains) who want to host TikTok/Facebook Live sales synced directly with their central inventory.'
+                  )}
                 </p>
               </div>
 
               <div className="flex flex-wrap items-center gap-3 shrink-0">
                 <div className="text-right">
-                  <p className="text-lg font-black text-rose-600 font-mono">Q 99.00 <span className="text-xs font-sans text-slate-500">/ mes</span></p>
-                  <p className="text-[10px] text-slate-400">Add-on recurrente</p>
+                  <p className="text-lg font-black text-rose-600 font-mono">{money(99)} <span className="text-xs font-sans text-slate-500">/ {L('mes', 'mo')}</span></p>
+                  <p className="text-[10px] text-slate-400">{L('Add-on recurrente', 'Recurring add-on')}</p>
                 </div>
                 <button
                   type="button"
@@ -2522,10 +2594,10 @@ export default function FortexaAppsView({
                     handleOpenSaaSModal(demoLive);
                   }}
                   className="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs shadow-md transition-all flex items-center gap-1.5 cursor-pointer"
-                  title="Configurar el módulo Live en cualquiera de las empresas suscritas"
+                  title={L('Configurar el módulo Live en cualquiera de las empresas suscritas', 'Configure the Live module on any subscribed company')}
                 >
                   <Sliders className="w-3.5 h-3.5 text-indigo-300" />
-                  <span>Programar en Empresas</span>
+                  <span>{L('Programar en Empresas', 'Configure on Tenants')}</span>
                 </button>
               </div>
             </div>
@@ -2536,15 +2608,15 @@ export default function FortexaAppsView({
                 <div>
                   <h3 className="text-sm font-black text-slate-900 flex items-center gap-2">
                     <Building2 className="w-4 h-4 text-blue-600" />
-                    Empresas Tenants & Suscripciones SaaS ({allEmpresas.length})
+                    {L(`Empresas Tenants & Suscripciones SaaS (${allEmpresas.length})`, `Tenant Companies & SaaS Subscriptions (${allEmpresas.length})`)}
                   </h3>
                   <p className="text-xs text-slate-500">
-                    Administración de planes SaaS, alta de nuevos inquilinos aislados, suspensión de servicio y control de módulos.
+                    {L('Administración de planes SaaS, alta de nuevos inquilinos aislados, suspensión de servicio y control de módulos.', 'Manage SaaS plans, onboard isolated tenants, suspend access, and control module entitlements.')}
                   </p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
                   <span className="text-xs font-bold text-slate-600 bg-slate-100 px-3 py-1.5 rounded-xl">
-                    {liveEnabledCount} con Módulo Live activo
+                    {liveEnabledCount} {L('con Módulo Live activo', 'with Live Module active')}
                   </span>
                   <button
                     type="button"
@@ -2552,7 +2624,7 @@ export default function FortexaAppsView({
                     className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 text-white text-xs font-black shadow-md shadow-indigo-600/25 flex items-center gap-1.5 transition-all cursor-pointer"
                   >
                     <Plus className="w-4 h-4" />
-                    <span>Activar Nuevo Cliente (Inquilino)</span>
+                    <span>{L('Activar Nuevo Cliente (Inquilino)', 'Activate New Client (Tenant)')}</span>
                   </button>
                 </div>
               </div>
@@ -2562,15 +2634,15 @@ export default function FortexaAppsView({
                   <table className="w-full text-left text-xs">
                     <thead className="bg-slate-50 text-slate-500 font-bold border-b border-slate-200 uppercase text-[10px] tracking-wider">
                       <tr>
-                        <th className="py-3 px-3.5">ID Tenant</th>
-                        <th className="py-3 px-3.5">Empresa / Razón Social</th>
-                        <th className="py-3 px-3.5">Régimen SAT</th>
-                        <th className="py-3 px-3.5">Plan SaaS Contratado</th>
-                        <th className="py-3 px-3.5">Módulo TikTok Live</th>
-                        <th className="py-3 px-3.5">Entorno de Usuario</th>
-                        <th className="py-3 px-3.5">Cuota & Próximo Cobro</th>
-                        <th className="py-3 px-3.5">Estado</th>
-                        <th className="py-3 px-3.5 text-right">Gestión SaaS</th>
+                        <th className="py-3 px-3.5">{L('ID Tenant', 'Tenant ID')}</th>
+                        <th className="py-3 px-3.5">{L('Empresa / Razón Social', 'Company / Legal Name')}</th>
+                        <th className="py-3 px-3.5">{L('Régimen SAT', `${taxIdLabel} & Tax Regime`)}</th>
+                        <th className="py-3 px-3.5">{L('Plan SaaS Contratado', 'Subscribed SaaS Plan')}</th>
+                        <th className="py-3 px-3.5">{L('Módulo TikTok Live', 'TikTok Live Module')}</th>
+                        <th className="py-3 px-3.5">{L('Entorno de Usuario', 'Workspace Mode')}</th>
+                        <th className="py-3 px-3.5">{L('Cuota & Próximo Cobro', 'Fee & Next Billing')}</th>
+                        <th className="py-3 px-3.5">{L('Estado', 'Status')}</th>
+                        <th className="py-3 px-3.5 text-right">{L('Gestión SaaS', 'SaaS Actions')}</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 font-medium">
@@ -2589,8 +2661,8 @@ export default function FortexaAppsView({
                               <p className="text-[10px] text-slate-400">{emp.razon_social || emp.nombre}</p>
                             </td>
                             <td className="py-3.5 px-3.5">
-                              <span className="text-slate-600 font-mono text-[11px]">{emp.nit || 'CF'}</span>
-                              <p className="text-[10px] text-slate-400">{emp.regimen}</p>
+                              <span className="text-slate-600 font-mono text-[11px]">{trTaxId(emp.nit)}</span>
+                              <p className="text-[10px] text-slate-400">{trRegime(emp.regimen)}</p>
                             </td>
                             <td className="py-3.5 px-3.5">
                               <span className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider inline-flex items-center gap-1 ${
@@ -2602,18 +2674,18 @@ export default function FortexaAppsView({
                                   ? 'bg-blue-100 text-blue-800 border border-blue-200'
                                   : 'bg-slate-200 text-slate-700 border border-slate-300'
                               }`}>
-                                {isLivePlan ? '🔴 Live Express (Q199)' : `Plan ${emp.plan?.toUpperCase() || 'ESTÁNDAR'}`}
+                                {isLivePlan ? `🔴 Live Express (${money(199)})` : L(`Plan ${emp.plan?.toUpperCase() || 'ESTÁNDAR'}`, `${emp.plan?.toUpperCase() || 'STANDARD'} Plan`)}
                               </span>
                             </td>
                             <td className="py-3.5 px-3.5">
                               {hasLiveAddon ? (
                                 <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200 inline-flex items-center gap-1">
                                   <Video className="w-3 h-3 text-rose-600" />
-                                  <span>{isLivePlan ? 'Plan Incluido' : 'Add-on Activo (+Q99)'}</span>
+                                  <span>{isLivePlan ? L('Plan Incluido', 'Included in Plan') : L(`Add-on Activo (+${money(99)})`, `Active Add-on (+${money(99)})`)}</span>
                                 </span>
                               ) : (
                                 <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-slate-100 text-slate-400 border border-slate-200">
-                                  Inactivo
+                                  {L('Inactivo', 'Inactive')}
                                 </span>
                               )}
                             </td>
@@ -2621,17 +2693,17 @@ export default function FortexaAppsView({
                               {isLiveOnly ? (
                                 <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200 inline-flex items-center gap-1">
                                   <Zap className="w-3 h-3 text-amber-600" />
-                                  <span>Solo Live Express (0 ERP)</span>
+                                  <span>{L('Solo Live Express (0 ERP)', 'Live Express Only (No ERP)')}</span>
                                 </span>
                               ) : emp.modules?.pos === false ? (
                                 <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-blue-50 text-blue-800 border border-blue-200 inline-flex items-center gap-1">
                                   <Layers className="w-3 h-3 text-blue-600" />
-                                  <span>Administrativo (Sin POS)</span>
+                                  <span>{L('Administrativo (Sin POS)', 'Back-Office (No POS)')}</span>
                                 </span>
                               ) : (
                                 <span className="px-2 py-0.5 rounded-md text-[10px] font-medium bg-slate-100 text-slate-700 border border-slate-200 inline-flex items-center gap-1">
                                   <Layers className="w-3 h-3 text-slate-500" />
-                                  <span>Suite ERP Completa</span>
+                                  <span>{L('Suite ERP Completa', 'Full ERP Suite')}</span>
                                 </span>
                               )}
                             </td>
@@ -2641,19 +2713,19 @@ export default function FortexaAppsView({
                                 const cur = b?.currency || getCurrencyForCountry(emp.pais);
                                 const sym = getCurrencySymbol(cur, emp.pais);
                                 const amt = b?.amount ?? 0;
-                                const cycLabel = b?.cycle === 'annual' ? 'año' : 'mes';
+                                const cycLabel = b?.cycle === 'annual' ? L('año', 'yr') : L('mes', 'mo');
                                 const dueInfo = getBillingDaysInfo(b?.next_billing_date || emp.trial_ends_at);
 
                                 if (emp.id === 1 || emp.id === 22) {
                                   return (
-                                    <span className="text-[10px] font-bold text-slate-400">Empresa Propia</span>
+                                    <span className="text-[10px] font-bold text-slate-400">{L('Empresa Propia', 'Owned Company')}</span>
                                   );
                                 }
 
                                 return (
                                   <div className="space-y-0.5">
                                     <div className="font-mono font-black text-slate-900 text-[11px]">
-                                      {amt > 0 ? `${sym} ${Number(amt).toFixed(2)} / ${cycLabel}` : 'Sin tarifa'}
+                                      {amt > 0 ? `${sym} ${Number(amt).toFixed(2)} / ${cycLabel}` : L('Sin tarifa', 'No fee set')}
                                       <span className="ml-1 text-[9px] font-bold text-slate-400">{cur}</span>
                                     </div>
                                     {dueInfo ? (
@@ -2665,13 +2737,13 @@ export default function FortexaAppsView({
                                           : 'bg-emerald-50 text-emerald-700'
                                       }`}>
                                         {dueInfo.diffDays < 0
-                                          ? `Vencida (${dueInfo.date})`
+                                          ? L(`Vencida (${dueInfo.date})`, `Overdue (${dueInfo.date})`)
                                           : dueInfo.diffDays <= 5
-                                          ? `Vence en ${dueInfo.diffDays}d (${dueInfo.date})`
-                                          : `Corte: ${dueInfo.date}`}
+                                          ? L(`Vence en ${dueInfo.diffDays}d (${dueInfo.date})`, `Due in ${dueInfo.diffDays}d (${dueInfo.date})`)
+                                          : L(`Corte: ${dueInfo.date}`, `Cutoff: ${dueInfo.date}`)}
                                       </span>
                                     ) : (
-                                      <span className="text-[10px] text-slate-400">Sin fecha de corte</span>
+                                      <span className="text-[10px] text-slate-400">{L('Sin fecha de corte', 'No cutoff date')}</span>
                                     )}
                                   </div>
                                 );
@@ -2681,12 +2753,12 @@ export default function FortexaAppsView({
                               {emp.activa !== false ? (
                                 <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 inline-flex items-center gap-1">
                                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                                  {emp.subscription_status === 'trial' ? 'Trial' : emp.subscription_status === 'pending' ? 'Por Cobrar' : 'Activa'}
+                                  {emp.subscription_status === 'trial' ? 'Trial' : emp.subscription_status === 'pending' ? L('Por Cobrar', 'Payment Due') : L('Activa', 'Active')}
                                 </span>
                               ) : (
                                 <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200 inline-flex items-center gap-1">
                                   <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
-                                  Suspendida
+                                  {L('Suspendida', 'Suspended')}
                                 </span>
                               )}
                             </td>
@@ -2696,10 +2768,10 @@ export default function FortexaAppsView({
                                   type="button"
                                   onClick={() => handleOpenSaaSModal(emp)}
                                   className="px-2.5 py-1 bg-slate-900 hover:bg-slate-800 text-white text-[11px] font-bold rounded-lg transition-all flex items-center gap-1 cursor-pointer shadow-xs"
-                                  title="Editar plan, cuota, fecha de cobro y módulos"
+                                  title={L('Editar plan, cuota, fecha de cobro y módulos', 'Edit plan, fee, billing date, and modules')}
                                 >
                                   <Sliders className="w-3 h-3 text-indigo-400" />
-                                  <span>Configurar</span>
+                                  <span>{L('Configurar', 'Configure')}</span>
                                 </button>
                                 {emp.id !== 1 && emp.id !== 22 && (
                                   <>
@@ -2708,19 +2780,19 @@ export default function FortexaAppsView({
                                       disabled={togglingTenantId === emp.id}
                                       onClick={() => handleRenewEmpresa(emp)}
                                       className="px-2 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 text-[11px] font-bold rounded-lg transition-all flex items-center gap-1 cursor-pointer disabled:opacity-50"
-                                      title="Registrar pago recibido y extender fecha de corte (+1 mes o +1 año)"
+                                      title={L('Registrar pago recibido y extender fecha de corte (+1 mes o +1 año)', 'Record received payment and extend cutoff date (+1 mo or +1 yr)')}
                                     >
                                       <CreditCard className="w-3 h-3" />
-                                      <span>Renovar</span>
+                                      <span>{L('Renovar', 'Renew')}</span>
                                     </button>
                                     <button
                                       type="button"
                                       onClick={() => handleSendBillingWhatsApp(emp)}
                                       className="px-2 py-1 bg-sky-50 hover:bg-sky-100 text-sky-700 border border-sky-200 text-[11px] font-bold rounded-lg transition-all flex items-center gap-1 cursor-pointer"
-                                      title="Enviar recordatorio de cobro por WhatsApp"
+                                      title={L('Enviar recordatorio de cobro por WhatsApp', 'Send billing reminder via WhatsApp')}
                                     >
                                       <Send className="w-3 h-3" />
-                                      <span>Cobrar</span>
+                                      <span>{L('Cobrar', 'Bill')}</span>
                                     </button>
                                     <button
                                       type="button"
@@ -2731,10 +2803,10 @@ export default function FortexaAppsView({
                                           ? 'bg-rose-50 hover:bg-rose-100 text-rose-700 border-rose-200'
                                           : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border-emerald-200'
                                       }`}
-                                      title={emp.activa !== false ? 'Suspender acceso del cliente y cerrar sesiones' : 'Reactivar servicio del cliente'}
+                                      title={emp.activa !== false ? L('Suspender acceso del cliente y cerrar sesiones', 'Suspend client access and terminate sessions') : L('Reactivar servicio del cliente', 'Reactivate client service')}
                                     >
                                       <Power className="w-3 h-3" />
-                                      <span>{emp.activa !== false ? 'Suspender' : 'Reactivar'}</span>
+                                      <span>{emp.activa !== false ? L('Suspender', 'Suspend') : L('Reactivar', 'Reactivate')}</span>
                                     </button>
                                     {emp.id !== 25 && (
                                       <button
@@ -2742,10 +2814,10 @@ export default function FortexaAppsView({
                                         disabled={togglingTenantId === emp.id || isDeletingEmpresa}
                                         onClick={() => handleOpenDeleteModal(emp)}
                                         className="px-2 py-1 bg-white hover:bg-rose-600 text-rose-600 hover:text-white border border-rose-200 hover:border-rose-600 text-[11px] font-bold rounded-lg transition-all flex items-center gap-1 cursor-pointer disabled:opacity-50"
-                                        title="Eliminar permanentemente esta empresa y todos sus datos"
+                                        title={L('Eliminar permanentemente esta empresa y todos sus datos', 'Permanently delete this company and all its data')}
                                       >
                                         <Trash2 className="w-3 h-3" />
-                                        <span>Eliminar</span>
+                                        <span>{L('Eliminar', 'Delete')}</span>
                                       </button>
                                     )}
                                   </>
@@ -2755,17 +2827,17 @@ export default function FortexaAppsView({
                                     type="button"
                                     onClick={() => onSelectEmpresa(emp.id)}
                                     className="px-2 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-[11px] font-bold rounded-lg transition-all cursor-pointer border border-indigo-200"
-                                    title="Ingresar a la vista de tu empresa propia / demo"
+                                    title={L('Ingresar a la vista de tu empresa propia / demo', 'Switch into your owned / demo company view')}
                                   >
-                                    <span>Probar Vista</span>
+                                    <span>{L('Probar Vista', 'Open View')}</span>
                                   </button>
                                 ) : (
                                   <span
                                     className="px-2 py-1 bg-slate-100 text-slate-500 text-[10px] font-bold rounded-lg border border-slate-200 inline-flex items-center gap-1"
-                                    title="Privacidad Multi-Tenant: los datos operativos de clientes externos son privados"
+                                    title={L('Privacidad Multi-Tenant: los datos operativos de clientes externos son privados', 'Multi-Tenant Privacy: external client operational data is private')}
                                   >
                                     <Lock className="w-3 h-3" />
-                                    <span>Privado</span>
+                                    <span>{L('Privado', 'Private')}</span>
                                   </span>
                                 )}
                               </div>
@@ -2784,14 +2856,14 @@ export default function FortexaAppsView({
                 <div>
                   <h3 className="text-sm font-black text-slate-900 flex items-center gap-2">
                     <FileCheck2 className="w-4 h-4 text-blue-600" />
-                    Contratos de Licencia Digital Firmados Electrónicamente
+                    {L('Contratos de Licencia Digital Firmados Electrónicamente', 'Electronically Signed Digital License Agreements')}
                   </h3>
                   <p className="text-xs text-slate-500">
-                    Registro legal de aceptación de términos de servicio y contratos de suscripción SaaS almacenados en el Droplet.
+                    {L('Registro legal de aceptación de términos de servicio y contratos de suscripción SaaS almacenados en el servidor.', 'Legal log of terms-of-service acceptances and SaaS subscription agreements stored on the server.')}
                   </p>
                 </div>
                 <span className="text-xs font-bold text-slate-600 bg-slate-100 px-3 py-1 rounded-xl">
-                  {signedLicenses.length} firmas registradas
+                  {signedLicenses.length} {L('firmas registradas', 'signatures logged')}
                 </span>
               </div>
 
@@ -2799,12 +2871,12 @@ export default function FortexaAppsView({
                 <table className="w-full text-left text-xs">
                   <thead className="bg-slate-50 text-slate-500 font-bold border-b border-slate-100">
                     <tr>
-                      <th className="py-3 px-3">ID Contrato</th>
-                      <th className="py-3 px-3">Firmado Por</th>
-                      <th className="py-3 px-3">Usuario ID</th>
-                      <th className="py-3 px-3">Dirección IP</th>
-                      <th className="py-3 px-3">Documento PDF</th>
-                      <th className="py-3 px-3 text-right">Fecha & Hora Firma</th>
+                      <th className="py-3 px-3">{L('ID Contrato', 'Contract ID')}</th>
+                      <th className="py-3 px-3">{L('Firmado Por', 'Signed By')}</th>
+                      <th className="py-3 px-3">{L('Usuario ID', 'User ID')}</th>
+                      <th className="py-3 px-3">{L('Dirección IP', 'IP Address')}</th>
+                      <th className="py-3 px-3">{L('Documento PDF', 'PDF Document')}</th>
+                      <th className="py-3 px-3 text-right">{L('Fecha & Hora Firma', 'Signed Date & Time')}</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
@@ -2862,7 +2934,10 @@ export default function FortexaAppsView({
                     </span>
                   </div>
                   <p className="text-xs text-slate-500 max-w-2xl mt-0.5">
-                    Infraestructura para streamers y vendedoras en directo: canastas abiertas, apartado en tiempo real, catálogo con fotos y liquidación por Guatex, Forza y WhatsApp.
+                    {L(
+                      'Infraestructura para streamers y vendedoras en directo: canastas abiertas, apartado en tiempo real, catálogo con fotos y liquidación por Guatex, Forza y WhatsApp.',
+                      'Infrastructure for live sellers and streamers: open live carts, real-time stock holds, visual product catalog, and courier/WhatsApp checkout.'
+                    )}
                   </p>
                 </div>
               </div>
@@ -2870,7 +2945,7 @@ export default function FortexaAppsView({
               <div className="flex items-center gap-2 self-start sm:self-auto">
                 <span className="px-3 py-1.5 rounded-xl bg-slate-900 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm">
                   <Sparkles className="w-3.5 h-3.5 text-rose-400" />
-                  <span>{liveEnabledCount} Clientes con Live</span>
+                  <span>{liveEnabledCount} {L('Clientes con Live', 'Clients on Live')}</span>
                 </span>
               </div>
             </div>
@@ -2878,24 +2953,24 @@ export default function FortexaAppsView({
             {/* Métricas Globales del Negocio Live en Fortexa */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-6 pb-2">
               <div className="p-4 bg-slate-50 border border-slate-200/70 rounded-2xl space-y-1">
-                <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Boutiques Activas</span>
+                <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">{L('Boutiques Activas', 'Active Boutiques')}</span>
                 <p className="text-2xl font-black text-slate-900">{liveEnabledCount}</p>
-                <span className="text-[10px] text-emerald-600 font-bold">100% operativas</span>
+                <span className="text-[10px] text-emerald-600 font-bold">{L('100% operativas', '100% operational')}</span>
               </div>
               <div className="p-4 bg-slate-50 border border-slate-200/70 rounded-2xl space-y-1">
-                <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">GMV en Directo</span>
-                <p className="text-2xl font-black text-rose-600 font-mono">Q 148,250</p>
-                <span className="text-[10px] text-slate-400 font-semibold">Procesado en el mes</span>
+                <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">{L('GMV en Directo', 'Live GMV')}</span>
+                <p className="text-2xl font-black text-rose-600 font-mono">{money(148250)}</p>
+                <span className="text-[10px] text-slate-400 font-semibold">{L('Procesado en el mes', 'Processed this month')}</span>
               </div>
               <div className="p-4 bg-slate-50 border border-slate-200/70 rounded-2xl space-y-1">
-                <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Canastas Abiertas</span>
+                <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">{L('Canastas Abiertas', 'Open Carts')}</span>
                 <p className="text-2xl font-black text-indigo-600 font-mono">1,420</p>
-                <span className="text-[10px] text-indigo-600 font-semibold">Prendas despachadas</span>
+                <span className="text-[10px] text-indigo-600 font-semibold">{L('Prendas despachadas', 'Items dispatched')}</span>
               </div>
               <div className="p-4 bg-slate-50 border border-slate-200/70 rounded-2xl space-y-1">
-                <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Efectividad de Cobro</span>
+                <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">{L('Efectividad de Cobro', 'Collection Rate')}</span>
                 <p className="text-2xl font-black text-emerald-600">94.8%</p>
-                <span className="text-[10px] text-emerald-600 font-semibold">Pagadas / Entregadas</span>
+                <span className="text-[10px] text-emerald-600 font-semibold">{L('Pagadas / Entregadas', 'Paid / Delivered')}</span>
               </div>
             </div>
 
@@ -2904,10 +2979,10 @@ export default function FortexaAppsView({
               <div>
                 <h3 className="text-sm font-black text-slate-900 flex items-center gap-2">
                   <CreditCard className="w-4 h-4 text-rose-600" />
-                  Estrategia de Suscripción & Monetización para Fortexa Technologies
+                  {L('Estrategia de Suscripción & Monetización para Fortexa Technologies', 'Subscription & Monetization Strategy for Fortexa Technologies')}
                 </h3>
                 <p className="text-xs text-slate-500">
-                  Dos opciones comerciales para adaptarse tanto a vendedoras informales como a tiendas formales consolidadas.
+                  {L('Dos opciones comerciales para adaptarse tanto a vendedoras informales como a tiendas formales consolidadas.', 'Two commercial tiers tailored for both independent live sellers and established brick-and-mortar retail stores.')}
                 </p>
               </div>
 
@@ -2916,32 +2991,35 @@ export default function FortexaAppsView({
                 <div className="p-5 rounded-2xl bg-gradient-to-br from-rose-50/80 via-pink-50/50 to-white border-2 border-rose-300 space-y-3 relative">
                   <div className="flex items-center justify-between">
                     <span className="px-2.5 py-0.5 rounded-lg text-[10px] font-black uppercase tracking-wider bg-rose-600 text-white shadow-xs">
-                      Modalidad 1: Plan Dedicado
+                      {L('Modalidad 1: Plan Dedicado', 'Tier 1: Dedicated Plan')}
                     </span>
-                    <span className="text-xs font-black text-rose-700 font-mono">Q 199.00 / mes</span>
+                    <span className="text-xs font-black text-rose-700 font-mono">{money(199)} / {L('mes', 'mo')}</span>
                   </div>
                   <div>
-                    <h4 className="text-sm font-black text-slate-900">Plan TikTok Live Express (Solo Live)</h4>
+                    <h4 className="text-sm font-black text-slate-900">{L('Plan TikTok Live Express (Solo Live)', 'TikTok Live Express Plan (Live Only)')}</h4>
                     <p className="text-xs text-slate-600 mt-1 leading-relaxed">
-                      Diseñado para vendedoras informales de TikTok Live, ropa de paca/americana o calzado que <strong>NO tienen local físico ni facturación SAT</strong>.
+                      {L(
+                        'Diseñado para vendedoras informales de TikTok Live, ropa de paca/americana o calzado que NO tienen local físico ni facturación SAT.',
+                        'Designed for independent TikTok Live sellers, apparel resellers, and boutiques with NO physical store or E-Invoicing requirements.'
+                      )}
                     </p>
                   </div>
                   <ul className="text-xs space-y-1.5 text-slate-700 font-medium pt-2 border-t border-rose-200/70">
                     <li className="flex items-center gap-2">
                       <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                      <span>Interfaz 100% limpia sin módulos ERP ni contabilidad</span>
+                      <span>{L('Interfaz 100% limpia sin módulos ERP ni contabilidad', '100% streamlined UI with zero ERP or accounting clutter')}</span>
                     </li>
                     <li className="flex items-center gap-2">
                       <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                      <span>Canastas abiertas, apartado inmediato y cobro por WhatsApp</span>
+                      <span>{L('Canastas abiertas, apartado inmediato y cobro por WhatsApp', 'Open live carts, instant stock hold, and WhatsApp checkout')}</span>
                     </li>
                     <li className="flex items-center gap-2">
                       <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                      <span>Envíos con Guatex, Forza o Cargo Expreso por departamento</span>
+                      <span>{L('Envíos con Guatex, Forza o Cargo Expreso por departamento', 'Nationwide courier shipping with Guatex, Forza, or Cargo Expreso')}</span>
                     </li>
                     <li className="flex items-center gap-2">
                       <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                      <span>Cuentas bancarias (BI, Banrural, BAC) y contra entrega</span>
+                      <span>{L('Cuentas bancarias (BI, Banrural, BAC) y contra entrega', 'Bank deposit accounts and Cash on Delivery (COD)')}</span>
                     </li>
                   </ul>
                 </div>
@@ -2950,32 +3028,35 @@ export default function FortexaAppsView({
                 <div className="p-5 rounded-2xl bg-gradient-to-br from-indigo-50/80 via-blue-50/50 to-white border border-indigo-200 space-y-3 relative">
                   <div className="flex items-center justify-between">
                     <span className="px-2.5 py-0.5 rounded-lg text-[10px] font-black uppercase tracking-wider bg-indigo-600 text-white shadow-xs">
-                      Modalidad 2: Add-on Extra
+                      {L('Modalidad 2: Add-on Extra', 'Tier 2: Extra Add-on')}
                     </span>
-                    <span className="text-xs font-black text-indigo-700 font-mono">+Q 99.00 / mes</span>
+                    <span className="text-xs font-black text-indigo-700 font-mono">+{money(99)} / {L('mes', 'mo')}</span>
                   </div>
                   <div>
-                    <h4 className="text-sm font-black text-slate-900">Módulo Add-on TikTok Live para Clientes ERP</h4>
+                    <h4 className="text-sm font-black text-slate-900">{L('Módulo Add-on TikTok Live para Clientes ERP', 'TikTok Live Add-on Module for ERP Clients')}</h4>
                     <p className="text-xs text-slate-600 mt-1 leading-relaxed">
-                      Para clientes en Plan PyME, Comercial o Enterprise (como <strong>Fashion Styles</strong>) que tienen tienda física y quieren hacer transmisiones en vivo.
+                      {L(
+                        'Para clientes en Plan PyME, Comercial o Enterprise (como Fashion Styles) que tienen tienda física y quieren hacer transmisiones en vivo.',
+                        'For SMB, Business, or Enterprise clients (like Fashion Styles) who operate physical stores and want to sell via live streams.'
+                      )}
                     </p>
                   </div>
                   <ul className="text-xs space-y-1.5 text-slate-700 font-medium pt-2 border-t border-indigo-200/70">
                     <li className="flex items-center gap-2">
                       <Check className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
-                      <span>Mantiene todo el ERP: POS, Facturación FEL SAT y Contabilidad</span>
+                      <span>{L('Mantiene todo el ERP: POS, Facturación FEL SAT y Contabilidad', 'Keeps the full ERP: POS, E-Invoicing, and Accounting')}</span>
                     </li>
                     <li className="flex items-center gap-2">
                       <Check className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
-                      <span>Descuenta inventario en vivo del stock físico de sus tiendas</span>
+                      <span>{L('Descuenta inventario en vivo del stock físico de sus tiendas', 'Deducts live sales directly from physical store inventory')}</span>
                     </li>
                     <li className="flex items-center gap-2">
                       <Check className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
-                      <span>Opción de emitir factura FEL SAT o recibo al confirmar canasta</span>
+                      <span>{L('Opción de emitir factura FEL SAT o recibo al confirmar canasta', 'Option to issue a certified E-Invoice or receipt on cart checkout')}</span>
                     </li>
                     <li className="flex items-center gap-2">
                       <Check className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
-                      <span>Dashboard Ejecutivo con botón de alternar métricas de Live</span>
+                      <span>{L('Dashboard Ejecutivo con botón de alternar métricas de Live', 'Executive Dashboard with toggleable Live metrics')}</span>
                     </li>
                   </ul>
                 </div>
@@ -2988,10 +3069,10 @@ export default function FortexaAppsView({
                 <div>
                   <h3 className="text-sm font-black text-slate-900 flex items-center gap-2">
                     <Video className="w-4 h-4 text-rose-600" />
-                    Empresas con Módulo Live Activado ({liveEnabledCount})
+                    {L(`Empresas con Módulo Live Activado (${liveEnabledCount})`, `Companies with Live Module Enabled (${liveEnabledCount})`)}
                   </h3>
                   <p className="text-xs text-slate-500">
-                    Boutiques que tienen contratado el Plan Live Express o el Add-on Extra.
+                    {L('Boutiques que tienen contratado el Plan Live Express o el Add-on Extra.', 'Boutiques subscribed to the Live Express Plan or the Extra Add-on.')}
                   </p>
                 </div>
                 <button
@@ -3003,7 +3084,7 @@ export default function FortexaAppsView({
                   className="px-3 py-1.5 bg-gradient-to-r from-rose-600 to-pink-600 hover:from-rose-500 hover:to-pink-500 text-white font-bold text-xs rounded-xl shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
                 >
                   <Plus className="w-3.5 h-3.5" />
-                  <span>Habilitar Live en Otra Empresa</span>
+                  <span>{L('Habilitar Live en Otra Empresa', 'Enable Live on Another Company')}</span>
                 </button>
               </div>
 
@@ -3011,11 +3092,11 @@ export default function FortexaAppsView({
                 <table className="w-full text-left text-xs">
                   <thead className="bg-slate-50 text-slate-500 font-bold border-b border-slate-200 uppercase text-[10px] tracking-wider">
                     <tr>
-                      <th className="py-3 px-3.5">Empresa Cliente</th>
-                      <th className="py-3 px-3.5">Tipo de Contratación</th>
-                      <th className="py-3 px-3.5">Cuota Mensual</th>
-                      <th className="py-3 px-3.5">Entorno Activo</th>
-                      <th className="py-3 px-3.5 text-right">Acciones</th>
+                      <th className="py-3 px-3.5">{L('Empresa Cliente', 'Client Company')}</th>
+                      <th className="py-3 px-3.5">{L('Tipo de Contratación', 'Subscription Tier')}</th>
+                      <th className="py-3 px-3.5">{L('Cuota Mensual', 'Monthly Fee')}</th>
+                      <th className="py-3 px-3.5">{L('Entorno Activo', 'Active Workspace')}</th>
+                      <th className="py-3 px-3.5 text-right">{L('Acciones', 'Actions')}</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 font-medium">
@@ -3025,30 +3106,30 @@ export default function FortexaAppsView({
                         <tr key={emp.id} className="hover:bg-slate-50/80 transition-colors">
                           <td className="py-3.5 px-3.5">
                             <p className="font-bold text-slate-900">{emp.nombre}</p>
-                            <p className="text-[10px] text-slate-400 font-mono">Tenant #{emp.id} • {emp.nit || 'CF'}</p>
+                            <p className="text-[10px] text-slate-400 font-mono">Tenant #{emp.id} • {trTaxId(emp.nit)}</p>
                           </td>
                           <td className="py-3.5 px-3.5">
                             {emp.plan === 'live_express' ? (
                               <span className="px-2 py-0.5 rounded-lg text-[10px] font-black uppercase bg-rose-100 text-rose-800 border border-rose-200">
-                                Plan Dedicado Solo Live
+                                {L('Plan Dedicado Solo Live', 'Dedicated Live Only Plan')}
                               </span>
                             ) : (
                               <span className="px-2 py-0.5 rounded-lg text-[10px] font-black uppercase bg-indigo-100 text-indigo-800 border border-indigo-200">
-                                Add-on Extra (+ Plan {emp.plan?.toUpperCase()})
+                                {L(`Add-on Extra (+ Plan ${emp.plan?.toUpperCase()})`, `Extra Add-on (+ ${emp.plan?.toUpperCase()} Plan)`)}
                               </span>
                             )}
                           </td>
                           <td className="py-3.5 px-3.5 font-mono font-bold text-slate-900">
-                            {emp.plan === 'live_express' ? 'Q 199.00 / mes' : '+Q 99.00 / mes'}
+                            {emp.plan === 'live_express' ? `${money(199)} / ${L('mes', 'mo')}` : `+${money(99)} / ${L('mes', 'mo')}`}
                           </td>
                           <td className="py-3.5 px-3.5">
                             {isSoloLive ? (
                               <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
-                                ⚡ Live Express (0 ERP)
+                                {L('⚡ Live Express (0 ERP)', '⚡ Live Express (No ERP)')}
                               </span>
                             ) : (
                               <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-blue-800 border border-blue-200">
-                                💼 ERP Completo + Módulo Live
+                                {L('💼 ERP Completo + Módulo Live', '💼 Full ERP + Live Module')}
                               </span>
                             )}
                           </td>
@@ -3060,7 +3141,7 @@ export default function FortexaAppsView({
                                 className="px-2.5 py-1 bg-slate-900 hover:bg-slate-800 text-white text-[11px] font-bold rounded-lg transition-all flex items-center gap-1 cursor-pointer"
                               >
                                 <Sliders className="w-3 h-3 text-indigo-400" />
-                                <span>Ajustar Plan</span>
+                                <span>{L('Ajustar Plan', 'Adjust Plan')}</span>
                               </button>
                               {onSelectEmpresa && (
                                 <button
@@ -3068,7 +3149,7 @@ export default function FortexaAppsView({
                                   onClick={() => onSelectEmpresa(emp.id)}
                                   className="px-2.5 py-1 bg-gradient-to-r from-rose-600 to-pink-600 hover:from-rose-500 hover:to-pink-500 text-white text-[11px] font-bold rounded-lg transition-all cursor-pointer shadow-xs"
                                 >
-                                  <span>Probar Live</span>
+                                  <span>{L('Probar Live', 'Open Live')}</span>
                                 </button>
                               )}
                             </div>
@@ -3095,8 +3176,8 @@ export default function FortexaAppsView({
                   <Calendar className="w-4 h-4" />
                 </div>
                 <div>
-                  <h3 className="text-xs font-black text-slate-900">Ajustar Fecha de Corte</h3>
-                  <p className="text-[10px] text-slate-400">Modificar campo <code>expires_at</code></p>
+                  <h3 className="text-xs font-black text-slate-900">{L('Ajustar Fecha de Corte', 'Adjust Cutoff Date')}</h3>
+                  <p className="text-[10px] text-slate-400">{L('Modificar campo', 'Update field')} <code>expires_at</code></p>
                 </div>
               </div>
               <button 
@@ -3109,13 +3190,13 @@ export default function FortexaAppsView({
 
             <div className="space-y-3 text-xs">
               <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-100">
-                <p className="text-[10px] text-slate-400">Usuario / Cliente:</p>
+                <p className="text-[10px] text-slate-400">{L('Usuario / Cliente:', 'User / Client:')}</p>
                 <p className="font-bold text-slate-800">{editingCutoffSub.email}</p>
-                <p className="text-[11px] text-slate-500 font-medium">{editingCutoffSub.cliente} • {editingCutoffSub.plan}</p>
+                <p className="text-[11px] text-slate-500 font-medium">{editingCutoffSub.cliente} • {trRutaFuelPlan(editingCutoffSub.plan)}</p>
               </div>
 
               <div>
-                <label className="font-bold text-slate-700 block mb-1">Nueva Fecha de Corte:</label>
+                <label className="font-bold text-slate-700 block mb-1">{L('Nueva Fecha de Corte:', 'New Cutoff Date:')}</label>
                 <input
                   type="date"
                   value={newCutoffDate}
@@ -3130,14 +3211,14 @@ export default function FortexaAppsView({
                   onClick={() => setEditingCutoffSub(null)}
                   className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold cursor-pointer"
                 >
-                  Cancelar
+                  {L('Cancelar', 'Cancel')}
                 </button>
                 <button
                   type="button"
                   onClick={handleSaveCustomCutoff}
                   className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold shadow-md cursor-pointer"
                 >
-                  Guardar en Droplet MySQL
+                  {L('Guardar en Servidor', 'Save Changes')}
                 </button>
               </div>
             </div>
@@ -3155,8 +3236,8 @@ export default function FortexaAppsView({
                   <Key className="w-4 h-4" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-black text-slate-900">Emitir Licencia Quantum Store POS</h3>
-                  <p className="text-[11px] text-slate-400">Fortexa Technologies • Modelo Perpetuo vs Suscripción</p>
+                  <h3 className="text-sm font-black text-slate-900">{L('Emitir Licencia Quantum Store POS', 'Issue Quantum Store POS License')}</h3>
+                  <p className="text-[11px] text-slate-400">{L('Fortexa Technologies • Modelo Perpetuo vs Suscripción', 'Fortexa Technologies • Perpetual vs Subscription Model')}</p>
                 </div>
               </div>
               <button 
@@ -3170,7 +3251,7 @@ export default function FortexaAppsView({
             <form onSubmit={handleCreateLicense} className="space-y-4 text-xs">
               {/* Selector Visual de Modelo Comercial */}
               <div>
-                <label className="font-bold text-slate-700 block mb-1.5">Selecciona el Modelo de Comercialización:</label>
+                <label className="font-bold text-slate-700 block mb-1.5">{L('Selecciona el Modelo de Comercialización:', 'Select Licensing Model:')}</label>
                 <div className="grid grid-cols-2 gap-3">
                   <button
                     type="button"
@@ -3189,11 +3270,11 @@ export default function FortexaAppsView({
                   >
                     <div className="flex items-center gap-1.5 text-purple-700 font-black mb-1">
                       <Infinity className="w-4 h-4" />
-                      <span>Licencia Perpetua</span>
+                      <span>{L('Licencia Perpetua', 'Perpetual License')}</span>
                     </div>
-                    <p className="text-[11px] font-bold text-slate-800">Pago Único (Vitalicia)</p>
+                    <p className="text-[11px] font-bold text-slate-800">{L('Pago Único (Vitalicia)', 'One-Time Payment (Lifetime)')}</p>
                     <p className="text-[10px] text-slate-500 mt-1">
-                      Sin corte. Activación única de por vida ligada al Hardware ID (HWID).
+                      {L('Sin corte. Activación única de por vida ligada al Hardware ID (HWID).', 'Never expires. Lifetime activation bound to Hardware ID (HWID).')}
                     </p>
                   </button>
 
@@ -3219,11 +3300,11 @@ export default function FortexaAppsView({
                   >
                     <div className="flex items-center gap-1.5 text-blue-700 font-black mb-1">
                       <Calendar className="w-4 h-4" />
-                      <span>Mensualidad / Suscripción</span>
+                      <span>{L('Mensualidad / Suscripción', 'Monthly / Subscription')}</span>
                     </div>
-                    <p className="text-[11px] font-bold text-slate-800">Recurrente (Con Corte)</p>
+                    <p className="text-[11px] font-bold text-slate-800">{L('Recurrente (Con Corte)', 'Recurring (With Cutoff)')}</p>
                     <p className="text-[10px] text-slate-500 mt-1">
-                      Con fecha de corte programada. Notificación y corte si no renueva.
+                      {L('Con fecha de corte programada. Notificación y corte si no renueva.', 'Scheduled billing cutoff. Automatic alerts and suspension if not renewed.')}
                     </p>
                   </button>
                 </div>
@@ -3232,7 +3313,7 @@ export default function FortexaAppsView({
               {/* Opciones según el modelo seleccionado */}
               {newLicForm.modelo === 'perpetual' ? (
                 <div className="bg-purple-50/50 p-3 rounded-2xl border border-purple-200/60 space-y-2">
-                  <label className="font-bold text-purple-900 block text-[11px]">Tipo de Licencia Vitalicia:</label>
+                  <label className="font-bold text-purple-900 block text-[11px]">{L('Tipo de Licencia Vitalicia:', 'Lifetime License Tier:')}</label>
                   <select
                     value={newLicForm.license_type}
                     onChange={(e: any) => {
@@ -3245,18 +3326,18 @@ export default function FortexaAppsView({
                     }}
                     className="w-full px-3 py-2 bg-white border border-purple-200 rounded-xl font-bold text-slate-800"
                   >
-                    <option value="perpetual">Quantum POS Estándar (1 PC) — Q 499.00 Pago Único</option>
-                    <option value="Empresarial">Quantum POS Red Empresarial (hasta 5 PCs) — Q 999.00 Pago Único</option>
+                    <option value="perpetual">{L(`Quantum POS Estándar (1 PC) — ${money(499)} Pago Único`, `Quantum POS Standard (1 PC) — ${money(499)} One-Time`)}</option>
+                    <option value="Empresarial">{L(`Quantum POS Red Empresarial (hasta 5 PCs) — ${money(999)} Pago Único`, `Quantum POS Business Network (up to 5 PCs) — ${money(999)} One-Time`)}</option>
                   </select>
                   <p className="text-[10px] text-purple-700">
-                    ✓ <code>expires_at = null</code> en MySQL. Acceso ilimitado sin caducidad.
+                    ✓ <code>expires_at = null</code>. {L('Acceso ilimitado sin caducidad.', 'Unlimited lifetime access with no expiration.')}
                   </p>
                 </div>
               ) : (
                 <div className="bg-blue-50/50 p-3 rounded-2xl border border-blue-200/60 space-y-3">
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="font-bold text-blue-900 block text-[11px] mb-1">Ciclo Recurrente:</label>
+                      <label className="font-bold text-blue-900 block text-[11px] mb-1">{L('Ciclo Recurrente:', 'Billing Cycle:')}</label>
                       <select
                         value={newLicForm.sub_cycle}
                         onChange={(e: any) => {
@@ -3272,12 +3353,12 @@ export default function FortexaAppsView({
                         }}
                         className="w-full px-2.5 py-2 bg-white border border-blue-200 rounded-xl font-bold text-slate-800"
                       >
-                        <option value="mensual">Mensualidad — Q 75.00 / mes</option>
-                        <option value="anual">Suscripción Anual — Q 350.00 / año</option>
+                        <option value="mensual">{L(`Mensualidad — ${money(75)} / mes`, `Monthly — ${money(75)} / mo`)}</option>
+                        <option value="anual">{L(`Suscripción Anual — ${money(350)} / año`, `Annual Subscription — ${money(350)} / yr`)}</option>
                       </select>
                     </div>
                     <div>
-                      <label className="font-bold text-blue-900 block text-[11px] mb-1">Fecha de Primer Corte:</label>
+                      <label className="font-bold text-blue-900 block text-[11px] mb-1">{L('Fecha de Primer Corte:', 'First Cutoff Date:')}</label>
                       <input
                         type="date"
                         required
@@ -3288,18 +3369,18 @@ export default function FortexaAppsView({
                     </div>
                   </div>
                   <p className="text-[10px] text-blue-700">
-                    ✓ Se sincroniza con <code>expires_at</code> en MySQL. Corte de servicio si vence la fecha.
+                    ✓ {L('Se sincroniza con expires_at en el servidor. Corte de servicio si vence la fecha.', 'Syncs with expires_at on the server. Access pauses automatically if expired.')}
                   </p>
                 </div>
               )}
 
               {/* Datos del Comprador */}
               <div>
-                <label className="font-bold text-slate-700 block mb-1">Correo Electrónico del Comprador:</label>
+                <label className="font-bold text-slate-700 block mb-1">{L('Correo Electrónico del Comprador:', 'Buyer Email Address:')}</label>
                 <input
                   type="email"
                   required
-                  placeholder="ej. cliente@tienda.com"
+                  placeholder={L('ej. cliente@tienda.com', 'e.g., buyer@store.com')}
                   value={newLicForm.email}
                   onChange={(e) => setNewLicForm({ ...newLicForm, email: e.target.value })}
                   className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white font-medium"
@@ -3310,7 +3391,7 @@ export default function FortexaAppsView({
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <div className="flex items-center justify-between mb-1">
-                    <label className="font-bold text-slate-700 block">Código de Licencia:</label>
+                    <label className="font-bold text-slate-700 block">{L('Código de Licencia:', 'License Code:')}</label>
                     <button
                       type="button"
                       onClick={() => setNewLicForm({
@@ -3319,32 +3400,35 @@ export default function FortexaAppsView({
                       })}
                       className="text-[10px] font-bold text-purple-600 hover:underline cursor-pointer"
                     >
-                      Autogenerar Hotmart
+                      {L('Autogenerar Hotmart', 'Auto-Generate Code')}
                     </button>
                   </div>
                   <input
                     type="text"
-                    placeholder="HP... o dejar en blanco"
+                    placeholder={L('HP... o dejar en blanco', 'HP... or leave blank')}
                     value={newLicForm.license_code}
                     onChange={(e) => setNewLicForm({ ...newLicForm, license_code: e.target.value })}
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-mono font-bold text-slate-800"
                   />
                 </div>
                 <div>
-                  <label className="font-bold text-slate-700 block mb-1">Estado Inicial:</label>
+                  <label className="font-bold text-slate-700 block mb-1">{L('Estado Inicial:', 'Initial Status:')}</label>
                   <select
                     value={newLicForm.status}
                     onChange={(e: any) => setNewLicForm({ ...newLicForm, status: e.target.value })}
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-semibold"
                   >
-                    <option value="active">Activa (Lista para usar)</option>
-                    <option value="pending">Pendiente de Activación</option>
+                    <option value="active">{L('Activa (Lista para usar)', 'Active (Ready to use)')}</option>
+                    <option value="pending">{L('Pendiente de Activación', 'Pending Activation')}</option>
                   </select>
                 </div>
               </div>
 
               <p className="text-[11px] text-slate-500 bg-slate-50 p-3 rounded-xl border border-slate-100 leading-relaxed">
-                ℹ️ Al presionar guardar, el registro se sincronizará inmediatamente en la tabla <code>software_licenses</code> del Droplet en producción para que el sistema Quantum POS reconozca la activación.
+                {L(
+                  'ℹ️ Al presionar guardar, el registro se sincronizará inmediatamente en el servidor de producción para que Quantum POS reconozca la activación.',
+                  'ℹ️ Upon saving, this license syncs immediately with the production server so Quantum POS recognizes the activation.'
+                )}
               </p>
 
               <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
@@ -3353,13 +3437,13 @@ export default function FortexaAppsView({
                   onClick={() => setShowCreateModal(false)}
                   className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold cursor-pointer"
                 >
-                  Cancelar
+                  {L('Cancelar', 'Cancel')}
                 </button>
                 <button
                   type="submit"
                   className="px-5 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-bold shadow-md cursor-pointer"
                 >
-                  Emitir y Guardar en MySQL
+                  {L('Emitir y Guardar', 'Issue & Save License')}
                 </button>
               </div>
             </form>
@@ -3377,8 +3461,8 @@ export default function FortexaAppsView({
                   <Fuel className="w-4 h-4" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-black text-slate-900">Registrar Suscripción Anual de Usuario</h3>
-                  <p className="text-[11px] text-slate-400">Fortexa Technologies • Modelo Anual RutaFuel Pro (365 días)</p>
+                  <h3 className="text-sm font-black text-slate-900">{L('Registrar Suscripción Anual de Usuario', 'Register Annual User Subscription')}</h3>
+                  <p className="text-[11px] text-slate-400">{L('Fortexa Technologies • Modelo Anual RutaFuel Pro (365 días)', 'Fortexa Technologies • RutaFuel Pro Annual Model (365 days)')}</p>
                 </div>
               </div>
               <button 
@@ -3392,22 +3476,22 @@ export default function FortexaAppsView({
             <form onSubmit={handleCreateSubscription} className="space-y-4 text-xs">
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="font-bold text-slate-700 block mb-1">Correo Electrónico (Usuario Pagador):</label>
+                  <label className="font-bold text-slate-700 block mb-1">{L('Correo Electrónico (Usuario Pagador):', 'Email Address (Billing User):')}</label>
                   <input
                     type="email"
                     required
-                    placeholder="ej. gerencia@transportes.com"
+                    placeholder={L('ej. gerencia@transportes.com', 'e.g., billing@fleetcompany.com')}
                     value={newSubForm.email}
                     onChange={(e) => setNewSubForm({ ...newSubForm, email: e.target.value })}
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-mono font-bold text-slate-900"
                   />
                 </div>
                 <div>
-                  <label className="font-bold text-slate-700 block mb-1">Nombre Comercial / Flota:</label>
+                  <label className="font-bold text-slate-700 block mb-1">{L('Nombre Comercial / Flota:', 'Business / Fleet Name:')}</label>
                   <input
                     type="text"
                     required
-                    placeholder="ej. Transportes Rápidos S.A."
+                    placeholder={L('ej. Transportes Rápidos S.A.', 'e.g., Express Fleet LLC')}
                     value={newSubForm.cliente}
                     onChange={(e) => setNewSubForm({ ...newSubForm, cliente: e.target.value })}
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-semibold"
@@ -3417,20 +3501,20 @@ export default function FortexaAppsView({
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="font-bold text-slate-700 block mb-1">Persona de Contacto:</label>
+                  <label className="font-bold text-slate-700 block mb-1">{L('Persona de Contacto:', 'Contact Person:')}</label>
                   <input
                     type="text"
-                    placeholder="ej. Lic. Mario Estrada"
+                    placeholder={L('ej. Lic. Mario Estrada', 'e.g., John Miller')}
                     value={newSubForm.contacto}
                     onChange={(e) => setNewSubForm({ ...newSubForm, contacto: e.target.value })}
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-semibold"
                   />
                 </div>
                 <div>
-                  <label className="font-bold text-slate-700 block mb-1">Teléfono / WhatsApp:</label>
+                  <label className="font-bold text-slate-700 block mb-1">{L('Teléfono / WhatsApp:', 'Phone / WhatsApp:')}</label>
                   <input
                     type="text"
-                    placeholder="ej. +502 5555-1234"
+                    placeholder={L('ej. +502 5555-1234', 'e.g., +1 555-0192')}
                     value={newSubForm.telefono}
                     onChange={(e) => setNewSubForm({ ...newSubForm, telefono: e.target.value })}
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-semibold"
@@ -3441,7 +3525,7 @@ export default function FortexaAppsView({
               {/* Planes Oficiales Anuales de RutaFuel */}
               <div className="grid grid-cols-3 gap-3">
                 <div>
-                  <label className="font-bold text-slate-700 block mb-1">Plan de Suscripción Anual:</label>
+                  <label className="font-bold text-slate-700 block mb-1">{L('Plan de Suscripción Anual:', 'Annual Subscription Plan:')}</label>
                   <select
                     value={newSubForm.plan}
                     onChange={(e: any) => {
@@ -3455,14 +3539,14 @@ export default function FortexaAppsView({
                     }}
                     className="w-full px-2.5 py-2 bg-slate-50 border border-slate-200 rounded-xl font-semibold"
                   >
-                    <option value="Flotas B2B Pro (Anual)">Flotas B2B Pro (Anual) — Q 6,500/año</option>
-                    <option value="Flotas Enterprise (Anual)">Flotas Enterprise (Anual) — Q 12,000/año</option>
-                    <option value="Pro Individual (Anual)">Pro Individual (Anual) — Q 590/año</option>
-                    <option value="Conductor Particular (Freemium)">Conductor Particular — Gratis</option>
+                    <option value="Flotas B2B Pro (Anual)">{L(`Flotas B2B Pro (Anual) — ${money(6500)}/año`, `B2B Fleets Pro (Annual) — ${money(6500)}/yr`)}</option>
+                    <option value="Flotas Enterprise (Anual)">{L(`Flotas Enterprise (Anual) — ${money(12000)}/año`, `Enterprise Fleets (Annual) — ${money(12000)}/yr`)}</option>
+                    <option value="Pro Individual (Anual)">{L(`Pro Individual (Anual) — ${money(590)}/año`, `Individual Pro (Annual) — ${money(590)}/yr`)}</option>
+                    <option value="Conductor Particular (Freemium)">{L('Conductor Particular — Gratis', 'Personal Driver — Free')}</option>
                   </select>
                 </div>
                 <div>
-                  <label className="font-bold text-slate-700 block mb-1">Vehículos Contratados:</label>
+                  <label className="font-bold text-slate-700 block mb-1">{L('Vehículos Contratados:', 'Contracted Vehicles:')}</label>
                   <input
                     type="number"
                     min="1"
@@ -3473,7 +3557,7 @@ export default function FortexaAppsView({
                   />
                 </div>
                 <div>
-                  <label className="font-bold text-slate-700 block mb-1">Cuota Anual (GTQ):</label>
+                  <label className="font-bold text-slate-700 block mb-1">{L(`Cuota Anual (${currencyCode}):`, `Annual Fee (${currencyCode}):`)}</label>
                   <input
                     type="number"
                     step="0.01"
@@ -3487,7 +3571,7 @@ export default function FortexaAppsView({
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="font-bold text-slate-700 block mb-1">Fecha de Primer Corte Anual (expires_at):</label>
+                  <label className="font-bold text-slate-700 block mb-1">{L('Fecha de Primer Corte Anual (expires_at):', 'First Annual Cutoff Date (expires_at):')}</label>
                   <input
                     type="date"
                     required
@@ -3497,21 +3581,21 @@ export default function FortexaAppsView({
                   />
                 </div>
                 <div>
-                  <label className="font-bold text-slate-700 block mb-1">Método de Cobro:</label>
+                  <label className="font-bold text-slate-700 block mb-1">{L('Método de Cobro:', 'Payment Method:')}</label>
                   <select
                     value={newSubForm.metodo_pago}
                     onChange={(e: any) => setNewSubForm({ ...newSubForm, metodo_pago: e.target.value })}
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-semibold"
                   >
-                    <option value="Tarjeta BAC (Débito Automático Anual)">Tarjeta BAC (Débito Automático Anual)</option>
-                    <option value="Transferencia Bancaria">Transferencia Bancaria</option>
-                    <option value="Tarjeta de Crédito Online">Tarjeta de Crédito Online</option>
+                    <option value="Tarjeta BAC (Débito Automático Anual)">{L('Tarjeta BAC (Débito Automático Anual)', 'BAC Card (Annual Auto-Debit)')}</option>
+                    <option value="Transferencia Bancaria">{L('Transferencia Bancaria', 'Bank Transfer')}</option>
+                    <option value="Tarjeta de Crédito Online">{L('Tarjeta de Crédito Online', 'Online Credit Card')}</option>
                   </select>
                 </div>
               </div>
 
               <div>
-                <label className="font-bold text-slate-700 block mb-1">Estado de la Suscripción:</label>
+                <label className="font-bold text-slate-700 block mb-1">{L('Estado de la Suscripción:', 'Subscription Status:')}</label>
                 <div className="grid grid-cols-2 gap-3">
                   <label className={`p-2.5 rounded-xl border flex items-center gap-2 cursor-pointer transition-all ${
                     newSubForm.estado === 'active' ? 'bg-emerald-50 border-emerald-300 text-emerald-900 font-bold' : 'bg-slate-50 border-slate-200 text-slate-600'
@@ -3522,7 +3606,7 @@ export default function FortexaAppsView({
                       checked={newSubForm.estado === 'active'}
                       onChange={() => setNewSubForm({ ...newSubForm, estado: 'active' })}
                     />
-                    <span>Suscripción Anual Activa (365 días)</span>
+                    <span>{L('Suscripción Anual Activa (365 días)', 'Active Annual Subscription (365 days)')}</span>
                   </label>
                   <label className={`p-2.5 rounded-xl border flex items-center gap-2 cursor-pointer transition-all ${
                     newSubForm.estado === 'trial' ? 'bg-blue-50 border-blue-300 text-blue-900 font-bold' : 'bg-slate-50 border-slate-200 text-slate-600'
@@ -3533,7 +3617,7 @@ export default function FortexaAppsView({
                       checked={newSubForm.estado === 'trial'}
                       onChange={() => setNewSubForm({ ...newSubForm, estado: 'trial' })}
                     />
-                    <span>Periodo de Prueba (14 Días)</span>
+                    <span>{L('Periodo de Prueba (14 Días)', 'Free Trial Period (14 Days)')}</span>
                   </label>
                 </div>
               </div>
@@ -3541,10 +3625,13 @@ export default function FortexaAppsView({
               <div className="bg-amber-50 p-3 rounded-2xl border border-amber-200/80 text-[11px] text-amber-900 space-y-1">
                 <p className="font-bold flex items-center gap-1 text-amber-800">
                   <Bell className="w-3.5 h-3.5 text-amber-600" />
-                  Notificaciones automáticas y corte en Laravel
+                  {L('Notificaciones automáticas y corte programado', 'Automated notifications & scheduled cutoff')}
                 </p>
                 <p className="text-amber-800/90 leading-relaxed text-[10.5px]">
-                  El comando <code>licenses:send-reminders</code> revisará diariamente la fecha <code>expires_at</code>. Si faltan 5 días para cumplir el año, enviará un correo automático de renovación. Si no se registra el pago, se revoca el acceso en la aplicación móvil de RutaFuel.
+                  {L(
+                    'El sistema revisará diariamente la fecha expires_at. Si faltan 5 días para cumplir el año, enviará un correo automático de renovación. Si no se registra el pago, se revoca el acceso en la aplicación móvil de RutaFuel.',
+                    'The system checks expires_at daily. Five days before renewal, an automated email reminder is sent. If no payment is logged by the cutoff date, mobile app access is revoked.'
+                  )}
                 </p>
               </div>
 
@@ -3554,13 +3641,13 @@ export default function FortexaAppsView({
                   onClick={() => setShowSubModal(false)}
                   className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold cursor-pointer"
                 >
-                  Cancelar
+                  {L('Cancelar', 'Cancel')}
                 </button>
                 <button
                   type="submit"
                   className="px-5 py-2 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white rounded-xl font-bold shadow-md cursor-pointer"
                 >
-                  Guardar en MySQL y Activar Anual
+                  {L('Guardar y Activar Anual', 'Save & Activate Annual')}
                 </button>
               </div>
             </form>
@@ -3581,7 +3668,7 @@ export default function FortexaAppsView({
                 </div>
                 <div>
                   <h3 className="text-base font-black text-slate-900">
-                    Gestionar Suscripción & Módulos SaaS
+                    {L('Gestionar Suscripción & Módulos SaaS', 'Manage SaaS Subscription & Modules')}
                   </h3>
                   <p className="text-xs text-slate-400 font-mono">
                     {editingEmpresaSaaS.nombre} • Tenant #{editingEmpresaSaaS.id}
@@ -3603,7 +3690,7 @@ export default function FortexaAppsView({
               {/* 1. Selector de Plan SaaS Base */}
               <div className="space-y-2">
                 <label className="text-xs font-black text-slate-900 block uppercase tracking-wider">
-                  1. Plan de Suscripción Oficial
+                  {L('1. Plan de Suscripción Oficial', '1. Official Subscription Plan')}
                 </label>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                   
@@ -3618,13 +3705,13 @@ export default function FortexaAppsView({
                   >
                     <div className="flex items-center justify-between mb-1">
                       <span className="text-[10px] font-black uppercase text-rose-700 bg-rose-100 px-2 py-0.5 rounded">
-                        Solo Live Express
+                        {L('Solo Live Express', 'Live Express Only')}
                       </span>
-                      <span className="text-xs font-black font-mono text-rose-700">Q 199/m</span>
+                      <span className="text-xs font-black font-mono text-rose-700">{money(199)}/{L('m', 'mo')}</span>
                     </div>
                     <p className="text-xs font-black text-slate-900">TikTok Live Express</p>
                     <p className="text-[10.5px] text-slate-500 leading-tight mt-0.5">
-                      Para vendedoras sin local ni SAT. Cero módulos ERP.
+                      {L('Para vendedoras sin local ni SAT. Cero módulos ERP.', 'For live sellers without a store or tax invoicing. Zero ERP clutter.')}
                     </p>
                   </div>
 
@@ -3639,13 +3726,13 @@ export default function FortexaAppsView({
                   >
                     <div className="flex items-center justify-between mb-1">
                       <span className="text-[10px] font-black uppercase text-blue-700 bg-blue-100 px-2 py-0.5 rounded">
-                        Plan PyME
+                        {L('Plan PyME', 'SMB Plan')}
                       </span>
-                      <span className="text-xs font-black font-mono text-slate-900">Q 299/m</span>
+                      <span className="text-xs font-black font-mono text-slate-900">{money(299)}/{L('m', 'mo')}</span>
                     </div>
-                    <p className="text-xs font-black text-slate-900">IntegraPro PyME</p>
+                    <p className="text-xs font-black text-slate-900">{L('IntegraPro PyME', 'IntegraPro SMB')}</p>
                     <p className="text-[10.5px] text-slate-500 leading-tight mt-0.5">
-                      Hasta 2 sucursales, facturas FEL e inventario básico.
+                      {L('Hasta 2 sucursales, facturas FEL e inventario básico.', 'Up to 2 branches, E-Invoicing, and core inventory.')}
                     </p>
                   </div>
 
@@ -3660,13 +3747,13 @@ export default function FortexaAppsView({
                   >
                     <div className="flex items-center justify-between mb-1">
                       <span className="text-[10px] font-black uppercase text-indigo-700 bg-indigo-100 px-2 py-0.5 rounded">
-                        Más Elegido
+                        {L('Más Elegido', 'Most Popular')}
                       </span>
-                      <span className="text-xs font-black font-mono text-slate-900">Q 699/m</span>
+                      <span className="text-xs font-black font-mono text-slate-900">{money(699)}/{L('m', 'mo')}</span>
                     </div>
-                    <p className="text-xs font-black text-slate-900">IntegraPro Comercial</p>
+                    <p className="text-xs font-black text-slate-900">{L('IntegraPro Comercial', 'IntegraPro Business')}</p>
                     <p className="text-[10.5px] text-slate-500 leading-tight mt-0.5">
-                      5 sucursales, Kiosco biométrico RRHH y cuentas por cobrar.
+                      {L('5 sucursales, Kiosco biométrico RRHH y cuentas por cobrar.', '5 branches, biometric HR Time Clock, and Accounts Receivable.')}
                     </p>
                   </div>
 
@@ -3681,13 +3768,13 @@ export default function FortexaAppsView({
                   >
                     <div className="flex items-center justify-between mb-1">
                       <span className="text-[10px] font-black uppercase text-purple-700 bg-purple-100 px-2 py-0.5 rounded">
-                        Corporativo
+                        {L('Corporativo', 'Corporate')}
                       </span>
-                      <span className="text-xs font-black font-mono text-slate-900">Q 1,499/m</span>
+                      <span className="text-xs font-black font-mono text-slate-900">{money(1499)}/{L('m', 'mo')}</span>
                     </div>
                     <p className="text-xs font-black text-slate-900">IntegraPro Enterprise</p>
                     <p className="text-[10.5px] text-slate-500 leading-tight mt-0.5">
-                      Multi-empresa, API contable SAT y sucursales ilimitadas.
+                      {L('Multi-empresa, API contable SAT y sucursales ilimitadas.', 'Multi-company, accounting API, and unlimited branches.')}
                     </p>
                   </div>
 
@@ -3701,14 +3788,14 @@ export default function FortexaAppsView({
                     <div className="flex items-center gap-2">
                       <span className="font-black text-xs text-rose-900 flex items-center gap-1.5">
                         <Video className="w-4 h-4 text-rose-600" />
-                        Add-on Extra: TikTok Live Commerce
+                        {L('Add-on Extra: TikTok Live Commerce', 'Extra Add-on: TikTok Live Commerce')}
                       </span>
                       <span className="text-[10px] font-black font-mono text-rose-700 bg-rose-200/60 px-2 py-0.2 rounded-full">
-                        +Q 99.00 / mes
+                        +{money(99)} / {L('mes', 'mo')}
                       </span>
                     </div>
                     <p className="text-[11px] text-slate-600 leading-snug">
-                      Habilita el módulo de canastas en vivo y apartado para clientes con ERP completo.
+                      {L('Habilita el módulo de canastas en vivo y apartado para clientes con ERP completo.', 'Enables live carts and stock reservation for full-ERP clients.')}
                     </p>
                   </div>
                   <label className="relative inline-flex items-center cursor-pointer shrink-0">
@@ -3728,10 +3815,10 @@ export default function FortexaAppsView({
                 <div className="space-y-0.5">
                   <span className="font-bold text-xs text-slate-900 flex items-center gap-1.5">
                     <Zap className="w-4 h-4 text-amber-500" />
-                    Forzar Interfaz Live Express (Ocultar Todo el ERP)
+                    {L('Forzar Interfaz Live Express (Ocultar Todo el ERP)', 'Force Live Express UI (Hide All ERP Modules)')}
                   </span>
                   <p className="text-[11px] text-slate-500 leading-snug">
-                    Al entrar a esta empresa, el usuario solo verá las 5 pestañas de Live (Live, Prendas, Clientas, Resultados y Tienda).
+                    {L('Al entrar a esta empresa, el usuario solo verá las 5 pestañas de Live (Live, Prendas, Clientas, Resultados y Tienda).', 'When entering this company, the user will only see the 5 Live Commerce tabs (Live, Items, Customers, Results, and Store).')}
                   </p>
                 </div>
                 <label className="relative inline-flex items-center cursor-pointer shrink-0">
@@ -3749,17 +3836,17 @@ export default function FortexaAppsView({
               {!saasPlanForm.isLiveOnly && (
                 <div className="space-y-2">
                   <label className="text-xs font-black text-slate-900 block uppercase tracking-wider">
-                    2. Módulos ERP Tradicionales Activos
+                    {L('2. Módulos ERP Tradicionales Activos', '2. Active Core ERP Modules')}
                   </label>
                   <div className="grid grid-cols-2 gap-2 text-xs">
                     {[
-                      { key: 'hasPos', label: 'Punto de Venta (POS)', desc: 'Cajas físicas' },
-                      { key: 'hasFel', label: 'Ventas & Facturas FEL', desc: 'DTEs SAT' },
-                      { key: 'hasInventory', label: 'Inventario & Bodega', desc: 'Kardex y stock' },
-                      { key: 'hasClients', label: 'Cartera de Clientes', desc: 'Crédito y saldo' },
-                      { key: 'hasPurchases', label: 'Compras & Proveedores', desc: 'Facturas compras' },
-                      { key: 'hasAccounting', label: 'Contabilidad SAT', desc: 'Libro diario' },
-                      { key: 'hasHr', label: 'Recursos Humanos & Kiosco', desc: 'Planillas y huella' }
+                      { key: 'hasPos', label: L('Punto de Venta (POS)', 'Point of Sale (POS)'), desc: L('Cajas físicas', 'Checkout registers') },
+                      { key: 'hasFel', label: L('Ventas & Facturas FEL', 'Sales & E-Invoices'), desc: L('DTEs SAT', 'Electronic billing') },
+                      { key: 'hasInventory', label: L('Inventario & Bodega', 'Inventory & Warehouse'), desc: L('Kardex y stock', 'Stock ledger') },
+                      { key: 'hasClients', label: L('Cartera de Clientes', 'Customer Portfolio'), desc: L('Crédito y saldo', 'Credit & A/R') },
+                      { key: 'hasPurchases', label: L('Compras & Proveedores', 'Purchases & Suppliers'), desc: L('Facturas compras', 'Vendor bills') },
+                      { key: 'hasAccounting', label: L('Contabilidad SAT', 'Accounting & Tax'), desc: L('Libro diario', 'Journal entries') },
+                      { key: 'hasHr', label: L('Recursos Humanos & Kiosco', 'HR & Time Clock'), desc: L('Planillas y huella', 'Payroll & attendance') }
                     ].map((mod) => (
                       <label 
                         key={mod.key} 
@@ -3785,34 +3872,34 @@ export default function FortexaAppsView({
               <div className="p-4 bg-indigo-50/60 border border-indigo-200/80 rounded-2xl space-y-3 text-xs">
                 <p className="font-black text-indigo-950 uppercase tracking-wider text-[11px] flex items-center gap-1.5">
                   <CreditCard className="w-3.5 h-3.5 text-indigo-600" />
-                  Facturación & Fecha de Corte (GT = Q / Otros países = $)
+                  {L('Facturación & Fecha de Corte (GT = GTQ / Internacional = USD)', 'Billing & Cutoff Date (GT = GTQ / International = USD)')}
                 </p>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
                   <div>
-                    <label className="block font-bold text-slate-700 mb-1 text-[11px]">Ciclo</label>
+                    <label className="block font-bold text-slate-700 mb-1 text-[11px]">{L('Ciclo', 'Cycle')}</label>
                     <select
                       value={saasPlanForm.billingCycle}
                       onChange={(e) => setSaasPlanForm({ ...saasPlanForm, billingCycle: e.target.value as 'monthly' | 'annual' })}
                       className="w-full px-2.5 py-2 bg-white border border-slate-200 rounded-xl font-bold text-xs"
                     >
-                      <option value="monthly">Mensual</option>
-                      <option value="annual">Anual</option>
+                      <option value="monthly">{L('Mensual', 'Monthly')}</option>
+                      <option value="annual">{L('Anual', 'Annual')}</option>
                     </select>
                   </div>
                   <div>
-                    <label className="block font-bold text-slate-700 mb-1 text-[11px]">Moneda</label>
+                    <label className="block font-bold text-slate-700 mb-1 text-[11px]">{L('Moneda', 'Currency')}</label>
                     <select
                       value={saasPlanForm.billingCurrency}
                       onChange={(e) => setSaasPlanForm({ ...saasPlanForm, billingCurrency: e.target.value as 'GTQ' | 'USD' })}
                       className="w-full px-2.5 py-2 bg-white border border-slate-200 rounded-xl font-bold text-xs"
                     >
-                      <option value="GTQ">GTQ (Q)</option>
+                      <option value="GTQ">{L('GTQ (Q)', 'GTQ (Quetzales)')}</option>
                       <option value="USD">USD ($)</option>
                     </select>
                   </div>
                   <div>
                     <label className="block font-bold text-slate-700 mb-1 text-[11px]">
-                      Cuota ({saasPlanForm.billingCurrency === 'GTQ' ? 'Q' : '$'})
+                      {L('Cuota', 'Fee')} ({saasPlanForm.billingCurrency})
                     </label>
                     <input
                       type="number"
@@ -3824,7 +3911,7 @@ export default function FortexaAppsView({
                     />
                   </div>
                   <div>
-                    <label className="block font-bold text-slate-700 mb-1 text-[11px]">Próximo Cobro</label>
+                    <label className="block font-bold text-slate-700 mb-1 text-[11px]">{L('Próximo Cobro', 'Next Billing')}</label>
                     <input
                       type="date"
                       value={saasPlanForm.nextBillingDate}
@@ -3844,7 +3931,7 @@ export default function FortexaAppsView({
                 onClick={() => setEditingEmpresaSaaS(null)}
                 className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition-all cursor-pointer"
               >
-                Cancelar
+                {L('Cancelar', 'Cancel')}
               </button>
               <div className="flex items-center gap-2">
                 {onSelectEmpresa && isOwnerOperableEmpresa(editingEmpresaSaaS.id) && (
@@ -3858,7 +3945,7 @@ export default function FortexaAppsView({
                     }}
                     className="px-3.5 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold rounded-xl transition-all border border-indigo-200 cursor-pointer"
                   >
-                    Guardar y Probar Vista
+                    {L('Guardar y Probar Vista', 'Save & Open View')}
                   </button>
                 )}
                 <button
@@ -3866,7 +3953,7 @@ export default function FortexaAppsView({
                   onClick={handleSaveSaaSConfig}
                   className="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-black rounded-xl shadow-md transition-all cursor-pointer"
                 >
-                  Guardar Configuración SaaS
+                  {L('Guardar Configuración SaaS', 'Save SaaS Settings')}
                 </button>
               </div>
             </div>
@@ -3887,12 +3974,12 @@ export default function FortexaAppsView({
                 </div>
                 <div>
                   <h3 className="text-base font-black text-slate-900">
-                    {createdTenantResult ? '¡Nuevo Cliente Activado en Producción!' : 'Activar Nuevo Cliente (Inquilino SaaS)'}
+                    {createdTenantResult ? L('¡Nuevo Cliente Activado en Producción!', 'New Client Activated in Production!') : L('Activar Nuevo Cliente (Inquilino SaaS)', 'Activate New Client (SaaS Tenant)')}
                   </h3>
                   <p className="text-xs text-slate-500">
                     {createdTenantResult
-                      ? 'Espacio multi-tenant creado en MySQL con aislamiento total. Entrega estas credenciales al cliente.'
-                      : 'Crea en 1 paso: Empresa aislada + Sucursal Principal + Usuario Dueño (sin acceso a otros inquilinos).'}
+                      ? L('Espacio multi-tenant creado en el servidor con aislamiento total. Entrega estas credenciales al cliente.', 'Multi-tenant workspace created with complete isolation. Share these credentials with the client.')
+                      : L('Crea en 1 paso: Empresa aislada + Sucursal Principal + Usuario Dueño (sin acceso a otros inquilinos).', 'Create in 1 step: Isolated Company + Main Branch + Owner Account (zero access to other tenants).')}
                   </p>
                 </div>
               </div>
@@ -3910,28 +3997,28 @@ export default function FortexaAppsView({
                 <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 flex items-center gap-3">
                   <CheckCircle2 className="w-6 h-6 text-emerald-600 shrink-0" />
                   <div className="text-xs text-emerald-900">
-                    <p className="font-black">Inquilino #{createdTenantResult.empresa.id} — {createdTenantResult.empresa.nombre}</p>
+                    <p className="font-black">{L('Inquilino', 'Tenant')} #{createdTenantResult.empresa.id} — {createdTenantResult.empresa.nombre}</p>
                     <p className="text-emerald-700 mt-0.5">
-                      Sucursal inicial: <strong>{createdTenantResult.sucursalNombre}</strong> • Aislamiento privado verificado.
+                      {L('Sucursal inicial:', 'Main branch:')} <strong>{createdTenantResult.sucursalNombre}</strong> • {L('Aislamiento privado verificado.', 'Private tenant isolation verified.')}
                     </p>
                   </div>
                 </div>
 
                 <div className="p-4 rounded-2xl bg-slate-900 text-slate-100 space-y-2.5 font-mono text-xs">
                   <div className="flex justify-between gap-2 border-b border-slate-800 pb-2">
-                    <span className="text-slate-400">URL de Acceso:</span>
+                    <span className="text-slate-400">{L('URL de Acceso:', 'Login URL:')}</span>
                     <span className="text-indigo-300 font-bold">https://app.integrapro.app</span>
                   </div>
                   <div className="flex justify-between gap-2 border-b border-slate-800 pb-2">
-                    <span className="text-slate-400">Administrador:</span>
+                    <span className="text-slate-400">{L('Administrador:', 'Administrator:')}</span>
                     <span className="text-white font-bold">{createdTenantResult.adminName}</span>
                   </div>
                   <div className="flex justify-between gap-2 border-b border-slate-800 pb-2">
-                    <span className="text-slate-400">Correo (Usuario):</span>
+                    <span className="text-slate-400">{L('Correo (Usuario):', 'Email (Username):')}</span>
                     <span className="text-emerald-300 font-bold">{createdTenantResult.adminEmail}</span>
                   </div>
                   <div className="flex justify-between gap-2">
-                    <span className="text-slate-400">Contraseña Inicial:</span>
+                    <span className="text-slate-400">{L('Contraseña Inicial:', 'Initial Password:')}</span>
                     <span className="text-amber-300 font-black text-sm">{createdTenantResult.plainPassword}</span>
                   </div>
                 </div>
@@ -3947,7 +4034,7 @@ export default function FortexaAppsView({
                     className="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold flex items-center gap-1.5 cursor-pointer"
                   >
                     {copiedCredentials ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4" />}
-                    <span>{copiedCredentials ? '¡Mensaje Copiado!' : 'Copiar Credenciales'}</span>
+                    <span>{copiedCredentials ? L('¡Mensaje Copiado!', 'Message Copied!') : L('Copiar Credenciales', 'Copy Credentials')}</span>
                   </button>
                   <button
                     type="button"
@@ -3962,14 +4049,14 @@ export default function FortexaAppsView({
                     className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black flex items-center gap-1.5 shadow-md shadow-emerald-600/20 cursor-pointer"
                   >
                     <Send className="w-4 h-4" />
-                    <span>Enviar por WhatsApp</span>
+                    <span>{L('Enviar por WhatsApp', 'Send via WhatsApp')}</span>
                   </button>
                   <button
                     type="button"
                     onClick={() => setShowNewTenantModal(false)}
                     className="px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-black cursor-pointer"
                   >
-                    Finalizar
+                    {L('Finalizar', 'Done')}
                   </button>
                 </div>
               </div>
@@ -3986,86 +4073,86 @@ export default function FortexaAppsView({
                 <div className="space-y-3">
                   <p className="font-black text-slate-900 uppercase tracking-wider text-[11px] flex items-center gap-1.5">
                     <Building2 className="w-3.5 h-3.5 text-indigo-600" />
-                    1. Datos del Negocio (Nuevo Inquilino)
+                    {L('1. Datos del Negocio (Nuevo Inquilino)', '1. Business Details (New Tenant)')}
                   </p>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
-                      <label className="block font-bold text-slate-700 mb-1">Nombre Comercial *</label>
+                      <label className="block font-bold text-slate-700 mb-1">{L('Nombre Comercial *', 'Trade Name *')}</label>
                       <input
                         type="text"
                         required
                         value={newTenantForm.nombre}
                         onChange={(e) => setNewTenantForm({ ...newTenantForm, nombre: e.target.value })}
-                        placeholder="Ej. Ferretería El Constructor"
+                        placeholder={L('Ej. Ferretería El Constructor', 'e.g., Summit Hardware Co.')}
                         className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-semibold focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                       />
                     </div>
                     <div>
-                      <label className="block font-bold text-slate-700 mb-1">Razón Social</label>
+                      <label className="block font-bold text-slate-700 mb-1">{L('Razón Social', 'Legal Entity Name')}</label>
                       <input
                         type="text"
                         value={newTenantForm.razon_social}
                         onChange={(e) => setNewTenantForm({ ...newTenantForm, razon_social: e.target.value })}
-                        placeholder="Ej. Inversiones El Constructor S.A."
+                        placeholder={L('Ej. Inversiones El Constructor S.A.', 'e.g., Summit Hardware LLC')}
                         className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-semibold focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                       />
                     </div>
                     <div>
-                      <label className="block font-bold text-slate-700 mb-1">NIT (o CF)</label>
+                      <label className="block font-bold text-slate-700 mb-1">{L('NIT (o CF)', `${taxIdLabel} (or N/A)`)}</label>
                       <input
                         type="text"
                         value={newTenantForm.nit}
                         onChange={(e) => setNewTenantForm({ ...newTenantForm, nit: e.target.value })}
-                        placeholder="Ej. 1234567-8 o CF"
+                        placeholder={L('Ej. 1234567-8 o CF', 'e.g., 12-3456789 or N/A')}
                         className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-mono font-semibold focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                       />
                     </div>
                     <div>
-                      <label className="block font-bold text-slate-700 mb-1">Régimen Tributario SAT</label>
+                      <label className="block font-bold text-slate-700 mb-1">{L('Régimen Tributario SAT', 'Tax Regime')}</label>
                       <select
                         value={newTenantForm.regimen_tributario}
                         onChange={(e) => setNewTenantForm({ ...newTenantForm, regimen_tributario: e.target.value as any })}
                         className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-semibold focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                       >
-                        <option value="general">Régimen General (IVA 12%)</option>
-                        <option value="pequeno_contribuyente">Pequeño Contribuyente (5%)</option>
-                        <option value="informal">Exento / Informal (0%)</option>
+                        <option value="general">{L('Régimen General (IVA 12%)', 'Standard Tax (12% VAT)')}</option>
+                        <option value="pequeno_contribuyente">{L('Pequeño Contribuyente (5%)', 'Small Business (5% Flat)')}</option>
+                        <option value="informal">{L('Exento / Informal (0%)', 'Tax-Exempt / Informal (0%)')}</option>
                       </select>
                     </div>
                     <div>
-                      <label className="block font-bold text-slate-700 mb-1">País & Moneda de Cobro</label>
+                      <label className="block font-bold text-slate-700 mb-1">{L('País & Moneda de Cobro', 'Country & Billing Currency')}</label>
                       <select
                         value={newTenantForm.pais}
                         onChange={(e) => handleTenantCountryChange(e.target.value)}
                         className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-semibold focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                       >
-                        <option value="GT">🇬🇹 Guatemala (Quetzales - Q)</option>
-                        <option value="SV">🇸🇻 El Salvador (Dólares - $)</option>
-                        <option value="HN">🇭🇳 Honduras (Dólares - $)</option>
-                        <option value="CR">🇨🇷 Costa Rica (Dólares - $)</option>
-                        <option value="PA">🇵🇦 Panamá (Dólares - $)</option>
-                        <option value="MX">🇲🇽 México (Dólares - $)</option>
-                        <option value="US">🇺🇸 Estados Unidos (Dólares - $)</option>
-                        <option value="OT">🌎 Otro País (Dólares - $)</option>
+                        <option value="GT">{L('🇬🇹 Guatemala (Quetzales - Q)', '🇬🇹 Guatemala (GTQ)')}</option>
+                        <option value="SV">{L('🇸🇻 El Salvador (Dólares - $)', '🇸🇻 El Salvador (USD - $)')}</option>
+                        <option value="HN">{L('🇭🇳 Honduras (Dólares - $)', '🇭🇳 Honduras (USD - $)')}</option>
+                        <option value="CR">{L('🇨🇷 Costa Rica (Dólares - $)', '🇨🇷 Costa Rica (USD - $)')}</option>
+                        <option value="PA">{L('🇵🇦 Panamá (Dólares - $)', '🇵🇦 Panama (USD - $)')}</option>
+                        <option value="MX">{L('🇲🇽 México (Dólares - $)', '🇲🇽 Mexico (USD - $)')}</option>
+                        <option value="US">{L('🇺🇸 Estados Unidos (Dólares - $)', '🇺🇸 United States (USD - $)')}</option>
+                        <option value="OT">{L('🌎 Otro País (Dólares - $)', '🌎 Other Country (USD - $)')}</option>
                       </select>
                     </div>
                     <div>
-                      <label className="block font-bold text-slate-700 mb-1">Teléfono / WhatsApp</label>
+                      <label className="block font-bold text-slate-700 mb-1">{L('Teléfono / WhatsApp', 'Phone / WhatsApp')}</label>
                       <input
                         type="text"
                         value={newTenantForm.telefono}
                         onChange={(e) => setNewTenantForm({ ...newTenantForm, telefono: e.target.value })}
-                        placeholder={newTenantForm.pais === 'GT' ? 'Ej. 5555-1234' : 'Ej. +1 555-1234'}
+                        placeholder={newTenantForm.pais === 'GT' ? L('Ej. 5555-1234', 'e.g., 5555-1234') : L('Ej. +1 555-1234', 'e.g., +1 555-1234')}
                         className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-semibold focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                       />
                     </div>
                     <div className="sm:col-span-2">
-                      <label className="block font-bold text-slate-700 mb-1">Sucursal Inicial</label>
+                      <label className="block font-bold text-slate-700 mb-1">{L('Sucursal Inicial', 'Initial Branch')}</label>
                       <input
                         type="text"
                         value={newTenantForm.sucursal_nombre}
                         onChange={(e) => setNewTenantForm({ ...newTenantForm, sucursal_nombre: e.target.value })}
-                        placeholder="Sucursal Principal"
+                        placeholder={L('Sucursal Principal', 'Main Branch')}
                         className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-semibold focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                       />
                     </div>
@@ -4076,15 +4163,15 @@ export default function FortexaAppsView({
                 <div className="space-y-3 pt-2 border-t border-slate-100">
                   <p className="font-black text-slate-900 uppercase tracking-wider text-[11px] flex items-center gap-1.5">
                     <Layers className="w-3.5 h-3.5 text-purple-600" />
-                    2. Perfil del Cliente & Módulos Activados
+                    {L('2. Perfil del Cliente & Módulos Activados', '2. Client Profile & Enabled Modules')}
                   </p>
                   <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5">
                     {[
                       { id: 'retail', label: 'Retail / POS' },
-                      { id: 'admin_only', label: 'Admin (Sin POS)' },
-                      { id: 'standard', label: 'Estándar PyME' },
+                      { id: 'admin_only', label: L('Admin (Sin POS)', 'Back-Office (No POS)') },
+                      { id: 'standard', label: L('Estándar PyME', 'Standard SMB') },
                       { id: 'enterprise', label: 'Enterprise Full' },
-                      { id: 'live_express', label: 'Solo TikTok Live' },
+                      { id: 'live_express', label: L('Solo TikTok Live', 'TikTok Live Only') },
                     ].map(p => (
                       <button
                         key={p.id}
@@ -4103,13 +4190,13 @@ export default function FortexaAppsView({
 
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                     {[
-                      { key: 'hasPos', label: 'Punto de Venta (POS)' },
-                      { key: 'hasInventory', label: 'Inventario & Bodega' },
-                      { key: 'hasFel', label: 'Ventas & FEL' },
-                      { key: 'hasClients', label: 'Clientes & CxC' },
-                      { key: 'hasPurchases', label: 'Compras & CxP' },
-                      { key: 'hasAccounting', label: 'Contabilidad SAT' },
-                      { key: 'hasHr', label: 'RRHH & Asistencia' },
+                      { key: 'hasPos', label: L('Punto de Venta (POS)', 'Point of Sale (POS)') },
+                      { key: 'hasInventory', label: L('Inventario & Bodega', 'Inventory & Warehouse') },
+                      { key: 'hasFel', label: L('Ventas & FEL', 'Sales & E-Invoice') },
+                      { key: 'hasClients', label: L('Clientes & CxC', 'Clients & A/R') },
+                      { key: 'hasPurchases', label: L('Compras & CxP', 'Purchases & A/P') },
+                      { key: 'hasAccounting', label: L('Contabilidad SAT', 'Accounting & Tax') },
+                      { key: 'hasHr', label: L('RRHH & Asistencia', 'HR & Attendance') },
                       { key: 'hasLiveSales', label: 'TikTok Live' },
                     ].map(mod => (
                       <label
@@ -4131,29 +4218,29 @@ export default function FortexaAppsView({
                     <div className="flex items-center justify-between gap-2">
                       <span className="font-black text-indigo-950 uppercase tracking-wider text-[11px] flex items-center gap-1.5">
                         <CreditCard className="w-3.5 h-3.5 text-indigo-600" />
-                        Facturación, Ciclo & Próximo Cobro
+                        {L('Facturación, Ciclo & Próximo Cobro', 'Billing, Cycle & Next Payment')}
                       </span>
                       <span className="px-2 py-0.5 rounded-md bg-white border border-indigo-200 text-[10px] font-black text-indigo-700">
-                        {newTenantForm.billing_currency === 'GTQ' ? 'GTQ (Quetzales - Q)' : 'USD (Dólares - $)'}
+                        {newTenantForm.billing_currency === 'GTQ' ? L('GTQ (Quetzales - Q)', 'GTQ (Quetzales)') : L('USD (Dólares - $)', 'USD (US Dollars - $)')}
                       </span>
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div>
-                        <label className="block font-bold text-slate-700 mb-1">Estado Inicial de Suscripción</label>
+                        <label className="block font-bold text-slate-700 mb-1">{L('Estado Inicial de Suscripción', 'Initial Subscription Status')}</label>
                         <select
                           value={newTenantForm.subscription_status}
                           onChange={(e) => handleTenantStatusChange(e.target.value as any)}
                           className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl font-semibold"
                         >
-                          <option value="active">Activa (Pagada)</option>
-                          <option value="trial">Prueba Gratis (Trial)</option>
-                          <option value="pending">Pendiente de Pago</option>
+                          <option value="active">{L('Activa (Pagada)', 'Active (Paid)')}</option>
+                          <option value="trial">{L('Prueba Gratis (Trial)', 'Free Trial')}</option>
+                          <option value="pending">{L('Pendiente de Pago', 'Pending Payment')}</option>
                         </select>
                       </div>
 
                       <div>
-                        <label className="block font-bold text-slate-700 mb-1">Ciclo de Facturación</label>
+                        <label className="block font-bold text-slate-700 mb-1">{L('Ciclo de Facturación', 'Billing Cycle')}</label>
                         <div className="grid grid-cols-2 gap-1.5">
                           <button
                             type="button"
@@ -4164,7 +4251,7 @@ export default function FortexaAppsView({
                                 : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
                             }`}
                           >
-                            Mensual (30d)
+                            {L('Mensual (30d)', 'Monthly (30d)')}
                           </button>
                           <button
                             type="button"
@@ -4175,18 +4262,18 @@ export default function FortexaAppsView({
                                 : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
                             }`}
                           >
-                            Anual (2m gratis)
+                            {L('Anual (2m gratis)', 'Annual (2 mo free)')}
                           </button>
                         </div>
                       </div>
 
                       <div>
                         <label className="block font-bold text-slate-700 mb-1">
-                          Valor de la Suscripción ({newTenantForm.billing_currency === 'GTQ' ? 'Q' : '$'}) *
+                          {L('Valor de la Suscripción', 'Subscription Amount')} ({newTenantForm.billing_currency}) *
                         </label>
                         <div className="relative">
                           <span className="absolute left-3 top-1/2 -translate-y-1/2 font-mono font-black text-indigo-700">
-                            {newTenantForm.billing_currency === 'GTQ' ? 'Q' : '$'}
+                            {newTenantForm.billing_currency === 'GTQ' ? currencySymbol : '$'}
                           </span>
                           <input
                             type="number"
@@ -4198,7 +4285,7 @@ export default function FortexaAppsView({
                             className="w-full pl-8 pr-14 py-2 bg-white border border-slate-200 rounded-xl font-mono font-black text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                           />
                           <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-400">
-                            /{newTenantForm.billing_cycle === 'annual' ? 'año' : 'mes'}
+                            /{newTenantForm.billing_cycle === 'annual' ? L('año', 'yr') : L('mes', 'mo')}
                           </span>
                         </div>
                       </div>
@@ -4206,8 +4293,8 @@ export default function FortexaAppsView({
                       <div>
                         <label className="block font-bold text-slate-700 mb-1">
                           {newTenantForm.subscription_status === 'trial'
-                            ? 'Fin de Prueba / 1er Cobro'
-                            : 'Próxima Fecha de Cobro / Corte'}
+                            ? L('Fin de Prueba / 1er Cobro', 'Trial End / 1st Charge')
+                            : L('Próxima Fecha de Cobro / Corte', 'Next Billing / Cutoff Date')}
                         </label>
                         <input
                           type="date"
@@ -4220,7 +4307,7 @@ export default function FortexaAppsView({
 
                       {newTenantForm.subscription_status === 'trial' && (
                         <div>
-                          <label className="block font-bold text-slate-700 mb-1">Días de Prueba</label>
+                          <label className="block font-bold text-slate-700 mb-1">{L('Días de Prueba', 'Trial Days')}</label>
                           <input
                             type="number"
                             min={1}
@@ -4240,17 +4327,17 @@ export default function FortexaAppsView({
                       )}
 
                       <div className={newTenantForm.subscription_status === 'trial' ? '' : 'sm:col-span-2'}>
-                        <label className="block font-bold text-slate-700 mb-1">Método de Pago</label>
+                        <label className="block font-bold text-slate-700 mb-1">{L('Método de Pago', 'Payment Method')}</label>
                         <select
                           value={newTenantForm.payment_method}
                           onChange={(e) => setNewTenantForm({ ...newTenantForm, payment_method: e.target.value })}
                           className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl font-semibold"
                         >
-                          <option value="Transferencia / Depósito">Transferencia / Depósito Bancario</option>
-                          <option value="Tarjeta de Crédito / Débito">Tarjeta de Crédito / Débito</option>
-                          <option value="Efectivo">Efectivo</option>
-                          <option value="PayPal / Internacional">PayPal / Pago Internacional (USD)</option>
-                          <option value="Pendiente">Pendiente de Confirmar</option>
+                          <option value="Transferencia / Depósito">{L('Transferencia / Depósito Bancario', 'Bank Transfer / Deposit')}</option>
+                          <option value="Tarjeta de Crédito / Débito">{L('Tarjeta de Crédito / Débito', 'Credit / Debit Card')}</option>
+                          <option value="Efectivo">{L('Efectivo', 'Cash')}</option>
+                          <option value="PayPal / Internacional">{L('PayPal / Pago Internacional (USD)', 'PayPal / International Payment (USD)')}</option>
+                          <option value="Pendiente">{L('Pendiente de Confirmar', 'Pending Confirmation')}</option>
                         </select>
                       </div>
                     </div>
@@ -4261,40 +4348,40 @@ export default function FortexaAppsView({
                 <div className="space-y-3 pt-2 border-t border-slate-100">
                   <p className="font-black text-slate-900 uppercase tracking-wider text-[11px] flex items-center gap-1.5">
                     <Key className="w-3.5 h-3.5 text-emerald-600" />
-                    3. Usuario Administrador del Cliente (Acceso Aislado)
+                    {L('3. Usuario Administrador del Cliente (Acceso Aislado)', '3. Client Admin Account (Isolated Access)')}
                   </p>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     <div>
-                      <label className="block font-bold text-slate-700 mb-1">Nombre del Dueño *</label>
+                      <label className="block font-bold text-slate-700 mb-1">{L('Nombre del Dueño *', 'Owner Name *')}</label>
                       <input
                         type="text"
                         required
                         value={newTenantForm.admin_name}
                         onChange={(e) => setNewTenantForm({ ...newTenantForm, admin_name: e.target.value })}
-                        placeholder="Ej. Carlos Méndez"
+                        placeholder={L('Ej. Carlos Méndez', 'e.g., Alex Morgan')}
                         className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-semibold focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                       />
                     </div>
                     <div>
-                      <label className="block font-bold text-slate-700 mb-1">Correo de Acceso *</label>
+                      <label className="block font-bold text-slate-700 mb-1">{L('Correo de Acceso *', 'Login Email *')}</label>
                       <input
                         type="email"
                         required
                         value={newTenantForm.admin_email}
                         onChange={(e) => setNewTenantForm({ ...newTenantForm, admin_email: e.target.value })}
-                        placeholder="carlos@ferreteria.com"
+                        placeholder={L('carlos@ferreteria.com', 'alex@company.com')}
                         className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-semibold focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                       />
                     </div>
                     <div>
                       <label className="block font-bold text-slate-700 mb-1 flex items-center justify-between">
-                        <span>Contraseña Inicial</span>
+                        <span>{L('Contraseña Inicial', 'Initial Password')}</span>
                         <button
                           type="button"
                           onClick={() => setNewTenantForm({ ...newTenantForm, admin_password: generateSecurePassword() })}
                           className="text-[10px] text-indigo-600 hover:underline cursor-pointer"
                         >
-                          Generar otra
+                          {L('Generar otra', 'Regenerate')}
                         </button>
                       </label>
                       <input
@@ -4317,7 +4404,7 @@ export default function FortexaAppsView({
                     onClick={() => setShowNewTenantModal(false)}
                     className="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold cursor-pointer"
                   >
-                    Cancelar
+                    {L('Cancelar', 'Cancel')}
                   </button>
                   <button
                     type="submit"
@@ -4327,12 +4414,12 @@ export default function FortexaAppsView({
                     {isCreatingTenant ? (
                       <>
                         <RefreshCw className="w-4 h-4 animate-spin" />
-                        <span>Creando Inquilino en MySQL...</span>
+                        <span>{L('Creando Inquilino en el Servidor...', 'Creating Tenant on Server...')}</span>
                       </>
                     ) : (
                       <>
                         <CheckCircle2 className="w-4 h-4" />
-                        <span>Crear y Activar Empresa Cliente</span>
+                        <span>{L('Crear y Activar Empresa Cliente', 'Create & Activate Client Company')}</span>
                       </>
                     )}
                   </button>
@@ -4355,9 +4442,9 @@ export default function FortexaAppsView({
                   <Trash2 className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-black text-rose-950">Eliminar Empresa Permanentemente</h3>
+                  <h3 className="text-sm font-black text-rose-950">{L('Eliminar Empresa Permanentemente', 'Permanently Delete Company')}</h3>
                   <p className="text-xs text-rose-700 mt-0.5">
-                    Esta acción no se puede deshacer.
+                    {L('Esta acción no se puede deshacer.', 'This action cannot be undone.')}
                   </p>
                 </div>
               </div>
@@ -4378,12 +4465,16 @@ export default function FortexaAppsView({
                   <span className="font-mono text-xs text-slate-500">#{deletingEmpresa.id}</span>
                 </p>
                 <p className="text-[11px] text-slate-500">
-                  Razón Social: {deletingEmpresa.razon_social || deletingEmpresa.nombre} • NIT: {deletingEmpresa.nit || 'CF'}
+                  {L('Razón Social:', 'Legal Name:')} {deletingEmpresa.razon_social || deletingEmpresa.nombre} • {taxIdLabel}: {trTaxId(deletingEmpresa.nit)}
                 </p>
               </div>
 
               <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-[11px] leading-relaxed">
-                <strong>Se borrarán definitivamente:</strong> los usuarios del inquilino (y sus sesiones activas), sucursales, inventario, ventas, compras, clientes, contabilidad y configuración en MySQL.
+                <strong>{L('Se borrarán definitivamente:', 'The following will be permanently deleted:')}</strong>{' '}
+                {L(
+                  'los usuarios del inquilino (y sus sesiones activas), sucursales, inventario, ventas, compras, clientes, contabilidad y configuración en MySQL.',
+                  'all tenant users (and active sessions), branches, inventory, sales, purchases, customers, accounting records, and server settings.'
+                )}
               </div>
 
               {deleteEmpresaError && (
@@ -4394,14 +4485,14 @@ export default function FortexaAppsView({
 
               <div>
                 <label className="block font-bold text-slate-700 mb-1.5">
-                  Escribe <span className="font-mono font-black text-rose-600">ELIMINAR</span> para confirmar:
+                  {L('Escribe', 'Type')} <span className="font-mono font-black text-rose-600">{deleteKeyword}</span> {L('para confirmar:', 'to confirm:')}
                 </label>
                 <input
                   type="text"
                   autoFocus
                   value={deleteConfirmText}
                   onChange={(e) => setDeleteConfirmText(e.target.value)}
-                  placeholder="ELIMINAR"
+                  placeholder={deleteKeyword}
                   className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl font-mono font-black text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-rose-500"
                 />
               </div>
@@ -4413,23 +4504,23 @@ export default function FortexaAppsView({
                   onClick={() => setDeletingEmpresa(null)}
                   className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold cursor-pointer"
                 >
-                  Cancelar
+                  {L('Cancelar', 'Cancel')}
                 </button>
                 <button
                   type="button"
-                  disabled={isDeletingEmpresa || deleteConfirmText.trim().toUpperCase() !== 'ELIMINAR'}
+                  disabled={isDeletingEmpresa || (deleteConfirmText.trim().toUpperCase() !== 'ELIMINAR' && deleteConfirmText.trim().toUpperCase() !== 'DELETE')}
                   onClick={handleConfirmDeleteEmpresa}
                   className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-black shadow-sm flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
                 >
                   {isDeletingEmpresa ? (
                     <>
                       <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                      <span>Eliminando...</span>
+                      <span>{L('Eliminando...', 'Deleting...')}</span>
                     </>
                   ) : (
                     <>
                       <Trash2 className="w-3.5 h-3.5" />
-                      <span>Sí, Eliminar Empresa</span>
+                      <span>{L('Sí, Eliminar Empresa', 'Yes, Delete Company')}</span>
                     </>
                   )}
                 </button>

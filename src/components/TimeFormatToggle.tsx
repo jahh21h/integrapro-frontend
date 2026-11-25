@@ -1,5 +1,6 @@
 import { Clock } from 'lucide-react';
 import { useTimeFormat } from '../context/TimeFormatContext';
+import { useLanguage } from '../context/LanguageContext';
 
 interface TimeFormatToggleProps {
   variant?: 'badge' | 'button' | 'minimal' | 'pills';
@@ -13,6 +14,7 @@ export default function TimeFormatToggle({
   showIcon = true
 }: TimeFormatToggleProps) {
   const { timeFormat, setTimeFormat, toggleTimeFormat } = useTimeFormat();
+  const { L } = useLanguage();
 
   if (variant === 'pills') {
     return (
@@ -49,7 +51,7 @@ export default function TimeFormatToggle({
         type="button"
         onClick={toggleTimeFormat}
         className={`inline-flex items-center gap-1 text-[11px] font-mono font-bold text-slate-500 hover:text-indigo-600 transition-colors cursor-pointer ${className}`}
-        title="Alternar formato de hora (12h / 24h)"
+        title={L('Alternar formato de hora (12h / 24h)', 'Toggle time format (12h / 24h)')}
       >
         {showIcon && <Clock className="w-3 h-3" />}
         <span>{timeFormat.toUpperCase()}</span>
@@ -66,12 +68,12 @@ export default function TimeFormatToggle({
           ? 'bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border-indigo-200'
           : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-300'
       } ${className}`}
-      title="Clic para cambiar formato de hora (12h AM/PM vs 24h Militar)"
+      title={L('Clic para cambiar formato de hora (12h AM/PM vs 24h Militar)', 'Click to switch time format (12h AM/PM vs 24h)')}
     >
       {showIcon && <Clock className="w-3.5 h-3.5 text-indigo-600" />}
       <span className="font-mono">{timeFormat.toUpperCase()}</span>
       <span className="text-[9px] font-extrabold px-1.5 py-0.2 rounded-md bg-white text-slate-700 border border-slate-200/80">
-        {timeFormat === '12h' ? '12 Horas' : '24 Horas'}
+        {timeFormat === '12h' ? L('12 Horas', '12-Hour') : L('24 Horas', '24-Hour')}
       </span>
     </button>
   );

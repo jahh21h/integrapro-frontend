@@ -7,7 +7,8 @@ import {
   Building2,
   Store,
   BarChart3,
-  LogOut
+  LogOut,
+  Globe
 } from 'lucide-react';
 import { EmpresaSaaS } from '../types';
 import LiveSalesView from '../pages/LiveSalesView';
@@ -16,6 +17,7 @@ import Clients from '../pages/Clients';
 import SettingsView from '../pages/SettingsView';
 import LiveDashboardTab from './LiveDashboardTab';
 import { useLiveSales } from '../context/LiveSalesContext';
+import { useLanguage } from '../context/LanguageContext';
 
 interface LiveExpressShellProps {
   empresa: EmpresaSaaS;
@@ -34,6 +36,7 @@ export default function LiveExpressShell({
   onExitLiveMode,
   onLogout
 }: LiveExpressShellProps) {
+  const { lang, setLang, L, money } = useLanguage();
   const [activeTab, setActiveTab] = useState<'live_sales' | 'inventario' | 'clientes' | 'metricas' | 'ajustes'>('live_sales');
   const { isLiveActive: rawIsLiveActive, currentSession: rawCurrentSession, bags: allBags } = useLiveSales();
 
@@ -69,13 +72,40 @@ export default function LiveExpressShell({
                   </span>
                 </div>
                 <p className="text-[10px] text-slate-400 truncate">
-                  {isLiveActive ? (currentSession?.titulo || 'Transmisión en Directo') : 'Venta por TikTok Live & Redes'}
+                  {isLiveActive
+                    ? (currentSession?.titulo || L('Transmisión en Directo', 'Live Broadcast'))
+                    : L('Venta por TikTok Live & Redes', 'TikTok Live & Social Selling')}
                 </p>
               </div>
             </div>
 
-            {/* Acciones Mobile: Selector de Empresa y Botón Salir */}
+            {/* Acciones Mobile: Selector de Idioma, Selector de Empresa y Botón Salir */}
             <div className="flex items-center gap-1.5 shrink-0">
+              <div
+                className="inline-flex sm:hidden items-center gap-0.5 p-0.5 rounded-xl bg-slate-800 border border-slate-700"
+                role="group"
+                aria-label={L('Cambiar idioma', 'Switch language')}
+              >
+                <button
+                  type="button"
+                  onClick={() => setLang('es')}
+                  className={`px-2 py-1 rounded-lg text-[10px] font-black cursor-pointer transition-all ${
+                    lang === 'es' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  ES
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setLang('en')}
+                  className={`px-2 py-1 rounded-lg text-[10px] font-black cursor-pointer transition-all ${
+                    lang === 'en' ? 'bg-emerald-500 text-slate-950' : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  EN
+                </button>
+              </div>
+
               {empresas && onSelectEmpresa && (
                 <div className="flex items-center gap-1 px-2 py-1 bg-slate-800 border border-slate-700 rounded-xl text-xs sm:hidden">
                   <Building2 className="w-3 h-3 text-indigo-400" />
@@ -98,10 +128,10 @@ export default function LiveExpressShell({
                   type="button"
                   onClick={onLogout}
                   className="sm:hidden flex items-center gap-1 px-2.5 py-1.5 bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer"
-                  title="Cerrar sesión"
+                  title={L('Cerrar sesión', 'Sign out')}
                 >
                   <LogOut className="w-3.5 h-3.5 text-rose-400" />
-                  <span>Salir</span>
+                  <span>{L('Salir', 'Sign Out')}</span>
                 </button>
               )}
             </div>
@@ -119,7 +149,7 @@ export default function LiveExpressShell({
               }`}
             >
               <Video className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Venta en Vivo & Canastas</span>
+              <span className="hidden sm:inline">{L('Venta en Vivo & Canastas', 'Live Sales & Baskets')}</span>
               <span className="sm:hidden">Live</span>
             </button>
 
@@ -133,7 +163,7 @@ export default function LiveExpressShell({
               }`}
             >
               <Boxes className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Prendas en Stock</span>
+              <span className="hidden sm:inline">{L('Prendas en Stock', 'Items in Stock')}</span>
               <span className="sm:hidden">Stock</span>
             </button>
 
@@ -147,8 +177,8 @@ export default function LiveExpressShell({
               }`}
             >
               <Users className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Mis Clientas</span>
-              <span className="sm:hidden">Clientas</span>
+              <span className="hidden sm:inline">{L('Mis Clientas', 'My Customers')}</span>
+              <span className="sm:hidden">{L('Clientas', 'Clients')}</span>
             </button>
 
             <button
@@ -161,8 +191,8 @@ export default function LiveExpressShell({
               }`}
             >
               <BarChart3 className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Resultados del Live</span>
-              <span className="sm:hidden">Métricas</span>
+              <span className="hidden sm:inline">{L('Resultados del Live', 'Live Results')}</span>
+              <span className="sm:hidden">{L('Métricas', 'Metrics')}</span>
             </button>
 
             <button
@@ -175,17 +205,45 @@ export default function LiveExpressShell({
               }`}
             >
               <Store className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Datos de Mi Tienda</span>
-              <span className="sm:hidden">Tienda</span>
+              <span className="hidden sm:inline">{L('Datos de Mi Tienda', 'My Store Info')}</span>
+              <span className="sm:hidden">{L('Tienda', 'Store')}</span>
             </button>
           </div>
 
-          {/* Lado Derecho: Métricas, Selector de Empresa y Botón de Salir a ERP */}
+          {/* Lado Derecho: Idioma, Métricas, Selector de Empresa y Botón de Salir a ERP */}
           <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0 justify-end">
+            {/* Selector de Idioma ES | EN */}
+            <div
+              className="hidden sm:inline-flex items-center gap-0.5 p-0.5 rounded-xl bg-slate-800/90 border border-slate-700/80 shrink-0"
+              role="group"
+              aria-label={L('Cambiar idioma', 'Switch language')}
+              title={L('Cambiar idioma (Español Q / English $)', 'Switch language (Español Q / English $)')}
+            >
+              <Globe className="w-3 h-3 text-cyan-300 ml-1.5 mr-0.5 shrink-0" />
+              <button
+                type="button"
+                onClick={() => setLang('es')}
+                className={`px-2 py-1 rounded-lg text-[10px] font-black transition-all cursor-pointer ${
+                  lang === 'es' ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                ES
+              </button>
+              <button
+                type="button"
+                onClick={() => setLang('en')}
+                className={`px-2 py-1 rounded-lg text-[10px] font-black transition-all cursor-pointer ${
+                  lang === 'en' ? 'bg-emerald-500 text-slate-950 shadow-xs' : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                EN
+              </button>
+            </div>
+
             <div className="hidden lg:flex items-center gap-2 px-3 py-1 bg-slate-800/90 border border-slate-700/80 rounded-xl text-xs font-mono">
-              <span className="text-rose-400 font-bold">Q {totalRecaudado.toFixed(2)}</span>
+              <span className="text-rose-400 font-bold">{money(totalRecaudado)}</span>
               <span className="text-slate-500">•</span>
-              <span className="text-slate-300">{totalApartadas} prendas apartadas</span>
+              <span className="text-slate-300">{totalApartadas} {L('prendas apartadas', 'reserved items')}</span>
             </div>
 
             {empresas && onSelectEmpresa && (
@@ -213,10 +271,10 @@ export default function LiveExpressShell({
                   if (onSelectEmpresa) onSelectEmpresa(22);
                 }}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs font-bold shadow-md shadow-blue-900/30 transition-all cursor-pointer"
-                title="Volver a la consola maestra de Fortexa Technologies y ver todo el sistema"
+                title={L('Volver a la consola maestra de Fortexa Technologies y ver todo el sistema', 'Return to the Fortexa Technologies master console to view the entire system')}
               >
                 <Building2 className="w-3.5 h-3.5 text-blue-200" />
-                <span className="hidden md:inline">Consola Fortexa</span>
+                <span className="hidden md:inline">{L('Consola Fortexa', 'Fortexa Console')}</span>
                 <span className="md:hidden">Fortexa</span>
               </button>
             )}
@@ -225,10 +283,10 @@ export default function LiveExpressShell({
               type="button"
               onClick={onExitLiveMode}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-bold border border-slate-700 transition-all cursor-pointer"
-              title="Volver a la vista del ERP completo con todos los módulos empresariales"
+              title={L('Volver a la vista del ERP completo con todos los módulos empresariales', 'Return to the full ERP view with all business modules')}
             >
               <ArrowLeft className="w-3.5 h-3.5 text-indigo-400" />
-              <span className="hidden md:inline">Salir a ERP Completo</span>
+              <span className="hidden md:inline">{L('Salir a ERP Completo', 'Exit to Full ERP')}</span>
               <span className="md:hidden">ERP</span>
             </button>
 
@@ -237,10 +295,10 @@ export default function LiveExpressShell({
                 type="button"
                 onClick={onLogout}
                 className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 text-xs font-bold transition-all cursor-pointer shadow-sm"
-                title="Cerrar sesión en el sistema"
+                title={L('Cerrar sesión en el sistema', 'Sign out of the system')}
               >
                 <LogOut className="w-3.5 h-3.5 text-rose-400" />
-                <span>Cerrar Sesión</span>
+                <span>{L('Cerrar Sesión', 'Sign Out')}</span>
               </button>
             )}
           </div>
@@ -259,10 +317,10 @@ export default function LiveExpressShell({
             <div className="mb-4 p-3 bg-amber-50 rounded-2xl border border-amber-200 text-xs flex items-center justify-between text-amber-900">
               <span className="font-bold flex items-center gap-1.5">
                 <Boxes className="w-4 h-4 text-amber-600" />
-                Catálogo de Prendas para Transmisión en Vivo
+                {L('Catálogo de Prendas para Transmisión en Vivo', 'Item Catalog for Live Broadcast')}
               </span>
               <span className="text-[11px] text-amber-700">
-                Las prendas editadas aquí se sincronizan al instante en la pantalla del Live
+                {L('Las prendas editadas aquí se sincronizan al instante en la pantalla del Live', 'Items edited here sync instantly to the Live screen')}
               </span>
             </div>
             <Inventory key={empresa.id} currentEmpresa={empresa} />
@@ -274,10 +332,10 @@ export default function LiveExpressShell({
             <div className="mb-4 p-3 bg-blue-50 rounded-2xl border border-blue-200 text-xs flex items-center justify-between text-blue-900">
               <span className="font-bold flex items-center gap-1.5">
                 <Users className="w-4 h-4 text-blue-600" />
-                Directorio de Clientas de TikTok y WhatsApp
+                {L('Directorio de Clientas de TikTok y WhatsApp', 'TikTok & WhatsApp Customer Directory')}
               </span>
               <span className="text-[11px] text-blue-700">
-                Registro de números para envío de recibos y direcciones de paquetería
+                {L('Registro de números para envío de recibos y direcciones de paquetería', 'Phone numbers for receipts and courier shipping addresses')}
               </span>
             </div>
             <Clients key={empresa.id} currentEmpresa={empresa} />

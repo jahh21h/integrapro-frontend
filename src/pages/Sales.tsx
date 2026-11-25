@@ -34,17 +34,55 @@ import { salesApi } from '../api';
 import { getTenantSales, getTenantCotizaciones, VentaItem, CotizacionItem } from '../data/realSales';
 import { filterRecordsByTenant, getStoredActiveEmpresaId } from '../utils/tenant';
 import { getLiveCache, setLiveCache } from '../utils/liveCache';
+import { useLanguage } from '../context/LanguageContext';
 
 interface SalesProps {
   currentEmpresa?: EmpresaSaaS;
 }
 
 export default function Sales({ currentEmpresa }: SalesProps = {}) {
+  const {
+    L,
+    isEn,
+    money,
+    currencySymbol,
+    taxIdLabel,
+    trPayment,
+    trStatus,
+    trRegime,
+    trClient,
+    trTaxId,
+  } = useLanguage();
+
+  const trBranch = (raw?: string | null) => {
+    const s = String(raw || '');
+    if (s === 'Sucursal Principal') return L('Sucursal Principal', 'Main Branch');
+    if (s === 'Sucursal Central') return L('Sucursal Central', 'Central Branch');
+    if (s === 'Sucursal Norte') return L('Sucursal Norte', 'North Branch');
+    if (s === 'Sucursal Sur') return L('Sucursal Sur', 'South Branch');
+    if (s === 'Sucursal Demo Principal') return L('Sucursal Demo Principal', 'Main Demo Branch');
+    return isEn ? s.replace(/^Sucursal\b/i, 'Branch') : s;
+  };
+
+  const trSeller = (raw?: string | null) => {
+    const s = String(raw || '');
+    if (s === 'Caja Principal') return L('Caja Principal', 'Main Register');
+    if (s === 'Asesor Comercial Demo') return L('Asesor Comercial Demo', 'Demo Sales Advisor');
+    return s;
+  };
+
+  const trProdName = (raw?: string | null) => {
+    const s = String(raw || '');
+    if (s === 'Producto General') return L('Producto General', 'General Product');
+    if (isEn && /^Producto #/i.test(s)) return s.replace(/^Producto #/i, 'Product #');
+    return s;
+  };
+
   const fallbackEmpresaId = getStoredActiveEmpresaId() || 0;
   const empresaActiva: EmpresaSaaS = currentEmpresa || {
     id: fallbackEmpresaId,
-    nombre: fallbackEmpresaId === 1 ? 'Fashion Styles' : 'Empresa Activa',
-    razon_social: fallbackEmpresaId === 1 ? 'Fashion Styles S.A.' : 'Empresa Activa',
+    nombre: fallbackEmpresaId === 1 ? 'Fashion Styles' : L('Empresa Activa', 'Active Company'),
+    razon_social: fallbackEmpresaId === 1 ? 'Fashion Styles S.A.' : L('Empresa Activa', 'Active Company'),
     nit: 'CF',
     pais: 'GT',
     regimen: 'General (IVA 12%)',
@@ -91,7 +129,7 @@ export default function Sales({ currentEmpresa }: SalesProps = {}) {
   const handleOpenSalePdf = async (sale: VentaItem) => {
     const numericId = parseSaleNumericId(sale);
     if (!numericId) {
-      showToast('⚠️ Esta venta no tiene un ID numérico válido en la base de datos.');
+      showToast(L('⚠️ Esta venta no tiene un ID numérico válido en la base de datos.', '⚠️ This sale does not have a valid numeric ID in the database.'));
       return;
     }
     if (loadingPdfSaleId === numericId) return;
@@ -111,8 +149,14 @@ export default function Sales({ currentEmpresa }: SalesProps = {}) {
       const status = err?.response?.status;
       showToast(
         status === 404
-          ? `⚠️ La venta #${numericId} no existe en MySQL para ${empresaActiva.nombre}.`
-          : `⚠️ No se pudo cargar el PDF de la venta #${numericId}: ${err?.response?.data?.message || err?.message || 'Error de conexión'}`
+          ? L(
+              `⚠️ La venta #${numericId} no existe en MySQL para ${empresaActiva.nombre}.`,
+              `⚠️ Sale #${numericId} does not exist in MySQL for ${empresaActiva.nombre}.`
+            )
+          : L(
+              `⚠️ No se pudo cargar el PDF de la venta #${numericId}: ${err?.response?.data?.message || err?.message || 'Error de conexión'}`,
+              `⚠️ Could not load PDF for sale #${numericId}: ${err?.response?.data?.message || err?.message || 'Connection error'}`
+            )
       );
     } finally {
       setLoadingPdfSaleId(null);
@@ -243,7 +287,7 @@ export default function Sales({ currentEmpresa }: SalesProps = {}) {
   const handleSaveEditSale = async () => {
     if (!editingSale || !editSaleForm) return;
     if (editSaleForm.detalles.length === 0) {
-      alert('La venta debe contener al menos un producto.');
+      alert(L('La venta debe contener al menos un producto.', 'The sale must contain at least one product.'));
       return;
     }
 
@@ -263,14 +307,19 @@ export default function Sales({ currentEmpresa }: SalesProps = {}) {
       };
 
       await salesApi.updateSale(editingSale.rawId || editingSale.id, payload);
-      showToast(`Venta #${editingSale.id} modificada exitosamente. Stock actualizado en inventario.`);
+      showToast(
+        L(
+          `Venta #${editingSale.id} modificada exitosamente. Stock actualizado en inventario.`,
+          `Sale #${editingSale.id} updated successfully. Inventory stock synced.`
+        )
+      );
       setEditingSale(null);
       setEditSaleForm(null);
       fetchSales();
     } catch (err: any) {
       console.error('Error al actualizar venta:', err);
-      const errMsg = err?.response?.data?.message || err?.message || 'Error al actualizar venta.';
-      alert(`⚠️ NO SE PUDO MODIFICAR LA VENTA:\n\n${errMsg}`);
+      const errMsg = err?.response?.data?.message || err?.message || L('Error al actualizar venta.', 'Error updating sale.');
+      alert(L(`⚠️ NO SE PUDO MODIFICAR LA VENTA:\n\n${errMsg}`, `⚠️ COULD NOT UPDATE SALE:\n\n${errMsg}`));
     } finally {
       setIsSavingSale(false);
     }
@@ -282,13 +331,18 @@ export default function Sales({ currentEmpresa }: SalesProps = {}) {
     setIsDeletingSale(true);
     try {
       await salesApi.deleteSale(saleToDelete.rawId || saleToDelete.id);
-      showToast(`Venta #${saleToDelete.id} eliminada. Stock de prendas restaurado al inventario.`);
+      showToast(
+        L(
+          `Venta #${saleToDelete.id} eliminada. Stock de prendas restaurado al inventario.`,
+          `Sale #${saleToDelete.id} voided. Item stock restored to inventory.`
+        )
+      );
       setSales(prev => prev.filter(s => s.id !== saleToDelete.id));
       setSaleToDelete(null);
     } catch (err: any) {
       console.error('Error al eliminar venta:', err);
-      const errMsg = err?.response?.data?.message || err?.message || 'Error al anular la venta.';
-      alert(`⚠️ NO SE PUDO ELIMINAR LA VENTA:\n\n${errMsg}`);
+      const errMsg = err?.response?.data?.message || err?.message || L('Error al anular la venta.', 'Error voiding sale.');
+      alert(L(`⚠️ NO SE PUDO ELIMINAR LA VENTA:\n\n${errMsg}`, `⚠️ COULD NOT VOID SALE:\n\n${errMsg}`));
     } finally {
       setIsDeletingSale(false);
     }
@@ -368,7 +422,12 @@ export default function Sales({ currentEmpresa }: SalesProps = {}) {
   }, [empresaActiva.id]);
 
   const handleConvertQuote = (quote: CotizacionItem) => {
-    showToast(`Cotización ${quote.id} convertida a Venta exitosamente en Caja Central.`);
+    showToast(
+      L(
+        `Cotización ${quote.id} convertida a Venta exitosamente en Caja Central.`,
+        `Quote ${quote.id} successfully converted to a Sale at Main Register.`
+      )
+    );
     setQuotes(quotes.map(q => q.id === quote.id ? { ...q, estado: 'Aprobada' } : q));
   };
 
@@ -422,24 +481,24 @@ export default function Sales({ currentEmpresa }: SalesProps = {}) {
     const dataToExport = filteredSales.map(s => {
       const taxes = calculateSaleTaxes(s.total, empresaActiva.regimen);
       return {
-        'No. Factura': s.id,
-        'Fecha': s.fecha,
-        'Cliente': s.cliente,
-        'NIT': s.nit,
-        'Sucursal': s.sucursal,
-        'Vendedor': s.vendedor,
-        'Método Pago': s.metodoPago,
-        'Estado': s.estado,
-        'Base Gravable (Q)': taxes.subtotalNeto.toFixed(2),
-        'IVA / Impuesto SAT (Q)': taxes.impuestoCalculadoSAT.toFixed(2),
-        'Total (Q)': s.total.toFixed(2),
-        'UUID FEL': s.dte?.uuid || 'No certificada',
-        'Serie DTE': s.dte?.serie || '-',
-        'Régimen Fiscal': empresaActiva.regimen
+        [L('No. Factura', 'Invoice #')]: s.id,
+        [L('Fecha', 'Date')]: s.fecha,
+        [L('Cliente', 'Customer')]: trClient(s.cliente),
+        [taxIdLabel]: trTaxId(s.nit),
+        [L('Sucursal', 'Branch')]: trBranch(s.sucursal),
+        [L('Vendedor', 'Salesperson')]: trSeller(s.vendedor),
+        [L('Método Pago', 'Payment Method')]: trPayment(s.metodoPago),
+        [L('Estado', 'Status')]: trStatus(s.estado),
+        [L(`Base Gravable (${currencySymbol})`, `Taxable Base (${currencySymbol})`)]: taxes.subtotalNeto.toFixed(2),
+        [L(`IVA / Impuesto SAT (${currencySymbol})`, `VAT / Tax (${currencySymbol})`)]: taxes.impuestoCalculadoSAT.toFixed(2),
+        [L(`Total (${currencySymbol})`, `Total (${currencySymbol})`)]: s.total.toFixed(2),
+        [L('UUID FEL', 'E-Invoice UUID')]: s.dte?.uuid || L('No certificada', 'Not certified'),
+        [L('Serie DTE', 'E-Invoice Series')]: s.dte?.serie || '-',
+        [L('Régimen Fiscal', 'Tax Regime')]: trRegime(empresaActiva.regimen)
       };
     });
-    exportToExcelCsv(dataToExport, `libro_ventas_sat_${empresaActiva.nombre.replace(/\s+/g, '_')}`);
-    showToast('Libro de Ventas SAT exportado exitosamente a Excel CSV');
+    exportToExcelCsv(dataToExport, `${L('libro_ventas_sat_', 'sales_tax_ledger_')}${empresaActiva.nombre.replace(/\s+/g, '_')}`);
+    showToast(L('Libro de Ventas SAT exportado exitosamente a Excel CSV', 'Sales Tax Ledger exported successfully to Excel CSV'));
   };
 
   return (
@@ -457,12 +516,17 @@ export default function Sales({ currentEmpresa }: SalesProps = {}) {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-slate-200">
         <div>
           <h1 className="text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2.5">
-            Ventas, Facturación SAT & Comisiones
+            {L('Ventas, Facturación SAT & Comisiones', 'Sales, E-Invoicing & Commissions')}
             <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-              Certificador INFILE DTE
+              {L('Certificador INFILE DTE', 'E-Invoice Certifier (INFILE)')}
             </span>
           </h1>
-          <p className="text-xs text-slate-500 font-medium">Historial de facturas FEL certificadas, cotizaciones y tabla de rendimiento comercial</p>
+          <p className="text-xs text-slate-500 font-medium">
+            {L(
+              'Historial de facturas FEL certificadas, cotizaciones y tabla de rendimiento comercial',
+              'Certified electronic invoices history, quotes, and sales performance leaderboard'
+            )}
+          </p>
         </div>
 
         <div className="flex items-center gap-2">
@@ -470,10 +534,10 @@ export default function Sales({ currentEmpresa }: SalesProps = {}) {
             type="button"
             onClick={fetchSales}
             className="px-3.5 py-2.5 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 shadow-sm transition-all flex items-center gap-2 hover:border-slate-300 cursor-pointer"
-            title="Recargar ventas en tiempo real desde la Base de Datos"
+            title={L('Recargar ventas en tiempo real desde la Base de Datos', 'Reload real-time sales from the database')}
           >
             <RefreshCcw className={`w-4 h-4 text-indigo-600 ${isLoadingSales ? 'animate-spin' : ''}`} />
-            <span>Actualizar</span>
+            <span>{L('Actualizar', 'Refresh')}</span>
           </button>
           <button
             type="button"
@@ -481,7 +545,7 @@ export default function Sales({ currentEmpresa }: SalesProps = {}) {
             className="px-4 py-2.5 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 shadow-sm transition-all flex items-center gap-2 hover:border-slate-300"
           >
             <Download className="w-4 h-4 text-slate-400" />
-            <span>Exportar Libro SAT</span>
+            <span>{L('Exportar Libro SAT', 'Export Tax Ledger')}</span>
           </button>
         </div>
       </div>
@@ -490,11 +554,13 @@ export default function Sales({ currentEmpresa }: SalesProps = {}) {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
           <div>
-            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Ventas Facturadas</span>
+            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">{L('Ventas Facturadas', 'Invoiced Sales')}</span>
             <p className="text-2xl font-black text-slate-900 mt-1">
-              Q {totalVentasFacturadas.toLocaleString('es-GT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              {money(totalVentasFacturadas)}
             </p>
-            <span className="text-[11px] font-semibold text-emerald-600">{sales.length} transacciones registradas</span>
+            <span className="text-[11px] font-semibold text-emerald-600">
+              {sales.length} {L('transacciones registradas', 'recorded transactions')}
+            </span>
           </div>
           <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
             <DollarSign className="w-5 h-5" />
@@ -503,9 +569,9 @@ export default function Sales({ currentEmpresa }: SalesProps = {}) {
 
         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
           <div>
-            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Certificaciones FEL</span>
-            <p className="text-2xl font-black text-slate-900 mt-1">{totalDtes} DTEs</p>
-            <span className="text-[11px] font-semibold text-teal-600">INFILE 100% en línea</span>
+            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">{L('Certificaciones FEL', 'Certified E-Invoices')}</span>
+            <p className="text-2xl font-black text-slate-900 mt-1">{totalDtes} {L('DTEs', 'E-Invoices')}</p>
+            <span className="text-[11px] font-semibold text-teal-600">{L('INFILE 100% en línea', 'INFILE 100% online')}</span>
           </div>
           <div className="w-10 h-10 rounded-xl bg-teal-50 text-teal-600 flex items-center justify-center">
             <FileCheck2 className="w-5 h-5" />
@@ -514,11 +580,11 @@ export default function Sales({ currentEmpresa }: SalesProps = {}) {
 
         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
           <div>
-            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Ticket Promedio</span>
+            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">{L('Ticket Promedio', 'Average Ticket')}</span>
             <p className="text-2xl font-black text-slate-900 mt-1">
-              Q {ticketPromedio.toLocaleString('es-GT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              {money(ticketPromedio)}
             </p>
-            <span className="text-[11px] font-semibold text-indigo-600">Catálogo general</span>
+            <span className="text-[11px] font-semibold text-indigo-600">{L('Catálogo general', 'General catalog')}</span>
           </div>
           <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
             <Receipt className="w-5 h-5" />
@@ -527,10 +593,10 @@ export default function Sales({ currentEmpresa }: SalesProps = {}) {
 
         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
           <div>
-            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Top Vendedor Mes</span>
-            <p className="text-sm font-black text-slate-900 mt-1 truncate">{topVendedor.nombre}</p>
+            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">{L('Top Vendedor Mes', 'Top Seller (Month)')}</span>
+            <p className="text-sm font-black text-slate-900 mt-1 truncate">{trSeller(topVendedor.nombre)}</p>
             <span className="text-[11px] font-semibold text-amber-600">
-              Q {(topVendedor.total_vendido / 1000).toFixed(1)}k • {topVendedor.porcentaje_cumplido}% meta
+              {isEn ? '$' : 'Q '}{(topVendedor.total_vendido / 1000).toFixed(1)}k • {topVendedor.porcentaje_cumplido}% {L('meta', 'goal')}
             </span>
           </div>
           <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
@@ -549,7 +615,7 @@ export default function Sales({ currentEmpresa }: SalesProps = {}) {
             }`}
         >
           <Receipt className="w-4 h-4" />
-          <span>Historial de Ventas & FEL DTE</span>
+          <span>{L('Historial de Ventas & FEL DTE', 'Sales History & E-Invoices')}</span>
           <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-slate-100 font-bold">
             {sales.length}
           </span>
@@ -563,7 +629,7 @@ export default function Sales({ currentEmpresa }: SalesProps = {}) {
             }`}
         >
           <FileText className="w-4 h-4" />
-          <span>Cotizaciones & Propuestas</span>
+          <span>{L('Cotizaciones & Propuestas', 'Quotes & Proposals')}</span>
           <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-slate-100 font-bold">
             {quotes.length}
           </span>
@@ -577,9 +643,9 @@ export default function Sales({ currentEmpresa }: SalesProps = {}) {
             }`}
         >
           <Trophy className="w-4 h-4" />
-          <span>Desempeño & Comisiones</span>
+          <span>{L('Desempeño & Comisiones', 'Performance & Commissions')}</span>
           <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-amber-100 text-amber-800 font-bold">
-            {vendedores.length} vendedores
+            {vendedores.length} {L('vendedores', 'sellers')}
           </span>
         </button>
       </div>
@@ -593,7 +659,7 @@ export default function Sales({ currentEmpresa }: SalesProps = {}) {
               <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
               <input
                 type="text"
-                placeholder="Buscar por ID, cliente, NIT o UUID SAT..."
+                placeholder={L('Buscar por ID, cliente, NIT o UUID SAT...', 'Search by ID, customer, Tax ID or E-Invoice UUID...')}
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full pl-9 pr-4 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:ring-1 focus:ring-emerald-500"
@@ -606,10 +672,10 @@ export default function Sales({ currentEmpresa }: SalesProps = {}) {
                 onChange={(e) => setSelectedBranch(e.target.value)}
                 className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:outline-none"
               >
-                <option value="Todas">Todas las Sucursales</option>
-                <option value="Central">Sucursal Central</option>
-                <option value="Norte">Sucursal Norte</option>
-                <option value="Sur">Sucursal Sur</option>
+                <option value="Todas">{L('Todas las Sucursales', 'All Branches')}</option>
+                <option value="Central">{L('Sucursal Central', 'Central Branch')}</option>
+                <option value="Norte">{L('Sucursal Norte', 'North Branch')}</option>
+                <option value="Sur">{L('Sucursal Sur', 'South Branch')}</option>
               </select>
             </div>
           </div>
@@ -620,14 +686,14 @@ export default function Sales({ currentEmpresa }: SalesProps = {}) {
               <table className="w-full text-left text-xs">
                 <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 font-extrabold uppercase text-[10px] tracking-wider">
                   <tr>
-                    <th className="py-3 px-4">Comprobante</th>
-                    <th className="py-3 px-4">Tipo / Régimen</th>
-                    <th className="py-3 px-4">Cliente / NIT</th>
-                    <th className="py-3 px-4">Vendedor</th>
-                    <th className="py-3 px-4">Sucursal</th>
-                    <th className="py-3 px-4 text-right">Subtotal</th>
-                    <th className="py-3 px-4 text-right">Total</th>
-                    <th className="py-3 px-4 text-center">Acciones</th>
+                    <th className="py-3 px-4">{L('Comprobante', 'Receipt')}</th>
+                    <th className="py-3 px-4">{L('Tipo / Régimen', 'Type / Regime')}</th>
+                    <th className="py-3 px-4">{L('Cliente', 'Customer')} / {taxIdLabel}</th>
+                    <th className="py-3 px-4">{L('Vendedor', 'Salesperson')}</th>
+                    <th className="py-3 px-4">{L('Sucursal', 'Branch')}</th>
+                    <th className="py-3 px-4 text-right">{L('Subtotal', 'Subtotal')}</th>
+                    <th className="py-3 px-4 text-right">{L('Total', 'Total')}</th>
+                    <th className="py-3 px-4 text-center">{L('Acciones', 'Actions')}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 font-medium">
@@ -642,33 +708,33 @@ export default function Sales({ currentEmpresa }: SalesProps = {}) {
                           <div className="inline-flex flex-col">
                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black bg-teal-50 text-teal-700 border border-teal-200">
                               <FileCheck2 className="w-3 h-3" />
-                              <span>FEL SAT</span>
+                              <span>{L('FEL SAT', 'E-Invoice')}</span>
                             </span>
                             <span className="text-[9px] text-slate-400 font-mono mt-0.5">
-                              Serie {s.dte.serie}
+                              {L('Serie', 'Series')} {s.dte.serie}
                             </span>
                           </div>
                         ) : (
                           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600">
-                            Ticket POS
+                            {L('Ticket POS', 'POS Receipt')}
                           </span>
                         )}
                       </td>
                       <td className="py-3 px-4">
-                        <div className="font-bold text-slate-800">{s.cliente}</div>
-                        <div className="text-[10px] text-slate-500 font-mono">NIT: {s.nit}</div>
+                        <div className="font-bold text-slate-800">{trClient(s.cliente)}</div>
+                        <div className="text-[10px] text-slate-500 font-mono">{taxIdLabel}: {trTaxId(s.nit)}</div>
                       </td>
                       <td className="py-3 px-4 text-slate-600 font-medium">
-                        {s.vendedor}
+                        {trSeller(s.vendedor)}
                       </td>
                       <td className="py-3 px-4 text-slate-600">
-                        {s.sucursal}
+                        {trBranch(s.sucursal)}
                       </td>
                       <td className="py-3 px-4 text-right font-mono text-slate-600">
-                        Q {s.subtotal.toFixed(2)}
+                        {money(s.subtotal)}
                       </td>
                       <td className="py-3 px-4 text-right font-mono font-black text-slate-900">
-                        Q {s.total.toFixed(2)}
+                        {money(s.total)}
                       </td>
                       <td className="py-3 px-4 text-center">
                         <div className="flex items-center justify-center gap-1.5">
@@ -676,10 +742,10 @@ export default function Sales({ currentEmpresa }: SalesProps = {}) {
                             type="button"
                             onClick={() => setSelectedSaleDetail(s)}
                             className="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition-colors inline-flex items-center gap-1 cursor-pointer"
-                            title="Ver Comprobante / DTE"
+                            title={L('Ver Comprobante / DTE', 'View Receipt / E-Invoice')}
                           >
                             <Eye className="w-3.5 h-3.5 text-slate-600" />
-                            <span className="hidden xl:inline">Ver</span>
+                            <span className="hidden xl:inline">{L('Ver', 'View')}</span>
                           </button>
 
                           <button
@@ -687,7 +753,7 @@ export default function Sales({ currentEmpresa }: SalesProps = {}) {
                             disabled={loadingPdfSaleId !== null && loadingPdfSaleId === parseSaleNumericId(s)}
                             onClick={() => handleOpenSalePdf(s)}
                             className="p-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold rounded-xl text-xs transition-colors inline-flex items-center gap-1 cursor-pointer disabled:opacity-50"
-                            title="Mostrar Comprobante de Venta en PDF"
+                            title={L('Mostrar Comprobante de Venta en PDF', 'View Sales Receipt PDF')}
                           >
                             {loadingPdfSaleId !== null && loadingPdfSaleId === parseSaleNumericId(s) ? (
                               <Loader2 className="w-3.5 h-3.5 text-emerald-600 animate-spin" />
@@ -701,20 +767,20 @@ export default function Sales({ currentEmpresa }: SalesProps = {}) {
                             type="button"
                             onClick={() => handleOpenEditSale(s)}
                             className="p-1.5 bg-amber-50 hover:bg-amber-100 text-amber-700 font-bold rounded-xl text-xs transition-colors inline-flex items-center gap-1 cursor-pointer"
-                            title="Modificar Venta"
+                            title={L('Modificar Venta', 'Edit Sale')}
                           >
                             <Pencil className="w-3.5 h-3.5 text-amber-600" />
-                            <span className="hidden xl:inline">Modificar</span>
+                            <span className="hidden xl:inline">{L('Modificar', 'Edit')}</span>
                           </button>
 
                           <button
                             type="button"
                             onClick={() => setSaleToDelete(s)}
                             className="p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold rounded-xl text-xs transition-colors inline-flex items-center gap-1 cursor-pointer"
-                            title="Eliminar / Anular Venta y Restaurar Stock"
+                            title={L('Eliminar / Anular Venta y Restaurar Stock', 'Void Sale & Restore Stock')}
                           >
                             <Trash2 className="w-3.5 h-3.5 text-rose-600" />
-                            <span className="hidden xl:inline">Eliminar</span>
+                            <span className="hidden xl:inline">{L('Eliminar', 'Delete')}</span>
                           </button>
                         </div>
                       </td>
@@ -728,7 +794,10 @@ export default function Sales({ currentEmpresa }: SalesProps = {}) {
             {filteredSales.length > 0 && (
               <div className="p-4 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
                 <span className="text-slate-500 font-medium">
-                  Mostrando {(salesPage - 1) * salesPerPage + 1} a {Math.min(salesPage * salesPerPage, filteredSales.length)} de {filteredSales.length} ventas
+                  {L(
+                    `Mostrando ${(salesPage - 1) * salesPerPage + 1} a ${Math.min(salesPage * salesPerPage, filteredSales.length)} de ${filteredSales.length} ventas`,
+                    `Showing ${(salesPage - 1) * salesPerPage + 1} to ${Math.min(salesPage * salesPerPage, filteredSales.length)} of ${filteredSales.length} sales`
+                  )}
                 </span>
                 <div className="flex items-center gap-2">
                   <button
@@ -737,17 +806,17 @@ export default function Sales({ currentEmpresa }: SalesProps = {}) {
                     className="px-3 py-1.5 border border-slate-200 rounded-xl font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1"
                   >
                     <ChevronLeft className="w-3.5 h-3.5" />
-                    Anterior
+                    {L('Anterior', 'Previous')}
                   </button>
                   <span className="px-3 py-1 font-extrabold text-slate-700 bg-slate-50 rounded-lg">
-                    Pág. {salesPage} de {Math.max(1, totalSalesPages)}
+                    {L(`Pág. ${salesPage} de ${Math.max(1, totalSalesPages)}`, `Page ${salesPage} of ${Math.max(1, totalSalesPages)}`)}
                   </span>
                   <button
                     onClick={() => setSalesPage(p => Math.min(totalSalesPages, p + 1))}
                     disabled={salesPage >= totalSalesPages}
                     className="px-3 py-1.5 border border-slate-200 rounded-xl font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1"
                   >
-                    Siguiente
+                    {L('Siguiente', 'Next')}
                     <ChevronRight className="w-3.5 h-3.5" />
                   </button>
                 </div>
@@ -766,29 +835,29 @@ export default function Sales({ currentEmpresa }: SalesProps = {}) {
                 <div className="flex items-center justify-between pb-3 border-b border-slate-100">
                   <div>
                     <span className="text-xs font-black text-indigo-600">{q.id}</span>
-                    <h3 className="text-sm font-bold text-slate-900">{q.cliente}</h3>
+                    <h3 className="text-sm font-bold text-slate-900">{trClient(q.cliente)}</h3>
                     <p className="text-[11px] text-slate-500">{q.empresa}</p>
                   </div>
                   <span className={`px-2.5 py-1 rounded-full text-xs font-extrabold ${q.estado === 'Aprobada'
                     ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                     : 'bg-amber-50 text-amber-700 border border-amber-200'
                     }`}>
-                    {q.estado}
+                    {trStatus(q.estado)}
                   </span>
                 </div>
 
                 <div className="space-y-1.5 text-xs text-slate-600">
                   <div className="flex justify-between">
-                    <span className="text-slate-400">Fecha Emisión:</span>
+                    <span className="text-slate-400">{L('Fecha Emisión:', 'Issue Date:')}</span>
                     <span className="font-medium">{q.fecha}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-slate-400">Vigencia:</span>
+                    <span className="text-slate-400">{L('Vigencia:', 'Valid Until:')}</span>
                     <span className="font-medium text-amber-700">{q.vigencia}</span>
                   </div>
                   <div className="flex justify-between text-sm font-black text-slate-900 pt-2 border-t border-slate-100">
-                    <span>Monto Total:</span>
-                    <span className="text-emerald-700">Q {q.total.toFixed(2)}</span>
+                    <span>{L('Monto Total:', 'Total Amount:')}</span>
+                    <span className="text-emerald-700">{money(q.total)}</span>
                   </div>
                 </div>
 
@@ -798,7 +867,7 @@ export default function Sales({ currentEmpresa }: SalesProps = {}) {
                       onClick={() => handleConvertQuote(q)}
                       className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 shadow-sm"
                     >
-                      <span>Convertir a Venta FEL</span>
+                      <span>{L('Convertir a Venta FEL', 'Convert to E-Invoice Sale')}</span>
                       <ArrowRight className="w-3.5 h-3.5" />
                     </button>
                   )}
@@ -811,7 +880,10 @@ export default function Sales({ currentEmpresa }: SalesProps = {}) {
           {filteredQuotes.length > 0 && (
             <div className="bg-white p-4 rounded-2xl border border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
               <span className="text-slate-500 font-medium">
-                Mostrando {(quotesPage - 1) * quotesPerPage + 1} a {Math.min(quotesPage * quotesPerPage, filteredQuotes.length)} de {filteredQuotes.length} cotizaciones
+                {L(
+                  `Mostrando ${(quotesPage - 1) * quotesPerPage + 1} a ${Math.min(quotesPage * quotesPerPage, filteredQuotes.length)} de ${filteredQuotes.length} cotizaciones`,
+                  `Showing ${(quotesPage - 1) * quotesPerPage + 1} to ${Math.min(quotesPage * quotesPerPage, filteredQuotes.length)} of ${filteredQuotes.length} quotes`
+                )}
               </span>
               <div className="flex items-center gap-2">
                 <button
@@ -820,17 +892,17 @@ export default function Sales({ currentEmpresa }: SalesProps = {}) {
                   className="px-3 py-1.5 border border-slate-200 rounded-xl font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1"
                 >
                   <ChevronLeft className="w-3.5 h-3.5" />
-                  Anterior
+                  {L('Anterior', 'Previous')}
                 </button>
                 <span className="px-3 py-1 font-extrabold text-slate-700 bg-slate-50 rounded-lg">
-                  Pág. {quotesPage} de {Math.max(1, totalQuotesPages)}
+                  {L(`Pág. ${quotesPage} de ${Math.max(1, totalQuotesPages)}`, `Page ${quotesPage} of ${Math.max(1, totalQuotesPages)}`)}
                 </span>
                 <button
                   onClick={() => setQuotesPage(p => Math.min(totalQuotesPages, p + 1))}
                   disabled={quotesPage >= totalQuotesPages}
                   className="px-3 py-1.5 border border-slate-200 rounded-xl font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1"
                 >
-                  Siguiente
+                  {L('Siguiente', 'Next')}
                   <ChevronRight className="w-3.5 h-3.5" />
                 </button>
               </div>
@@ -847,24 +919,27 @@ export default function Sales({ currentEmpresa }: SalesProps = {}) {
             <div className="space-y-1">
               <span className="text-[11px] font-bold text-indigo-300 uppercase tracking-wider flex items-center gap-1.5">
                 <Trophy className="w-4 h-4 text-amber-400" />
-                Plan de Comisiones y Metas Mensuales
+                {L('Plan de Comisiones y Metas Mensuales', 'Commission Plan & Monthly Goals')}
               </span>
-              <h2 className="text-lg font-black tracking-tight">Rendimiento Comercial • Noviembre 2026</h2>
+              <h2 className="text-lg font-black tracking-tight">{L('Rendimiento Comercial • Noviembre 2026', 'Sales Performance • November 2026')}</h2>
               <p className="text-xs text-slate-300 max-w-xl">
-                Cálculo automatizado con base en tickets facturados y DTEs certificados en todas las sucursales. Comisión aplicable del 3.0% sobre ventas netas cumplidas.
+                {L(
+                  'Cálculo automatizado con base en tickets facturados y DTEs certificados en todas las sucursales. Comisión aplicable del 3.0% sobre ventas netas cumplidas.',
+                  'Automated calculation based on invoiced receipts and certified E-Invoices across all branches. 3.0% commission applied on net sales achieved.'
+                )}
               </p>
             </div>
             <div className="flex items-center gap-3">
               <div className="bg-white/10 backdrop-blur-md px-4 py-2.5 rounded-2xl border border-white/10 text-center">
-                <span className="text-[10px] font-bold text-slate-300 uppercase block">Comisiones del Mes</span>
+                <span className="text-[10px] font-bold text-slate-300 uppercase block">{L('Comisiones del Mes', 'Monthly Commissions')}</span>
                 <span className="text-base font-black text-emerald-300">
-                  Q {vendedores.reduce((a: number, b: any) => a + (b.comision_acumulada || 0), 0).toLocaleString('es-GT', { minimumFractionDigits: 2 })}
+                  {money(vendedores.reduce((a: number, b: any) => a + (b.comision_acumulada || 0), 0))}
                 </span>
               </div>
               <div className="bg-white/10 backdrop-blur-md px-4 py-2.5 rounded-2xl border border-white/10 text-center">
-                <span className="text-[10px] font-bold text-slate-300 uppercase block">Venta Global</span>
+                <span className="text-[10px] font-bold text-slate-300 uppercase block">{L('Venta Global', 'Total Sales')}</span>
                 <span className="text-base font-black text-amber-300">
-                  Q {vendedores.reduce((a: number, b: any) => a + (b.total_vendido || 0), 0).toLocaleString('es-GT', { minimumFractionDigits: 2 })}
+                  {money(vendedores.reduce((a: number, b: any) => a + (b.total_vendido || 0), 0))}
                 </span>
               </div>
             </div>
@@ -875,24 +950,24 @@ export default function Sales({ currentEmpresa }: SalesProps = {}) {
             <div className="p-4 border-b border-slate-100 flex items-center justify-between">
               <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-2">
                 <Award className="w-4 h-4 text-indigo-600" />
-                Tabla de Posiciones y Cumplimiento
+                {L('Tabla de Posiciones y Cumplimiento', 'Leaderboard & Goal Attainment')}
               </h3>
-              <span className="text-[11px] text-slate-400">Actualizado en tiempo real</span>
+              <span className="text-[11px] text-slate-400">{L('Actualizado en tiempo real', 'Updated in real time')}</span>
             </div>
 
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs">
                 <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 font-extrabold uppercase text-[10px] tracking-wider">
                   <tr>
-                    <th className="py-3 px-4">Lugar</th>
-                    <th className="py-3 px-4">Vendedor</th>
-                    <th className="py-3 px-4">Sucursal</th>
-                    <th className="py-3 px-4 text-center">Ventas</th>
-                    <th className="py-3 px-4 text-right">Facturado</th>
-                    <th className="py-3 px-4 text-right">Meta Mensual</th>
-                    <th className="py-3 px-4 text-center">% Meta</th>
-                    <th className="py-3 px-4 text-right">Comisión</th>
-                    <th className="py-3 px-4 text-right">Ticket Prom.</th>
+                    <th className="py-3 px-4">{L('Lugar', 'Rank')}</th>
+                    <th className="py-3 px-4">{L('Vendedor', 'Salesperson')}</th>
+                    <th className="py-3 px-4">{L('Sucursal', 'Branch')}</th>
+                    <th className="py-3 px-4 text-center">{L('Ventas', 'Sales')}</th>
+                    <th className="py-3 px-4 text-right">{L('Facturado', 'Invoiced')}</th>
+                    <th className="py-3 px-4 text-right">{L('Meta Mensual', 'Monthly Goal')}</th>
+                    <th className="py-3 px-4 text-center">{L('% Meta', '% Goal')}</th>
+                    <th className="py-3 px-4 text-right">{L('Comisión', 'Commission')}</th>
+                    <th className="py-3 px-4 text-right">{L('Ticket Prom.', 'Avg. Ticket')}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 font-medium">
@@ -905,20 +980,20 @@ export default function Sales({ currentEmpresa }: SalesProps = {}) {
                         {index > 2 && <span className="text-slate-500 text-xs pl-2">#{index + 1}</span>}
                       </td>
                       <td className="py-3.5 px-4">
-                        <div className="font-bold text-slate-900">{v.nombre}</div>
+                        <div className="font-bold text-slate-900">{trSeller(v.nombre)}</div>
                         <div className="text-[10px] text-slate-400">ID EMP-{v.id_empleado}</div>
                       </td>
                       <td className="py-3.5 px-4 text-slate-600">
-                        {v.sucursal}
+                        {trBranch(v.sucursal)}
                       </td>
                       <td className="py-3.5 px-4 text-center font-bold text-slate-800">
                         {v.ventas_count}
                       </td>
                       <td className="py-3.5 px-4 text-right font-mono font-black text-slate-900">
-                        Q {v.total_vendido.toFixed(2)}
+                        {money(v.total_vendido)}
                       </td>
                       <td className="py-3.5 px-4 text-right font-mono text-slate-500">
-                        Q {v.meta_mensual.toFixed(2)}
+                        {money(v.meta_mensual)}
                       </td>
                       <td className="py-3.5 px-4 text-center">
                         <div className="flex items-center gap-2 justify-center">
@@ -936,10 +1011,10 @@ export default function Sales({ currentEmpresa }: SalesProps = {}) {
                         </div>
                       </td>
                       <td className="py-3.5 px-4 text-right font-mono font-bold text-emerald-700">
-                        Q {v.comision_acumulada.toFixed(2)}
+                        {money(v.comision_acumulada)}
                       </td>
                       <td className="py-3.5 px-4 text-right font-mono text-slate-600">
-                        Q {v.ticket_promedio.toFixed(2)}
+                        {money(v.ticket_promedio)}
                       </td>
                     </tr>
                   ))}
@@ -952,37 +1027,37 @@ export default function Sales({ currentEmpresa }: SalesProps = {}) {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm space-y-2">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-slate-400 uppercase">Sucursal Central</span>
+                <span className="text-xs font-bold text-slate-400 uppercase">{L('Sucursal Central', 'Central Branch')}</span>
                 <Building className="w-4 h-4 text-emerald-600" />
               </div>
-              <p className="text-xl font-black text-slate-900">Q 116,300.00</p>
+              <p className="text-xl font-black text-slate-900">{money(116300)}</p>
               <div className="flex justify-between text-[11px] text-slate-500 pt-1 border-t border-slate-100">
-                <span>79 transacciones</span>
-                <span className="font-bold text-emerald-600">Ticket Prom: Q 1,472.15</span>
+                <span>79 {L('transacciones', 'transactions')}</span>
+                <span className="font-bold text-emerald-600">{L('Ticket Prom:', 'Avg. Ticket:')} {money(1472.15)}</span>
               </div>
             </div>
 
             <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm space-y-2">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-slate-400 uppercase">Sucursal Norte</span>
+                <span className="text-xs font-bold text-slate-400 uppercase">{L('Sucursal Norte', 'North Branch')}</span>
                 <Building className="w-4 h-4 text-indigo-600" />
               </div>
-              <p className="text-xl font-black text-slate-900">Q 51,800.00</p>
+              <p className="text-xl font-black text-slate-900">{money(51800)}</p>
               <div className="flex justify-between text-[11px] text-slate-500 pt-1 border-t border-slate-100">
-                <span>36 transacciones</span>
-                <span className="font-bold text-indigo-600">Ticket Prom: Q 1,438.88</span>
+                <span>36 {L('transacciones', 'transactions')}</span>
+                <span className="font-bold text-indigo-600">{L('Ticket Prom:', 'Avg. Ticket:')} {money(1438.88)}</span>
               </div>
             </div>
 
             <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm space-y-2">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-slate-400 uppercase">Sucursal Sur</span>
+                <span className="text-xs font-bold text-slate-400 uppercase">{L('Sucursal Sur', 'South Branch')}</span>
                 <Building className="w-4 h-4 text-amber-600" />
               </div>
-              <p className="text-xl font-black text-slate-900">Q 28,450.00</p>
+              <p className="text-xl font-black text-slate-900">{money(28450)}</p>
               <div className="flex justify-between text-[11px] text-slate-500 pt-1 border-t border-slate-100">
-                <span>22 transacciones</span>
-                <span className="font-bold text-amber-600">Ticket Prom: Q 1,293.18</span>
+                <span>22 {L('transacciones', 'transactions')}</span>
+                <span className="font-bold text-amber-600">{L('Ticket Prom:', 'Avg. Ticket:')} {money(1293.18)}</span>
               </div>
             </div>
           </div>
@@ -995,7 +1070,9 @@ export default function Sales({ currentEmpresa }: SalesProps = {}) {
           <div className="max-w-md w-full bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
             <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
               <span className="text-xs font-black text-slate-900">
-                {selectedSaleDetail.dte ? 'Documento Tributario Electrónico (FEL SAT)' : `Comprobante #${selectedSaleDetail.id}`}
+                {selectedSaleDetail.dte
+                  ? L('Documento Tributario Electrónico (FEL SAT)', 'Electronic Tax Document (E-Invoice)')
+                  : L(`Comprobante #${selectedSaleDetail.id}`, `Receipt #${selectedSaleDetail.id}`)}
               </span>
               <button
                 onClick={() => setSelectedSaleDetail(null)}
@@ -1019,45 +1096,45 @@ export default function Sales({ currentEmpresa }: SalesProps = {}) {
                 )}
                 <p className="font-extrabold text-sm text-slate-900 uppercase tracking-tight">{empresaActiva.nombre}</p>
                 <p className="text-[10px] text-slate-500 font-medium">{empresaActiva.razon_social || empresaActiva.nombre}</p>
-                <p className="text-[11px] text-slate-500">NIT Emisor: {empresaActiva.nit || 'CF'}</p>
-                <p className="text-[11px]">{selectedSaleDetail.sucursal}</p>
+                <p className="text-[11px] text-slate-500">{L('NIT Emisor:', 'Issuer Tax ID:')} {trTaxId(empresaActiva.nit)}</p>
+                <p className="text-[11px]">{trBranch(selectedSaleDetail.sucursal)}</p>
                 <p className="text-[11px]">{selectedSaleDetail.fecha}</p>
               </div>
 
               {selectedSaleDetail.dte && (
                 <div className="p-3 bg-emerald-50 rounded-2xl border border-emerald-100 text-[10px] space-y-1">
                   <div className="flex justify-between items-center">
-                    <span className="font-bold text-slate-600">No. Autorización (UUID):</span>
+                    <span className="font-bold text-slate-600">{L('No. Autorización (UUID):', 'Authorization # (UUID):')}</span>
                     <button
                       onClick={() => copyToClipboard(selectedSaleDetail.dte!.uuid)}
                       className="text-emerald-700 hover:underline flex items-center gap-1 font-bold"
                     >
                       <Copy className="w-2.5 h-2.5" />
-                      {copiedUuid ? 'Copiado!' : 'Copiar'}
+                      {copiedUuid ? L('Copiado!', 'Copied!') : L('Copiar', 'Copy')}
                     </button>
                   </div>
                   <p className="font-black text-emerald-950 break-all">{selectedSaleDetail.dte.uuid}</p>
-                  <p><span className="font-bold">Serie DTE:</span> {selectedSaleDetail.dte.serie} | <span className="font-bold">Número:</span> {selectedSaleDetail.dte.numero}</p>
-                  <p><span className="font-bold">Fecha Certificación:</span> {selectedSaleDetail.dte.fechaCertificacion}</p>
+                  <p><span className="font-bold">{L('Serie DTE:', 'E-Invoice Series:')}</span> {selectedSaleDetail.dte.serie} | <span className="font-bold">{L('Número:', 'Number:')}</span> {selectedSaleDetail.dte.numero}</p>
+                  <p><span className="font-bold">{L('Fecha Certificación:', 'Certification Date:')}</span> {selectedSaleDetail.dte.fechaCertificacion}</p>
                 </div>
               )}
 
               <div>
-                <p><span className="font-bold">Cliente:</span> {selectedSaleDetail.cliente}</p>
-                <p><span className="font-bold">NIT:</span> {selectedSaleDetail.nit}</p>
-                <p><span className="font-bold">Pago:</span> {selectedSaleDetail.metodoPago}</p>
-                <p><span className="font-bold">Vendedor:</span> {selectedSaleDetail.vendedor}</p>
+                <p><span className="font-bold">{L('Cliente:', 'Customer:')}</span> {trClient(selectedSaleDetail.cliente)}</p>
+                <p><span className="font-bold">{taxIdLabel}:</span> {trTaxId(selectedSaleDetail.nit)}</p>
+                <p><span className="font-bold">{L('Pago:', 'Payment:')}</span> {trPayment(selectedSaleDetail.metodoPago)}</p>
+                <p><span className="font-bold">{L('Vendedor:', 'Salesperson:')}</span> {trSeller(selectedSaleDetail.vendedor)}</p>
               </div>
 
               <div className="pt-2 border-t border-dashed border-slate-300">
                 <table className="w-full text-[11px]">
                   <thead>
                     <tr className="border-b border-slate-200 text-left">
-                      <th className="pb-1 text-center w-6">Cant.</th>
-                      <th className="pb-1">Descripción</th>
-                      <th className="pb-1 text-right">Precio</th>
-                      <th className="pb-1 text-right text-amber-800">Desc.</th>
-                      <th className="pb-1 text-right">Total</th>
+                      <th className="pb-1 text-center w-6">{L('Cant.', 'Qty')}</th>
+                      <th className="pb-1">{L('Descripción', 'Description')}</th>
+                      <th className="pb-1 text-right">{L('Precio', 'Price')}</th>
+                      <th className="pb-1 text-right text-amber-800">{L('Desc.', 'Disc.')}</th>
+                      <th className="pb-1 text-right">{L('Total', 'Total')}</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
@@ -1068,12 +1145,12 @@ export default function Sales({ currentEmpresa }: SalesProps = {}) {
                       return (
                         <tr key={idx}>
                           <td className="py-1.5 font-bold text-center">{prod.cantidad}</td>
-                          <td className="py-1.5 pr-1 truncate max-w-[120px]" title={prod.nombre}>{prod.nombre}</td>
-                          <td className="py-1.5 text-right text-slate-500">Q {unitPrice.toFixed(2)}</td>
+                          <td className="py-1.5 pr-1 truncate max-w-[120px]" title={trProdName(prod.nombre)}>{trProdName(prod.nombre)}</td>
+                          <td className="py-1.5 text-right text-slate-500">{money(unitPrice)}</td>
                           <td className="py-1.5 text-right font-medium text-amber-700">
-                            {itemDiscount > 0 ? `-Q ${itemDiscount.toFixed(2)}` : 'Q 0.00'}
+                            {itemDiscount > 0 ? `-${money(itemDiscount)}` : money(0)}
                           </td>
-                          <td className="py-1.5 text-right font-bold text-slate-900">Q {prod.subtotal.toFixed(2)}</td>
+                          <td className="py-1.5 text-right font-bold text-slate-900">{money(prod.subtotal)}</td>
                         </tr>
                       );
                     })}
@@ -1084,11 +1161,14 @@ export default function Sales({ currentEmpresa }: SalesProps = {}) {
               {/* Total limpio al cliente (sin desglose de IVA ni descuento global; el descuento es individual por producto) */}
               <div className="pt-3 border-t border-dashed border-slate-300 space-y-1 text-right">
                 <p className="text-sm font-black text-slate-900">
-                  TOTAL A PAGAR: Q {selectedSaleDetail.total.toFixed(2)}
+                  {L('TOTAL A PAGAR:', 'TOTAL DUE:')} {money(selectedSaleDetail.total)}
                 </p>
                 {selectedSaleDetail.estado === 'Crédito' && (
                   <p className="text-[10px] font-bold text-amber-700">
-                    Venta al Crédito — Ver detalle de abonos y saldo en PDF Elegante o Cuentas por Cobrar
+                    {L(
+                      'Venta al Crédito — Ver detalle de abonos y saldo en PDF Elegante o Cuentas por Cobrar',
+                      'Credit Sale — View payment history and balance in Formal PDF or Accounts Receivable'
+                    )}
                   </p>
                 )}
               </div>
@@ -1099,7 +1179,7 @@ export default function Sales({ currentEmpresa }: SalesProps = {}) {
                     <QrCode className="w-10 h-10 text-slate-800" />
                   </div>
                   <div className="text-[9px] text-slate-500 leading-tight">
-                    <p className="font-bold text-slate-700">Certificador: {selectedSaleDetail.dte.certificador}</p>
+                    <p className="font-bold text-slate-700">{L('Certificador:', 'Certifier:')} {selectedSaleDetail.dte.certificador}</p>
                     <p className="text-emerald-700 italic">{selectedSaleDetail.dte.fraseFiscal}</p>
                   </div>
                 </div>
@@ -1107,8 +1187,8 @@ export default function Sales({ currentEmpresa }: SalesProps = {}) {
 
               <p className="text-center text-[10px] text-slate-400 pt-3 border-t border-dashed border-slate-300">
                 {empresaActiva.regimen.toLowerCase().includes('informal') || empresaActiva.regimen.toLowerCase().includes('exento')
-                  ? '¡Gracias por su preferencia! • Comprobante Interno de Venta'
-                  : '¡Gracias por su compra! • Factura Electrónica FEL'}
+                  ? L('¡Gracias por su preferencia! • Comprobante Interno de Venta', 'Thank you for your business! • Internal Sales Receipt')
+                  : L('¡Gracias por su compra! • Factura Electrónica FEL', 'Thank you for your purchase! • Electronic Invoice')}
               </p>
             </div>
 
@@ -1117,7 +1197,7 @@ export default function Sales({ currentEmpresa }: SalesProps = {}) {
                 onClick={() => setSelectedSaleDetail(null)}
                 className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-200 rounded-xl transition-colors cursor-pointer"
               >
-                Cerrar
+                {L('Cerrar', 'Close')}
               </button>
               <div className="flex items-center gap-2">
                 <button
@@ -1131,7 +1211,7 @@ export default function Sales({ currentEmpresa }: SalesProps = {}) {
                   ) : (
                     <FileText className="w-3.5 h-3.5 text-emerald-400" />
                   )}
-                  <span>Ver PDF Elegante</span>
+                  <span>{L('Ver PDF Elegante', 'View Formal PDF')}</span>
                 </button>
                 <button
                   onClick={() => {
@@ -1141,7 +1221,7 @@ export default function Sales({ currentEmpresa }: SalesProps = {}) {
                   className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 shadow-sm cursor-pointer"
                 >
                   <Printer className="w-3.5 h-3.5" />
-                  <span>Ticket</span>
+                  <span>{L('Ticket', 'Receipt')}</span>
                 </button>
               </div>
             </div>
@@ -1159,19 +1239,30 @@ export default function Sales({ currentEmpresa }: SalesProps = {}) {
               </div>
               <div className="space-y-1.5">
                 <h3 className="text-lg font-black text-slate-900 tracking-tight">
-                  ¿Anular y Eliminar Venta #{saleToDelete.id}?
+                  {L(`¿Anular y Eliminar Venta #${saleToDelete.id}?`, `Void and Delete Sale #${saleToDelete.id}?`)}
                 </h3>
                 <p className="text-xs text-slate-500 leading-relaxed">
-                  Esta acción anulará la venta efectuada a <strong className="text-slate-800">{saleToDelete.cliente}</strong> por un total de <strong className="text-slate-900">Q {saleToDelete.total.toFixed(2)}</strong>.
+                  {isEn ? (
+                    <>
+                      This action will void the sale made to <strong className="text-slate-800">{trClient(saleToDelete.cliente)}</strong> for a total of <strong className="text-slate-900">{money(saleToDelete.total)}</strong>.
+                    </>
+                  ) : (
+                    <>
+                      Esta acción anulará la venta efectuada a <strong className="text-slate-800">{trClient(saleToDelete.cliente)}</strong> por un total de <strong className="text-slate-900">{money(saleToDelete.total)}</strong>.
+                    </>
+                  )}
                 </p>
               </div>
 
               <div className="bg-amber-50 rounded-2xl p-3.5 border border-amber-200 text-left flex items-start gap-3">
                 <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
                 <div className="text-[11px] text-amber-900 leading-normal">
-                  <p className="font-bold">Restauración automática de stock:</p>
+                  <p className="font-bold">{L('Restauración automática de stock:', 'Automatic stock restoration:')}</p>
                   <p className="mt-0.5 text-amber-800">
-                    Las unidades de los {saleToDelete.productos?.length || 1} productos de esta venta se reintegrarán de inmediato al inventario físico de la sucursal y se registrará la devolución en el Kardex.
+                    {L(
+                      `Las unidades de los ${saleToDelete.productos?.length || 1} productos de esta venta se reintegrarán de inmediato al inventario físico de la sucursal y se registrará la devolución en el Kardex.`,
+                      `The units for the ${saleToDelete.productos?.length || 1} item(s) in this sale will be immediately returned to branch physical inventory and recorded in the stock ledger.`
+                    )}
                   </p>
                 </div>
               </div>
@@ -1184,7 +1275,7 @@ export default function Sales({ currentEmpresa }: SalesProps = {}) {
                 onClick={() => setSaleToDelete(null)}
                 className="px-4 py-2.5 text-xs font-bold text-slate-600 hover:bg-slate-200 rounded-xl transition-all disabled:opacity-50 cursor-pointer"
               >
-                Cancelar
+                {L('Cancelar', 'Cancel')}
               </button>
               <button
                 type="button"
@@ -1195,12 +1286,12 @@ export default function Sales({ currentEmpresa }: SalesProps = {}) {
                 {isDeletingSale ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>Eliminando & Restaurando Stock...</span>
+                    <span>{L('Eliminando & Restaurando Stock...', 'Voiding & Restoring Stock...')}</span>
                   </>
                 ) : (
                   <>
                     <Trash2 className="w-4 h-4" />
-                    <span>Confirmar Anulación</span>
+                    <span>{L('Confirmar Anulación', 'Confirm Void')}</span>
                   </>
                 )}
               </button>
@@ -1215,10 +1306,10 @@ export default function Sales({ currentEmpresa }: SalesProps = {}) {
           <div className="bg-white rounded-3xl max-w-2xl w-full shadow-2xl border border-slate-200 overflow-hidden my-8">
             <div className="p-6 bg-gradient-to-r from-slate-900 to-indigo-950 text-white flex items-center justify-between">
               <div>
-                <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-300">Modificación de Registro</span>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-300">{L('Modificación de Registro', 'Record Modification')}</span>
                 <h3 className="text-lg font-black tracking-tight text-white flex items-center gap-2 mt-0.5">
                   <Pencil className="w-5 h-5 text-indigo-400" />
-                  Editar Venta #{editingSale.id}
+                  {L(`Editar Venta #${editingSale.id}`, `Edit Sale #${editingSale.id}`)}
                 </h3>
               </div>
               <button
@@ -1237,34 +1328,34 @@ export default function Sales({ currentEmpresa }: SalesProps = {}) {
               {/* Información del Cliente y Pago */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Cliente</label>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">{L('Cliente', 'Customer')}</label>
                   <input
                     type="text"
                     disabled
-                    value={editSaleForm.nombreCliente}
+                    value={trClient(editSaleForm.nombreCliente)}
                     className="w-full px-3.5 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-xs text-slate-600 font-semibold cursor-not-allowed"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Método de Pago</label>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">{L('Método de Pago', 'Payment Method')}</label>
                   <select
                     value={editSaleForm.metodo_pago}
                     onChange={(e) => setEditSaleForm({ ...editSaleForm, metodo_pago: e.target.value })}
                     className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer"
                   >
-                    <option value="efectivo">Efectivo</option>
-                    <option value="tarjeta">Tarjeta POS</option>
-                    <option value="transferencia">Transferencia Bancaria</option>
-                    <option value="credito">Crédito</option>
+                    <option value="efectivo">{L('Efectivo', 'Cash')}</option>
+                    <option value="tarjeta">{L('Tarjeta POS', 'POS Card')}</option>
+                    <option value="transferencia">{L('Transferencia Bancaria', 'Bank Transfer')}</option>
+                    <option value="credito">{L('Crédito', 'Credit')}</option>
                   </select>
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Observaciones / Motivo de Modificación</label>
+                <label className="block text-xs font-bold text-slate-700 mb-1">{L('Observaciones / Motivo de Modificación', 'Notes / Reason for Modification')}</label>
                 <input
                   type="text"
-                  placeholder="Ej: Corrección de cantidad solicitada por clienta..."
+                  placeholder={L('Ej: Corrección de cantidad solicitada por clienta...', 'e.g., Quantity correction requested by customer...')}
                   value={editSaleForm.observaciones}
                   onChange={(e) => setEditSaleForm({ ...editSaleForm, observaciones: e.target.value })}
                   className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
@@ -1274,9 +1365,9 @@ export default function Sales({ currentEmpresa }: SalesProps = {}) {
               {/* Lista de Líneas de Productos */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <label className="block text-xs font-bold text-slate-700">Prendas & Productos de la Venta</label>
+                  <label className="block text-xs font-bold text-slate-700">{L('Prendas & Productos de la Venta', 'Sale Items & Products')}</label>
                   <span className="text-[11px] text-slate-400 font-medium">
-                    {editSaleForm.detalles.length} {editSaleForm.detalles.length === 1 ? 'línea' : 'líneas'}
+                    {editSaleForm.detalles.length} {editSaleForm.detalles.length === 1 ? L('línea', 'line') : L('líneas', 'lines')}
                   </span>
                 </div>
 
@@ -1288,10 +1379,10 @@ export default function Sales({ currentEmpresa }: SalesProps = {}) {
                     return (
                       <div key={idx} className="p-3.5 bg-white flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                         <div className="flex-1 min-w-0">
-                          <p className="text-xs font-bold text-slate-900 truncate" title={d.nombre}>
-                            {d.nombre}
+                          <p className="text-xs font-bold text-slate-900 truncate" title={trProdName(d.nombre)}>
+                            {trProdName(d.nombre)}
                           </p>
-                          <p className="text-[10px] text-slate-400 font-mono mt-0.5">ID Producto: #{d.id_producto}</p>
+                          <p className="text-[10px] text-slate-400 font-mono mt-0.5">{L('ID Producto:', 'Product ID:')} #{d.id_producto}</p>
                         </div>
 
                         <div className="flex items-center gap-3">
@@ -1340,9 +1431,9 @@ export default function Sales({ currentEmpresa }: SalesProps = {}) {
 
                           {/* Precio Unitario */}
                           <div className="w-24">
-                            <span className="text-[9px] text-slate-400 block">P. Unitario</span>
+                            <span className="text-[9px] text-slate-400 block">{L('P. Unitario', 'Unit Price')}</span>
                             <div className="relative">
-                              <span className="absolute left-2 top-2 text-[10px] text-slate-400">Q</span>
+                              <span className="absolute left-2 top-2 text-[10px] text-slate-400">{currencySymbol}</span>
                               <input
                                 type="number"
                                 step="0.01"
@@ -1362,7 +1453,7 @@ export default function Sales({ currentEmpresa }: SalesProps = {}) {
 
                           {/* Descuento por Línea */}
                           <div className="w-20">
-                            <span className="text-[9px] text-amber-700 block">Desc. (Q)</span>
+                            <span className="text-[9px] text-amber-700 block">{L('Desc.', 'Disc.')} ({currencySymbol})</span>
                             <input
                               type="number"
                               step="0.01"
@@ -1381,20 +1472,20 @@ export default function Sales({ currentEmpresa }: SalesProps = {}) {
 
                           {/* Subtotal de Línea */}
                           <div className="w-20 text-right">
-                            <span className="text-[9px] text-slate-400 block">Total</span>
+                            <span className="text-[9px] text-slate-400 block">{L('Total', 'Total')}</span>
                             <span className="text-xs font-black text-slate-900 font-mono">
-                              Q {lineTotal.toFixed(2)}
+                              {money(lineTotal)}
                             </span>
                           </div>
 
                           {/* Eliminar Línea */}
                           <button
                             type="button"
-                            title="Eliminar producto de la venta"
+                            title={L('Eliminar producto de la venta', 'Remove product from sale')}
                             disabled={editSaleForm.detalles.length <= 1}
                             onClick={() => {
                               if (editSaleForm.detalles.length <= 1) {
-                                alert('La venta debe contener al menos un producto.');
+                                alert(L('La venta debe contener al menos un producto.', 'The sale must contain at least one product.'));
                                 return;
                               }
                               const newDetalles = editSaleForm.detalles.filter((_: any, i: number) => i !== idx);
@@ -1420,18 +1511,18 @@ export default function Sales({ currentEmpresa }: SalesProps = {}) {
                 return (
                   <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
                     <div className="flex items-center justify-between text-xs text-slate-500">
-                      <span>Subtotal Bruto:</span>
-                      <span className="font-mono">Q {totalGross.toFixed(2)}</span>
+                      <span>{L('Subtotal Bruto:', 'Gross Subtotal:')}</span>
+                      <span className="font-mono">{money(totalGross)}</span>
                     </div>
                     {totalDesc > 0 && (
                       <div className="flex items-center justify-between text-xs text-amber-700 font-semibold">
-                        <span>Descuento Aplicado:</span>
-                        <span className="font-mono">-Q {totalDesc.toFixed(2)}</span>
+                        <span>{L('Descuento Aplicado:', 'Discount Applied:')}</span>
+                        <span className="font-mono">-{money(totalDesc)}</span>
                       </div>
                     )}
                     <div className="flex items-center justify-between text-sm font-black text-slate-900 pt-2 border-t border-slate-200">
-                      <span>TOTAL ACTUALIZADO:</span>
-                      <span className="font-mono text-indigo-700 text-base">Q {grandTotal.toFixed(2)}</span>
+                      <span>{L('TOTAL ACTUALIZADO:', 'UPDATED TOTAL:')}</span>
+                      <span className="font-mono text-indigo-700 text-base">{money(grandTotal)}</span>
                     </div>
                   </div>
                 );
@@ -1440,7 +1531,11 @@ export default function Sales({ currentEmpresa }: SalesProps = {}) {
               <div className="p-3 bg-indigo-50/60 rounded-xl border border-indigo-100 flex items-start gap-2.5">
                 <AlertCircle className="w-4 h-4 text-indigo-600 shrink-0 mt-0.5" />
                 <p className="text-[11px] text-indigo-900 leading-normal">
-                  <strong>Sincronización de Stock:</strong> Si aumentas o disminuyes prendas, el stock en MySQL y el Kardex se ajustarán automáticamente al guardar.
+                  <strong>{L('Sincronización de Stock:', 'Stock Synchronization:')}</strong>{' '}
+                  {L(
+                    'Si aumentas o disminuyes prendas, el stock en MySQL y el Kardex se ajustarán automáticamente al guardar.',
+                    'If you increase or decrease item quantities, MySQL stock and the inventory ledger will automatically adjust upon saving.'
+                  )}
                 </p>
               </div>
             </div>
@@ -1455,7 +1550,7 @@ export default function Sales({ currentEmpresa }: SalesProps = {}) {
                 }}
                 className="px-4 py-2.5 text-xs font-bold text-slate-600 hover:bg-slate-200 rounded-xl transition-all disabled:opacity-50 cursor-pointer"
               >
-                Cancelar
+                {L('Cancelar', 'Cancel')}
               </button>
               <button
                 type="button"
@@ -1466,12 +1561,12 @@ export default function Sales({ currentEmpresa }: SalesProps = {}) {
                 {isSavingSale ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>Guardando & Sincronizando...</span>
+                    <span>{L('Guardando & Sincronizando...', 'Saving & Syncing...')}</span>
                   </>
                 ) : (
                   <>
                     <CheckCircle2 className="w-4 h-4" />
-                    <span>Guardar Cambios</span>
+                    <span>{L('Guardar Cambios', 'Save Changes')}</span>
                   </>
                 )}
               </button>
@@ -1497,9 +1592,9 @@ export default function Sales({ currentEmpresa }: SalesProps = {}) {
                 </div>
                 <div className="min-w-0">
                   <h3 className="text-xs sm:text-sm font-black truncate">
-                    Comprobante de Venta PDF — {pdfViewer.label}
+                    {L('Comprobante de Venta PDF —', 'Sales Receipt PDF —')} {pdfViewer.label}
                   </h3>
-                  <p className="text-[11px] text-slate-300 truncate">{pdfViewer.cliente}</p>
+                  <p className="text-[11px] text-slate-300 truncate">{trClient(pdfViewer.cliente)}</p>
                 </div>
               </div>
 
@@ -1511,21 +1606,21 @@ export default function Sales({ currentEmpresa }: SalesProps = {}) {
                   className="px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold transition-colors hidden sm:inline-flex items-center gap-1.5"
                 >
                   <Printer className="w-3.5 h-3.5 text-emerald-300" />
-                  <span>Abrir en Pestaña</span>
+                  <span>{L('Abrir en Pestaña', 'Open in Tab')}</span>
                 </a>
                 <a
                   href={pdfViewer.url}
-                  download={`comprobante-venta-${pdfViewer.saleId}.pdf`}
+                  download={L(`comprobante-venta-${pdfViewer.saleId}.pdf`, `sales-receipt-${pdfViewer.saleId}.pdf`)}
                   className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black transition-colors inline-flex items-center gap-1.5 shadow-sm"
                 >
                   <Download className="w-3.5 h-3.5" />
-                  <span>Descargar PDF</span>
+                  <span>{L('Descargar PDF', 'Download PDF')}</span>
                 </a>
                 <button
                   type="button"
                   onClick={handleClosePdfViewer}
                   className="p-1.5 rounded-xl bg-white/10 hover:bg-rose-500/80 text-white transition-colors cursor-pointer"
-                  title="Cerrar visor PDF"
+                  title={L('Cerrar visor PDF', 'Close PDF viewer')}
                 >
                   <X className="w-4 h-4" />
                 </button>
@@ -1535,7 +1630,7 @@ export default function Sales({ currentEmpresa }: SalesProps = {}) {
             <div className="flex-1 bg-slate-100">
               <iframe
                 src={`${pdfViewer.url}#view=FitH&navpanes=0`}
-                title={`Comprobante PDF Venta #${pdfViewer.saleId}`}
+                title={L(`Comprobante PDF Venta #${pdfViewer.saleId}`, `Sales Receipt PDF #${pdfViewer.saleId}`)}
                 className="w-full h-full border-0"
               />
             </div>

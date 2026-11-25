@@ -36,6 +36,7 @@ import { EmpresaSaaS, LiveCustomerBag } from '../types';
 import { getTenantCatalog } from '../data/tenantProducts';
 import { inventoryApi } from '../api';
 import { filterRecordsByTenant, getStoredActiveEmpresaId } from '../utils/tenant';
+import { useLanguage } from '../context/LanguageContext';
 
 interface LiveProductItem {
   id: number;
@@ -90,7 +91,47 @@ interface LiveSalesViewProps {
 }
 
 export default function LiveSalesView({ currentEmpresa }: LiveSalesViewProps) {
+  const { L, money, currencySymbol, locale, isEn } = useLanguage();
   const activeEmpresaId = Number(currentEmpresa?.id ?? getStoredActiveEmpresaId() ?? 0);
+
+  const formatLiveDueDate = (dueDate: Date) => {
+    const isShortTime = boutiquePolicy.tipo === '24_horas' || boutiquePolicy.tipo === 'horas';
+    if (isEn) {
+      const dateStr = dueDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      if (isShortTime) {
+        const timeStr = dueDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+        return `${dateStr} (${timeStr})`;
+      }
+      return dateStr;
+    }
+    const monthNames = [
+      'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+      'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
+    ];
+    if (isShortTime) {
+      const hoursStr = dueDate.toLocaleTimeString('es-GT', { hour: '2-digit', minute: '2-digit', hour12: true });
+      return `${dueDate.getDate()} de ${monthNames[dueDate.getMonth()]} (${hoursStr})`;
+    }
+    return `${dueDate.getDate()} de ${monthNames[dueDate.getMonth()]}`;
+  };
+
+  const trCourier = (courier?: string) => {
+    if (!courier) return 'Guatex';
+    if (!isEn) return courier;
+    if (courier === 'Mensajero Local') return 'Local Courier';
+    if (courier === 'Entrega Personal / Cercana') return 'Personal / Local Pickup';
+    if (courier === 'Recoge en Tienda') return 'Store Pickup';
+    return courier;
+  };
+
+  const trBagStatusShort = (estado: LiveCustomerBag['estado']) => {
+    if (estado === 'abierta') return L('Abierta', 'Open');
+    if (estado === 'pendiente_pago') return L('Por Cobrar', 'Unpaid');
+    if (estado === 'despachada') return L('Despachada', 'Shipped');
+    if (estado === 'liquidada') return L('Liquidada', 'Paid');
+    if (estado === 'cancelada') return L('Cancelada', 'Cancelled');
+    return estado;
+  };
 
   const {
     isLiveActive: rawIsLiveActive,
@@ -180,7 +221,9 @@ export default function LiveSalesView({ currentEmpresa }: LiveSalesViewProps) {
   const [customPriceInput, setCustomPriceInput] = useState('');
 
   const [showStartLiveModal, setShowStartLiveModal] = useState(false);
-  const [newLiveTitle, setNewLiveTitle] = useState('TikTok Live - Noche de Moda & Remates');
+  const [newLiveTitle, setNewLiveTitle] = useState(() =>
+    L('TikTok Live - Noche de Moda & Remates', 'TikTok Live - Fashion Night & Flash Deals')
+  );
 
   // Catálogo de prendas y productos estrictamente aislado por empresa
   const [liveProducts, setLiveProducts] = useState<LiveProductItem[]>(() => getTenantCatalog(activeEmpresaId).products);
@@ -335,9 +378,15 @@ export default function LiveSalesView({ currentEmpresa }: LiveSalesViewProps) {
 
   const handleDeleteBag = (bag: LiveCustomerBag) => {
     const prendasAviso = bag.items.length > 0 
-      ? `\n\n⚠️ Tiene ${bag.items.length} prenda(s) apartada(s) que se devolverán inmediatamente al inventario disponible.`
+      ? L(
+          `\n\n⚠️ Tiene ${bag.items.length} prenda(s) apartada(s) que se devolverán inmediatamente al inventario disponible.`,
+          `\n\n⚠️ It has ${bag.items.length} reserved item(s) that will be immediately returned to available stock.`
+        )
       : '';
-    if (window.confirm(`¿Seguro que deseas eliminar la canasta de "${bag.cliente_nombre}"?${prendasAviso}`)) {
+    if (window.confirm(L(
+      `¿Seguro que deseas eliminar la canasta de "${bag.cliente_nombre}"?${prendasAviso}`,
+      `Are you sure you want to delete "${bag.cliente_nombre}"'s bag?${prendasAviso}`
+    ))) {
       deleteBag(bag.id);
       if (activeBagId === bag.id) {
         const remaining = bags.filter(b => b.id !== bag.id);
@@ -357,9 +406,15 @@ export default function LiveSalesView({ currentEmpresa }: LiveSalesViewProps) {
   const handleReleaseExpiredBags = () => {
     if (expiredBags.length === 0) return;
     const totalPrendas = expiredBags.reduce((acc, b) => acc + b.items.length, 0);
-    if (window.confirm(`¿Deseas devolver al inventario las prendas de ${expiredBags.length} canasta(s) vencidas (${totalPrendas} prendas en total)?\n\nEstas clientas no pagaron dentro del plazo de su apartado y sus prendas quedarán inmediatamente disponibles para volver a venderse.`)) {
+    if (window.confirm(L(
+      `¿Deseas devolver al inventario las prendas de ${expiredBags.length} canasta(s) vencidas (${totalPrendas} prendas en total)?\n\nEstas clientas no pagaron dentro del plazo de su apartado y sus prendas quedarán inmediatamente disponibles para volver a venderse.`,
+      `Do you want to return the items from ${expiredBags.length} overdue bag(s) (${totalPrendas} items total) back to inventory?\n\nThese customers did not pay within their hold period and their items will become immediately available for sale.`
+    ))) {
       const count = releaseExpiredBagsToStock(boutiquePolicy);
-      alert(`✅ Se liberaron ${count} canasta(s) vencidas. ${totalPrendas} prenda(s) volvieron al stock disponible.`);
+      alert(L(
+        `✅ Se liberaron ${count} canasta(s) vencidas. ${totalPrendas} prenda(s) volvieron al stock disponible.`,
+        `✅ Released ${count} overdue bag(s). ${totalPrendas} item(s) were returned to available stock.`
+      ));
     }
   };
 
@@ -449,13 +504,17 @@ export default function LiveSalesView({ currentEmpresa }: LiveSalesViewProps) {
             </div>
             <div>
               <p className="font-extrabold text-slate-900 flex items-center gap-2">
-                Modo Demostración: Cliente "Boutique Chic Live" (Vendedora Informal TikTok)
+                {L('Modo Demostración: Cliente "Boutique Chic Live" (Vendedora Informal TikTok)', 'Demo Mode: Client "Boutique Chic Live" (TikTok Live Seller)')}
                 <span className="px-2 py-0.5 rounded-md bg-rose-600 text-white font-mono text-[9px] uppercase font-black">
-                  Plan Live Express Q99/mes
+                  {L(`Plan Live Express ${currencySymbol}99/mes`, `Live Express Plan ${currencySymbol}99/mo`)}
                 </span>
               </p>
               <p className="text-slate-600 text-[11px] mt-0.5">
-                Así es exactamente como ve su pantalla la persona a quien le vendes este módulo: solo tiene <strong>Ventas en Vivo</strong>, <strong>Prendas de Inventario</strong> y <strong>WhatsApp</strong>, sin módulos contables ni nóminas innecesarias.
+                {isEn ? (
+                  <>This is exactly how the screen looks for a Live Express client: only <strong>Live Sales</strong>, <strong>Inventory Items</strong>, and <strong>WhatsApp</strong>, without unnecessary accounting or payroll modules.</>
+                ) : (
+                  <>Así es exactamente como ve su pantalla la persona a quien le vendes este módulo: solo tiene <strong>Ventas en Vivo</strong>, <strong>Prendas de Inventario</strong> y <strong>WhatsApp</strong>, sin módulos contables ni nóminas innecesarias.</>
+                )}
               </p>
             </div>
           </div>
@@ -467,7 +526,7 @@ export default function LiveSalesView({ currentEmpresa }: LiveSalesViewProps) {
             }}
             className="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-[11px] whitespace-nowrap shadow-xs transition-all cursor-pointer"
           >
-            ← Volver a Fortexa (Cerebro SaaS)
+            {L('← Volver a Fortexa (Cerebro SaaS)', '← Back to Fortexa (SaaS Hub)')}
           </button>
         </div>
       )}
@@ -486,21 +545,21 @@ export default function LiveSalesView({ currentEmpresa }: LiveSalesViewProps) {
               <div>
                 <div className="flex items-center gap-2.5">
                   <h1 className="text-xl sm:text-2xl font-black tracking-tight">
-                    TikTok Live & Canastas Abiertas
+                    {L('TikTok Live & Canastas Abiertas', 'TikTok Live & Open Bags')}
                   </h1>
                   {isLiveActive ? (
                     <span className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full text-xs font-black bg-rose-500 text-white shadow-lg shadow-rose-500/30 animate-pulse uppercase tracking-wider">
                       <span className="w-2 h-2 rounded-full bg-white animate-ping" />
-                      EN VIVO AHORA
+                      {L('EN VIVO AHORA', 'LIVE NOW')}
                     </span>
                   ) : (
                     <span className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full text-xs font-bold bg-slate-800 text-slate-400 border border-slate-700">
-                      Transmisión Pausada
+                      {L('Transmisión Pausada', 'Stream Paused')}
                     </span>
                   )}
                 </div>
                 <p className="text-xs sm:text-sm text-slate-300">
-                  {currentSession?.titulo || 'Sesión de Venta en Vivo'} • {currentEmpresa?.nombre || 'Fashion Styles'}
+                  {currentSession?.titulo || L('Sesión de Venta en Vivo', 'Live Selling Session')} • {currentEmpresa?.nombre || 'Fashion Styles'}
                 </p>
               </div>
             </div>
@@ -515,20 +574,20 @@ export default function LiveSalesView({ currentEmpresa }: LiveSalesViewProps) {
                 setShowPolicyModal(true);
               }}
               className="px-3.5 py-2.5 bg-slate-800/90 hover:bg-slate-700 active:scale-95 text-slate-200 font-bold text-xs rounded-xl border border-slate-700 transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
-              title="Configurar política de cobro y vencimiento de apartados"
+              title={L('Configurar política de cobro y vencimiento de apartados', 'Configure billing policy and hold expiration rules')}
             >
               <Settings className="w-4 h-4 text-purple-400" />
-              <span className="hidden sm:inline">Reglas de Cobro</span>
+              <span className="hidden sm:inline">{L('Reglas de Cobro', 'Billing Rules')}</span>
             </button>
 
             {isLiveActive ? (
               <button
                 onClick={() => setShowEndLiveModal(true)}
                 className="px-4 py-2.5 bg-rose-600 hover:bg-rose-700 active:scale-95 text-white font-bold text-xs rounded-xl shadow-lg shadow-rose-900/30 transition-all flex items-center gap-2 cursor-pointer"
-                title="Cerrar la transmisión y ver el corte de caja del Live"
+                title={L('Cerrar la transmisión y ver el corte de caja del Live', 'End live stream and view Live cash cut summary')}
               >
                 <Square className="w-4 h-4 fill-current" />
-                <span>Finalizar Live (Ver Corte)</span>
+                <span>{L('Finalizar Live (Ver Corte)', 'End Live (View Summary)')}</span>
               </button>
             ) : (
               <div className="flex items-center gap-2">
@@ -536,17 +595,17 @@ export default function LiveSalesView({ currentEmpresa }: LiveSalesViewProps) {
                   type="button"
                   onClick={() => setShowEndLiveModal(true)}
                   className="px-3.5 py-2.5 bg-slate-800/90 hover:bg-slate-700 active:scale-95 text-slate-200 font-bold text-xs rounded-xl border border-slate-700 transition-all flex items-center gap-1.5 cursor-pointer shadow-sm"
-                  title="Ver el reporte de ventas del Live"
+                  title={L('Ver el reporte de ventas del Live', 'View Live sales report')}
                 >
                   <FileText className="w-4 h-4 text-purple-400" />
-                  <span>Resumen del Live</span>
+                  <span>{L('Resumen del Live', 'Live Summary')}</span>
                 </button>
                 <button
                   onClick={() => setShowStartLiveModal(true)}
                   className="px-4 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 active:scale-95 text-white font-bold text-xs rounded-xl shadow-lg shadow-emerald-900/30 transition-all flex items-center gap-2 cursor-pointer"
                 >
                   <Play className="w-4 h-4 fill-current" />
-                  <span>Iniciar Nuevo Live</span>
+                  <span>{L('Iniciar Nuevo Live', 'Start New Live')}</span>
                 </button>
               </div>
             )}
@@ -556,7 +615,7 @@ export default function LiveSalesView({ currentEmpresa }: LiveSalesViewProps) {
               className="px-4 py-2.5 bg-white text-slate-900 hover:bg-slate-100 active:scale-95 font-bold text-xs rounded-xl shadow-lg transition-all flex items-center gap-2 cursor-pointer"
             >
               <Plus className="w-4 h-4" />
-              + Nueva Clienta en Live
+              {L('+ Nueva Clienta en Live', '+ New Live Customer')}
             </button>
           </div>
         </div>
@@ -565,37 +624,37 @@ export default function LiveSalesView({ currentEmpresa }: LiveSalesViewProps) {
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 sm:gap-3 mt-5 sm:mt-6 pt-4 sm:pt-5 border-t border-white/10">
           <div className="bg-white/5 backdrop-blur-md rounded-2xl p-3 border border-white/10">
             <span className="text-[10px] font-bold uppercase tracking-wider text-purple-300 flex items-center gap-1">
-              <ShoppingBag className="w-3 h-3 text-purple-400" /> Canastas Abiertas
+              <ShoppingBag className="w-3 h-3 text-purple-400" /> {L('Canastas Abiertas', 'Open Bags')}
             </span>
-            <p className="text-xl font-black text-white mt-0.5">{metrics.canastasAbiertas} activas</p>
+            <p className="text-xl font-black text-white mt-0.5">{metrics.canastasAbiertas} {L('activas', 'active')}</p>
           </div>
 
           <div className="bg-white/5 backdrop-blur-md rounded-2xl p-3 border border-white/10">
             <span className="text-[10px] font-bold uppercase tracking-wider text-rose-300 flex items-center gap-1">
-              <Sparkles className="w-3 h-3 text-rose-400" /> Prendas Apartadas
+              <Sparkles className="w-3 h-3 text-rose-400" /> {L('Prendas Apartadas', 'Reserved Items')}
             </span>
-            <p className="text-xl font-black text-rose-300 mt-0.5">{metrics.totalApartadas} piezas</p>
+            <p className="text-xl font-black text-rose-300 mt-0.5">{metrics.totalApartadas} {L('piezas', 'items')}</p>
           </div>
 
           <div className="bg-white/5 backdrop-blur-md rounded-2xl p-3 border border-white/10">
             <span className="text-[10px] font-bold uppercase tracking-wider text-sky-300 flex items-center gap-1">
-              <RefreshCcw className={`w-3 h-3 text-sky-400 ${isLoadingLive ? 'animate-spin' : ''}`} /> Prendas en Stock
+              <RefreshCcw className={`w-3 h-3 text-sky-400 ${isLoadingLive ? 'animate-spin' : ''}`} /> {L('Prendas en Stock', 'Items in Stock')}
             </span>
-            <p className="text-xl font-black text-white mt-0.5">{totalPrendasEnStock} piezas</p>
+            <p className="text-xl font-black text-white mt-0.5">{totalPrendasEnStock} {L('piezas', 'items')}</p>
           </div>
 
           <div className="bg-white/5 backdrop-blur-md rounded-2xl p-3 border border-white/10">
             <span className="text-[10px] font-bold uppercase tracking-wider text-amber-300 flex items-center gap-1">
-              <Flame className="w-3 h-3 text-amber-400" /> Ahorrado en Remates
+              <Flame className="w-3 h-3 text-amber-400" /> {L('Ahorrado en Remates', 'Saved in Flash Deals')}
             </span>
-            <p className="text-xl font-black text-amber-300 mt-0.5">Q {metrics.totalAhorradoEnRemates.toFixed(2)}</p>
+            <p className="text-xl font-black text-amber-300 mt-0.5">{money(metrics.totalAhorradoEnRemates)}</p>
           </div>
 
           <div className="bg-white/5 backdrop-blur-md rounded-2xl p-3 border border-white/10 col-span-2 sm:col-span-1">
             <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-300 flex items-center gap-1">
-              <DollarSign className="w-3 h-3 text-emerald-400" /> Total Cartera Live
+              <DollarSign className="w-3 h-3 text-emerald-400" /> {L('Total Cartera Live', 'Total Live Sales')}
             </span>
-            <p className="text-xl font-black text-emerald-400 mt-0.5 font-mono">Q {metrics.totalVentas.toFixed(2)}</p>
+            <p className="text-xl font-black text-emerald-400 mt-0.5 font-mono">{money(metrics.totalVentas)}</p>
           </div>
         </div>
       </div>
@@ -609,18 +668,30 @@ export default function LiveSalesView({ currentEmpresa }: LiveSalesViewProps) {
             </div>
             <div>
               <p className="font-black text-slate-900 text-sm flex items-center gap-2">
-                ¡Atención! Hay {expiredBags.length} canasta(s) con plazo vencido sin pagar
+                {L(
+                  `¡Atención! Hay ${expiredBags.length} canasta(s) con plazo vencido sin pagar`,
+                  `Attention! ${expiredBags.length} overdue unpaid bag(s)`
+                )}
                 <span className="px-2 py-0.5 rounded-md bg-rose-600 text-white font-mono text-[9px] uppercase font-black">
-                  {boutiquePolicy.tipo === 'quincenal' ? 'Corte Quincena / Mes' :
-                   boutiquePolicy.tipo === '24_horas' ? 'Plazo 24 Horas' :
-                   boutiquePolicy.tipo === 'dias' ? `Plazo ${boutiquePolicy.dias || 2} Días` :
-                   `Plazo ${boutiquePolicy.horas || 24} Horas`}
+                  {boutiquePolicy.tipo === 'quincenal'
+                    ? L('Corte Quincena / Mes', 'Bi-Weekly / Month-End Cut')
+                    : boutiquePolicy.tipo === '24_horas'
+                    ? L('Plazo 24 Horas', '24-Hour Limit')
+                    : boutiquePolicy.tipo === 'dias'
+                    ? L(`Plazo ${boutiquePolicy.dias || 2} Días`, `${boutiquePolicy.dias || 2}-Day Limit`)
+                    : L(`Plazo ${boutiquePolicy.horas || 24} Horas`, `${boutiquePolicy.horas || 24}-Hour Limit`)}
                 </span>
               </p>
               <p className="text-xs text-slate-600 mt-0.5 font-medium">
                 {boutiquePolicy.tipo === 'quincenal' 
-                  ? 'Estas clientas no pagaron dentro de los 5 días de gracia tras la quincena o fin de mes. Puedes devolver sus prendas al stock con un solo clic.'
-                  : 'Estas clientas no pagaron dentro del plazo de apartado configurado. Puedes devolver sus prendas al stock con un solo clic.'}
+                  ? L(
+                      'Estas clientas no pagaron dentro de los 5 días de gracia tras la quincena o fin de mes. Puedes devolver sus prendas al stock con un solo clic.',
+                      'These customers did not pay within the 5-day grace period after payday or month-end. You can return their items to stock in one click.'
+                    )
+                  : L(
+                      'Estas clientas no pagaron dentro del plazo de apartado configurado. Puedes devolver sus prendas al stock con un solo clic.',
+                      'These customers did not pay within the configured hold period. You can return their items to stock in one click.'
+                    )}
               </p>
             </div>
           </div>
@@ -630,7 +701,12 @@ export default function LiveSalesView({ currentEmpresa }: LiveSalesViewProps) {
             className="px-4 py-2.5 rounded-2xl bg-rose-600 hover:bg-rose-700 active:scale-95 text-white font-black text-xs whitespace-nowrap shadow-md shadow-rose-600/25 transition-all flex items-center justify-center gap-2 cursor-pointer shrink-0"
           >
             <RefreshCcw className="w-4 h-4" />
-            <span>Devolver {expiredBags.reduce((a, b) => a + b.items.length, 0)} Prendas al Inventario</span>
+            <span>
+              {L(
+                `Devolver ${expiredBags.reduce((a, b) => a + b.items.length, 0)} Prendas al Inventario`,
+                `Return ${expiredBags.reduce((a, b) => a + b.items.length, 0)} Items to Stock`
+              )}
+            </span>
           </button>
         </div>
       )}
@@ -647,7 +723,7 @@ export default function LiveSalesView({ currentEmpresa }: LiveSalesViewProps) {
           }`}
         >
           <ShoppingBag className="w-4 h-4" />
-          <span>Canasta {currentActiveBag ? `(${currentActiveBag.cliente_nombre.split(' ')[0]})` : 'Activa'}</span>
+          <span>{L('Canasta', 'Bag')} {currentActiveBag ? `(${currentActiveBag.cliente_nombre.split(' ')[0]})` : L('Activa', 'Active')}</span>
           {currentActiveBag && (
             <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
               mobileViewTab === 'canasta' ? 'bg-white/20 text-white' : 'bg-slate-300 text-slate-800'
@@ -667,7 +743,7 @@ export default function LiveSalesView({ currentEmpresa }: LiveSalesViewProps) {
           }`}
         >
           <Tag className="w-4 h-4" />
-          <span>Catálogo de Prendas</span>
+          <span>{L('Catálogo de Prendas', 'Item Catalog')}</span>
           <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
             mobileViewTab === 'catalogo' ? 'bg-white/20 text-white' : 'bg-slate-300 text-slate-800'
           }`}>
@@ -686,20 +762,20 @@ export default function LiveSalesView({ currentEmpresa }: LiveSalesViewProps) {
               <div>
                 <h2 className="text-sm font-black text-slate-900 flex items-center gap-2">
                   <Tag className="w-4 h-4 text-purple-600" />
-                  Catálogo Rápido para el Live
+                  {L('Catálogo Rápido para el Live', 'Quick Live Catalog')}
                 </h2>
                 <p className="text-[11px] text-slate-400">
-                  Toca una prenda para meterla a la canasta seleccionada (descuenta stock al instante)
+                  {L('Toca una prenda para meterla a la canasta seleccionada (descuenta stock al instante)', 'Tap an item to add it to the active bag (reserves stock instantly)')}
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => fetchLiveProducts(productSearch, stockOnlyFilter)}
                 className="p-1.5 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-700 transition-all flex items-center gap-1 text-[11px] font-bold cursor-pointer"
-                title="Recargar existencias en tiempo real desde la Base de Datos"
+                title={L('Recargar existencias en tiempo real desde la Base de Datos', 'Reload real-time stock from the database')}
               >
                 <RefreshCcw className={`w-3.5 h-3.5 ${isLoadingLive ? 'animate-spin' : ''}`} />
-                <span>Actualizar</span>
+                <span>{L('Actualizar', 'Refresh')}</span>
               </button>
             </div>
 
@@ -715,7 +791,7 @@ export default function LiveSalesView({ currentEmpresa }: LiveSalesViewProps) {
                 }`}
               >
                 <Sparkles className="w-3.5 h-3.5" />
-                <span>Prendas en Stock ({serverTotalStock ?? totalPrendasEnStock})</span>
+                <span>{L('Prendas en Stock', 'Items in Stock')} ({serverTotalStock ?? totalPrendasEnStock})</span>
               </button>
               <button
                 type="button"
@@ -726,7 +802,7 @@ export default function LiveSalesView({ currentEmpresa }: LiveSalesViewProps) {
                     : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                 }`}
               >
-                <span>Catálogo Completo</span>
+                <span>{L('Catálogo Completo', 'Full Catalog')}</span>
               </button>
             </div>
 
@@ -739,7 +815,9 @@ export default function LiveSalesView({ currentEmpresa }: LiveSalesViewProps) {
               )}
               <input
                 type="text"
-                placeholder={stockOnlyFilter ? "Buscar por SKU (ej: sb240228...), nombre o código..." : "Buscar en todo el catálogo o escanear SKU..."}
+                placeholder={stockOnlyFilter
+                  ? L('Buscar por SKU (ej: sb240228...), nombre o código...', 'Search by SKU (e.g. sb240228...), name, or barcode...')
+                  : L('Buscar en todo el catálogo o escanear SKU...', 'Search full catalog or scan SKU...')}
                 value={productSearch}
                 onChange={(e) => setProductSearch(e.target.value)}
                 onKeyDown={(e) => {
@@ -758,7 +836,7 @@ export default function LiveSalesView({ currentEmpresa }: LiveSalesViewProps) {
                     fetchLiveProducts('', stockOnlyFilter);
                   }}
                   className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600 p-0.5 rounded-full cursor-pointer"
-                  title="Limpiar búsqueda"
+                  title={L('Limpiar búsqueda', 'Clear search')}
                 >
                   <X className="w-3.5 h-3.5" />
                 </button>
@@ -777,7 +855,7 @@ export default function LiveSalesView({ currentEmpresa }: LiveSalesViewProps) {
                       : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                   }`}
                 >
-                  {cat}
+                  {cat === 'Todas' ? L('Todas', 'All') : cat}
                 </button>
               ))}
             </div>
@@ -786,12 +864,12 @@ export default function LiveSalesView({ currentEmpresa }: LiveSalesViewProps) {
             {isLoadingLive && liveProducts.length === 0 ? (
               <div className="py-12 flex flex-col items-center justify-center text-slate-400 gap-2">
                 <Loader2 className="w-6 h-6 animate-spin text-purple-600" />
-                <p className="text-xs font-semibold">Cargando inventario real de prendas...</p>
+                <p className="text-xs font-semibold">{L('Cargando inventario real de prendas...', 'Loading live item inventory...')}</p>
               </div>
             ) : filteredProducts.length === 0 ? (
               <div className="py-12 text-center text-slate-400 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
-                <p className="text-xs font-semibold">No se encontraron prendas para este filtro</p>
-                <p className="text-[10px] mt-1">Verifica el nombre o código SKU</p>
+                <p className="text-xs font-semibold">{L('No se encontraron prendas para este filtro', 'No items found for this filter')}</p>
+                <p className="text-[10px] mt-1">{L('Verifica el nombre o código SKU', 'Check the product name or SKU code')}</p>
               </div>
             ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 max-h-[500px] overflow-y-auto pr-1">
@@ -814,7 +892,7 @@ export default function LiveSalesView({ currentEmpresa }: LiveSalesViewProps) {
                       <div 
                         onClick={() => prod.imagen && setEnlargedImageItem(prod)}
                         className="w-full h-24 rounded-xl bg-slate-200 overflow-hidden relative cursor-zoom-in group/img select-none"
-                        title="Clic en la imagen para ampliar foto"
+                        title={L('Clic en la imagen para ampliar foto', 'Click image to enlarge photo')}
                       >
                         <img 
                           src={prod.imagen || 'https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?w=400'} 
@@ -833,7 +911,11 @@ export default function LiveSalesView({ currentEmpresa }: LiveSalesViewProps) {
                             ? 'bg-amber-500 text-slate-900 shadow-sm'
                             : 'bg-slate-900/80 text-white'
                         }`}>
-                          {isOutOfStock ? 'Agotado en Live' : reservedCount > 0 ? `Disp: ${availableStock} (Res: ${reservedCount})` : `Stock: ${availableStock}`}
+                          {isOutOfStock
+                            ? L('Agotado en Live', 'Sold Out in Live')
+                            : reservedCount > 0
+                            ? L(`Disp: ${availableStock} (Res: ${reservedCount})`, `Avail: ${availableStock} (Hold: ${reservedCount})`)
+                            : `Stock: ${availableStock}`}
                         </span>
                       </div>
 
@@ -847,7 +929,7 @@ export default function LiveSalesView({ currentEmpresa }: LiveSalesViewProps) {
 
                     <div className="pt-2 flex items-center justify-between border-t border-slate-200/60 mt-2">
                       <span className="text-xs font-black text-purple-700 font-mono">
-                        Q {prod.precioVenta.toFixed(2)}
+                        {money(prod.precioVenta)}
                       </span>
                       {/* Botón "+" único responsable de agregar a la canasta */}
                       <button
@@ -856,7 +938,10 @@ export default function LiveSalesView({ currentEmpresa }: LiveSalesViewProps) {
                         onClick={(e) => {
                           e.stopPropagation();
                           if (isOutOfStock) {
-                            alert(`¡Atención! "${prod.nombre}" no tiene unidades disponibles en el Inventario General (están apartadas en canastas activas o con stock en cero).`);
+                            alert(L(
+                              `¡Atención! "${prod.nombre}" no tiene unidades disponibles en el Inventario General (están apartadas en canastas activas o con stock en cero).`,
+                              `Notice! "${prod.nombre}" has no available units in general inventory (all units are reserved in active bags or out of stock).`
+                            ));
                             return;
                           }
                           if (currentActiveBag) {
@@ -870,7 +955,7 @@ export default function LiveSalesView({ currentEmpresa }: LiveSalesViewProps) {
                             ? 'bg-slate-400 cursor-not-allowed opacity-50' 
                             : 'bg-purple-600 hover:bg-purple-700 active:scale-95 shadow-purple-500/20'
                         }`}
-                        title={isOutOfStock ? 'Agotado' : 'Agregar a la canasta activa'}
+                        title={isOutOfStock ? L('Agotado', 'Out of stock') : L('Agregar a la canasta activa', 'Add to active bag')}
                       >
                         <Plus className="w-3.5 h-3.5" />
                       </button>
@@ -892,7 +977,7 @@ export default function LiveSalesView({ currentEmpresa }: LiveSalesViewProps) {
               <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-400" />
               <input
                 type="text"
-                placeholder="Buscar canasta por clienta, @TikTok o teléfono..."
+                placeholder={L('Buscar canasta por clienta, @TikTok o teléfono...', 'Search bag by customer, @TikTok, or phone...')}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full pl-8 pr-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-purple-500/20"
@@ -909,7 +994,13 @@ export default function LiveSalesView({ currentEmpresa }: LiveSalesViewProps) {
                       : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
                   }`}
                 >
-                  {tab === 'todas' ? 'Todas' : tab === 'abierta' ? 'En Vivo' : tab === 'pendiente_pago' ? 'Por Cobrar' : 'Despachadas'}
+                  {tab === 'todas'
+                    ? L('Todas', 'All')
+                    : tab === 'abierta'
+                    ? L('En Vivo', 'Live')
+                    : tab === 'pendiente_pago'
+                    ? L('Por Cobrar', 'Unpaid')
+                    : L('Despachadas', 'Shipped')}
                 </button>
               ))}
             </div>
@@ -918,7 +1009,7 @@ export default function LiveSalesView({ currentEmpresa }: LiveSalesViewProps) {
           {/* SELECTOR RÁPIDO DE CLIENTA / CANASTA */}
           <div className="bg-white rounded-3xl p-4 border border-slate-200 shadow-sm flex items-center justify-between gap-3 overflow-x-auto">
             <div className="flex items-center gap-2">
-              <span className="text-xs font-bold text-slate-400 whitespace-nowrap">Canastas:</span>
+              <span className="text-xs font-bold text-slate-400 whitespace-nowrap">{L('Canastas:', 'Bags:')}</span>
               <div className="flex items-center gap-1.5">
                 {filteredBags.map(b => (
                   <div key={b.id} className="relative inline-flex items-center">
@@ -943,7 +1034,7 @@ export default function LiveSalesView({ currentEmpresa }: LiveSalesViewProps) {
                             ? 'text-purple-200 hover:text-white hover:bg-purple-700' 
                             : 'text-slate-400 hover:text-rose-600 hover:bg-slate-300'
                         }`}
-                        title={`Eliminar canasta de ${b.cliente_nombre}`}
+                        title={L(`Eliminar canasta de ${b.cliente_nombre}`, `Delete ${b.cliente_nombre}'s bag`)}
                       >
                         <X className="w-3 h-3" />
                       </span>
@@ -958,7 +1049,7 @@ export default function LiveSalesView({ currentEmpresa }: LiveSalesViewProps) {
               className="px-3 py-1.5 bg-slate-900 hover:bg-black text-white font-bold text-xs rounded-xl transition-all flex items-center gap-1 cursor-pointer whitespace-nowrap shadow-sm"
             >
               <Plus className="w-3.5 h-3.5" />
-              <span>+ Clienta</span>
+              <span>{L('+ Clienta', '+ Customer')}</span>
             </button>
           </div>
 
@@ -1006,16 +1097,16 @@ export default function LiveSalesView({ currentEmpresa }: LiveSalesViewProps) {
                             : 'bg-indigo-50 text-indigo-700 border-indigo-200'
                         }`}>
                           <Calendar className="w-3.5 h-3.5" />
-                          <span>Vence: {due.formattedDate}</span>
+                          <span>{L('Vence:', 'Due:')} {formatLiveDueDate(due.dueDate)}</span>
                           {due.isExpired ? (
-                            <span className="font-black text-rose-600">(Vencida)</span>
+                            <span className="font-black text-rose-600">{L('(Vencida)', '(Overdue)')}</span>
                           ) : (
                             <span className="font-mono text-[10px] text-indigo-600 font-black">({due.daysRemaining}d)</span>
                           )}
                         </span>
 
-                        <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200 text-[10px] font-bold text-slate-600" title="Dar prórroga a esta clienta">
-                          <span className="px-1 text-slate-400 uppercase font-semibold text-[9px]">Prórroga:</span>
+                        <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200 text-[10px] font-bold text-slate-600" title={L('Dar prórroga a esta clienta', 'Extend due date for this customer')}>
+                          <span className="px-1 text-slate-400 uppercase font-semibold text-[9px]">{L('Prórroga:', 'Extend:')}</span>
                           <button
                             type="button"
                             onClick={() => {
@@ -1023,7 +1114,7 @@ export default function LiveSalesView({ currentEmpresa }: LiveSalesViewProps) {
                               updateBagDueDate(currentActiveBag.id, next.toISOString());
                             }}
                             className="px-2 py-0.5 rounded bg-white hover:bg-slate-200 text-slate-700 transition cursor-pointer shadow-2xs"
-                            title="Dar 1 día más de plazo a esta clienta"
+                            title={L('Dar 1 día más de plazo a esta clienta', 'Add 1 extra day for this customer')}
                           >
                             +1d
                           </button>
@@ -1034,7 +1125,7 @@ export default function LiveSalesView({ currentEmpresa }: LiveSalesViewProps) {
                               updateBagDueDate(currentActiveBag.id, next.toISOString());
                             }}
                             className="px-2 py-0.5 rounded bg-white hover:bg-slate-200 text-slate-700 transition cursor-pointer shadow-2xs"
-                            title="Dar 2 días más de plazo a esta clienta"
+                            title={L('Dar 2 días más de plazo a esta clienta', 'Add 2 extra days for this customer')}
                           >
                             +2d
                           </button>
@@ -1050,19 +1141,23 @@ export default function LiveSalesView({ currentEmpresa }: LiveSalesViewProps) {
                     currentActiveBag.estado === 'liquidada' ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' :
                     'bg-slate-100 text-slate-700'
                   }`}>
-                    {currentActiveBag.estado === 'abierta' ? '● Canasta Abierta' :
-                     currentActiveBag.estado === 'pendiente_pago' ? '⏳ Esperando Pago' :
-                     currentActiveBag.estado === 'despachada' ? '📦 Despachada' : '✅ Cobrada'}
+                    {currentActiveBag.estado === 'abierta'
+                      ? L('● Canasta Abierta', '● Open Bag')
+                      : currentActiveBag.estado === 'pendiente_pago'
+                      ? L('⏳ Esperando Pago', '⏳ Pending Payment')
+                      : currentActiveBag.estado === 'despachada'
+                      ? L('📦 Despachada', '📦 Shipped')
+                      : L('✅ Cobrada', '✅ Paid')}
                   </span>
 
                   <button
                     type="button"
                     onClick={() => handleDeleteBag(currentActiveBag)}
                     className="px-3 py-1.5 rounded-xl text-xs font-bold bg-rose-50 hover:bg-rose-600 text-rose-600 hover:text-white border border-rose-200 transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
-                    title="Eliminar esta canasta"
+                    title={L('Eliminar esta canasta', 'Delete this bag')}
                   >
                     <Trash2 className="w-3.5 h-3.5" />
-                    <span>Eliminar Canasta</span>
+                    <span>{L('Eliminar Canasta', 'Delete Bag')}</span>
                   </button>
                 </div>
               </div>
@@ -1070,15 +1165,15 @@ export default function LiveSalesView({ currentEmpresa }: LiveSalesViewProps) {
               {/* LISTA DE PRENDAS APARTADAS EN ESTA CANASTA */}
               <div className="space-y-3">
                 <div className="flex items-center justify-between text-xs text-slate-400 font-bold uppercase tracking-wider">
-                  <span>Prendas Apartadas ({currentActiveBag.items.length})</span>
-                  <span>Stock Descontado al Vuelo</span>
+                  <span>{L('Prendas Apartadas', 'Reserved Items')} ({currentActiveBag.items.length})</span>
+                  <span>{L('Stock Descontado al Vuelo', 'Stock Reserved Live')}</span>
                 </div>
 
                 {currentActiveBag.items.length === 0 ? (
                   <div className="py-12 text-center rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50/50 space-y-2">
                     <ShoppingBag className="w-8 h-8 text-slate-300 mx-auto" />
-                    <p className="text-xs font-bold text-slate-600">Esta canasta aún no tiene prendas apartadas</p>
-                    <p className="text-[11px] text-slate-400">Toca cualquier producto del catálogo izquierdo para apartarlo</p>
+                    <p className="text-xs font-bold text-slate-600">{L('Esta canasta aún no tiene prendas apartadas', 'This bag has no reserved items yet')}</p>
+                    <p className="text-[11px] text-slate-400">{L('Toca cualquier producto del catálogo izquierdo para apartarlo', 'Tap any product in the left catalog to reserve it')}</p>
                   </div>
                 ) : (
                   <div className="divide-y divide-slate-100">
@@ -1094,7 +1189,7 @@ export default function LiveSalesView({ currentEmpresa }: LiveSalesViewProps) {
                             <h4 className="text-xs font-bold text-slate-900 line-clamp-1">{item.nombre}</h4>
                             <div className="flex items-center gap-2 text-[10px] text-slate-400 mt-0.5">
                               <span className="font-mono">{item.sku}</span>
-                              {item.talla && <span className="bg-slate-100 px-1.5 py-0.2 rounded font-bold">Talla: {item.talla}</span>}
+                              {item.talla && <span className="bg-slate-100 px-1.5 py-0.2 rounded font-bold">{L('Talla:', 'Size:')} {item.talla}</span>}
                               {item.color && <span>• {item.color}</span>}
                             </div>
                           </div>
@@ -1106,25 +1201,25 @@ export default function LiveSalesView({ currentEmpresa }: LiveSalesViewProps) {
                             {item.es_remate ? (
                               <div className="space-y-0.5">
                                 <span className="text-[10px] text-slate-400 line-through block font-mono">
-                                  Q {item.precio_original.toFixed(2)}
+                                  {money(item.precio_original)}
                                 </span>
                                 <div className="flex items-center gap-1">
                                   <Flame className="w-3 h-3 text-rose-500 fill-current" />
                                   <span className="text-xs font-black text-rose-600 font-mono">
-                                    Q {item.precio_final.toFixed(2)}
+                                    {money(item.precio_final)}
                                   </span>
                                 </div>
                               </div>
                             ) : (
                               <span className="text-xs font-black text-slate-900 font-mono">
-                                Q {item.precio_final.toFixed(2)}
+                                {money(item.precio_final)}
                               </span>
                             )}
                           </div>
 
                           {/* BOTÓN RÁPIDO: MODIFICAR PRECIO / REMATE RELÁMPAGO */}
                           <button
-                            title="Precio Especial / Remate al Vuelo"
+                            title={L('Precio Especial / Remate al Vuelo', 'Special Price / Flash Deal')}
                             onClick={() => {
                               setEditingItemPrice({
                                 bagId: currentActiveBag.id,
@@ -1138,12 +1233,12 @@ export default function LiveSalesView({ currentEmpresa }: LiveSalesViewProps) {
                             className="p-1.5 bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-700 rounded-lg transition-colors cursor-pointer flex items-center gap-1 text-[10px] font-bold"
                           >
                             <Flame className="w-3 h-3" />
-                            <span>Remate</span>
+                            <span>{L('Remate', 'Deal')}</span>
                           </button>
 
                           {/* BOTÓN QUITAR (DEVUELVE STOCK) */}
                           <button
-                            title="Quitar prenda y devolver al stock"
+                            title={L('Quitar prenda y devolver al stock', 'Remove item and return to stock')}
                             onClick={() => removeItemFromBag(currentActiveBag.id, item.id)}
                             className="p-1.5 text-slate-300 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
                           >
@@ -1180,16 +1275,16 @@ export default function LiveSalesView({ currentEmpresa }: LiveSalesViewProps) {
                         className="w-4 h-4 rounded text-purple-600 focus:ring-purple-500 cursor-pointer"
                       />
                       <div className="flex items-center gap-2">
-                        <span className="text-xs font-black text-slate-900">🔗 Unificar con Pedido SHEIN</span>
+                        <span className="text-xs font-black text-slate-900">{L('🔗 Unificar con Pedido SHEIN', '🔗 Combine with SHEIN Order')}</span>
                         <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase bg-purple-200 text-purple-900">
-                          Entrega Conjunta
+                          {L('Entrega Conjunta', 'Combined Delivery')}
                         </span>
                       </div>
                     </label>
 
                     {currentActiveBag.es_unificada_shein && (
                       <span className="text-xs font-black text-purple-700 font-mono">
-                        + Q {(currentActiveBag.monto_shein || 0).toFixed(2)}
+                        + {money(currentActiveBag.monto_shein || 0)}
                       </span>
                     )}
                   </div>
@@ -1198,10 +1293,10 @@ export default function LiveSalesView({ currentEmpresa }: LiveSalesViewProps) {
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2.5 border-t border-purple-200 animate-in fade-in duration-200">
                       <div>
                         <label className="text-[11px] font-black text-slate-800 block mb-1">
-                          Monto / Saldo Pedido SHEIN (Q) *
+                          {L(`Monto / Saldo Pedido SHEIN (${currencySymbol}) *`, `SHEIN Order Amount / Balance (${currencySymbol}) *`)}
                         </label>
                         <div className="relative">
-                          <span className="absolute left-3.5 top-2.5 text-xs font-black text-slate-500">Q</span>
+                          <span className="absolute left-3.5 top-2.5 text-xs font-black text-slate-500">{currencySymbol}</span>
                           <input
                             type="number"
                             step="0.01"
@@ -1218,11 +1313,11 @@ export default function LiveSalesView({ currentEmpresa }: LiveSalesViewProps) {
                       </div>
                       <div>
                         <label className="text-[11px] font-black text-slate-800 block mb-1">
-                          Detalle / Nota Pedido SHEIN
+                          {L('Detalle / Nota Pedido SHEIN', 'SHEIN Order Details / Note')}
                         </label>
                         <input
                           type="text"
-                          placeholder="Ej. Pedido Quincena Ropa + Zapatos"
+                          placeholder={L('Ej. Pedido Quincena Ropa + Zapatos', 'e.g. Payday Order Apparel + Shoes')}
                           value={currentActiveBag.descripcion_shein || ''}
                           onChange={(e) => {
                             updateSheinUnification(currentActiveBag.id, true, currentActiveBag.monto_shein, e.target.value);
@@ -1258,7 +1353,7 @@ export default function LiveSalesView({ currentEmpresa }: LiveSalesViewProps) {
                       />
                       <span className="text-xs font-black text-slate-900 flex items-center gap-1">
                         <Truck className="w-3.5 h-3.5 text-purple-600" />
-                        Cobrar Envío de Paquetería
+                        {L('Cobrar Envío de Paquetería', 'Charge Parcel Shipping')}
                       </span>
                     </label>
                   </div>
@@ -1273,15 +1368,15 @@ export default function LiveSalesView({ currentEmpresa }: LiveSalesViewProps) {
                       }}
                       className="w-full text-xs font-bold p-2.5 bg-white rounded-xl border-2 border-slate-300 text-slate-900 focus:outline-none focus:border-purple-600 cursor-pointer"
                     >
-                      <option value="Guatex">Guatex Express (Q 35.00)</option>
-                      <option value="Forza Delivery">Forza Delivery Express (Q 35.00)</option>
-                      <option value="Cargo Expreso">Cargo Expreso (Q 35.00)</option>
-                      <option value="Mensajero Local">Mensajero Local Capital (Q 25.00)</option>
+                      <option value="Guatex">Guatex Express ({money(35)})</option>
+                      <option value="Forza Delivery">Forza Delivery Express ({money(35)})</option>
+                      <option value="Cargo Expreso">Cargo Expreso ({money(35)})</option>
+                      <option value="Mensajero Local">{L('Mensajero Local Capital', 'Local City Courier')} ({money(25)})</option>
                     </select>
                   ) : (
                     <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center gap-2 text-emerald-800 text-xs font-bold">
                       <Check className="w-4 h-4 text-emerald-600 shrink-0" />
-                      <span>Entrega Personal / Cercana (Sin costo de envío - Q 0.00)</span>
+                      <span>{L(`Entrega Personal / Cercana (Sin costo de envío - ${money(0)})`, `Personal / Local Pickup (Free shipping - ${money(0)})`)}</span>
                     </div>
                   )}
                 </div>
@@ -1290,7 +1385,7 @@ export default function LiveSalesView({ currentEmpresa }: LiveSalesViewProps) {
                 <div className="space-y-2">
                   <label className="text-xs font-black text-slate-900 flex items-center gap-1">
                     <DollarSign className="w-3.5 h-3.5 text-emerald-600" />
-                    Modalidad de Pago:
+                    {L('Modalidad de Pago:', 'Payment Method:')}
                   </label>
                   <div className="grid grid-cols-2 gap-2">
                     <button
@@ -1302,7 +1397,7 @@ export default function LiveSalesView({ currentEmpresa }: LiveSalesViewProps) {
                           : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-100'
                       }`}
                     >
-                      <span>🏦 Transferencia</span>
+                      <span>{L('🏦 Transferencia', '🏦 Bank Transfer')}</span>
                     </button>
                     <button
                       type="button"
@@ -1313,7 +1408,7 @@ export default function LiveSalesView({ currentEmpresa }: LiveSalesViewProps) {
                           : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-100'
                       }`}
                     >
-                      <span>📦 Contra Entrega</span>
+                      <span>{L('📦 Contra Entrega', '📦 Cash on Delivery')}</span>
                     </button>
                   </div>
                 </div>
@@ -1322,38 +1417,40 @@ export default function LiveSalesView({ currentEmpresa }: LiveSalesViewProps) {
               {/* DESGLOSE Y TOTAL CONSOLIDADO */}
               <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-2.5">
                 <div className="flex justify-between text-xs text-slate-600 font-bold">
-                  <span>👗 Prendas TikTok Live ({currentActiveBag.items.length} piezas):</span>
-                  <span className="font-mono text-slate-900 font-black">Q {currentActiveBag.subtotal.toFixed(2)}</span>
+                  <span>{L(`👗 Prendas TikTok Live (${currentActiveBag.items.length} piezas):`, `👗 TikTok Live Items (${currentActiveBag.items.length} pcs):`)}</span>
+                  <span className="font-mono text-slate-900 font-black">{money(currentActiveBag.subtotal)}</span>
                 </div>
 
                 {boutiquePolicy.vende_shein !== false && currentActiveBag.es_unificada_shein && (
                   <div className="flex justify-between text-xs text-purple-700 font-bold">
-                    <span>📦 Pedido SHEIN Consolidado:</span>
-                    <span className="font-mono font-black">+ Q {(currentActiveBag.monto_shein || 0).toFixed(2)}</span>
+                    <span>{L('📦 Pedido SHEIN Consolidado:', '📦 Combined SHEIN Order:')}</span>
+                    <span className="font-mono font-black">+ {money(currentActiveBag.monto_shein || 0)}</span>
                   </div>
                 )}
 
                 <div className="flex justify-between text-xs text-slate-600 font-bold">
                   <span>
-                    🚚 Envío ({currentActiveBag.incluye_envio === false ? 'Entrega Personal' : (currentActiveBag.empresa_envio || 'Guatex')}):
+                    {L('🚚 Envío', '🚚 Shipping')} ({currentActiveBag.incluye_envio === false ? L('Entrega Personal', 'Local Pickup') : trCourier(currentActiveBag.empresa_envio)}):
                   </span>
                   <span className={`font-mono font-black ${currentActiveBag.incluye_envio === false ? 'text-emerald-700' : 'text-slate-900'}`}>
-                    {currentActiveBag.incluye_envio === false ? 'GRATIS (Q 0.00)' : `Q ${currentActiveBag.costo_envio.toFixed(2)}`}
+                    {currentActiveBag.incluye_envio === false ? L(`GRATIS (${money(0)})`, `FREE (${money(0)})`) : money(currentActiveBag.costo_envio)}
                   </span>
                 </div>
 
                 <div className="pt-2.5 border-t border-slate-200 flex items-center justify-between">
                   <div>
                     <span className="text-xs font-black text-slate-800 uppercase tracking-wider block">
-                      {boutiquePolicy.vende_shein !== false && currentActiveBag.es_unificada_shein ? 'Gran Total Unificado:' : 'Total a Cobrar:'}
+                      {boutiquePolicy.vende_shein !== false && currentActiveBag.es_unificada_shein
+                        ? L('Gran Total Unificado:', 'Combined Grand Total:')
+                        : L('Total a Cobrar:', 'Total Due:')}
                     </span>
                     <span className="text-[11px] font-bold text-slate-500">
-                      📅 Fecha límite: {getLiveDueDate(currentActiveBag.creado_en, boutiquePolicy, currentActiveBag.fecha_vencimiento).formattedDate}
+                      📅 {L('Fecha límite:', 'Due date:')} {formatLiveDueDate(getLiveDueDate(currentActiveBag.creado_en, boutiquePolicy, currentActiveBag.fecha_vencimiento).dueDate)}
                     </span>
                   </div>
                   <div className="text-right">
                     <span className="text-2xl font-black text-purple-700 font-mono tracking-tight">
-                      Q {currentActiveBag.total.toFixed(2)}
+                      {money(currentActiveBag.total)}
                     </span>
                   </div>
                 </div>
@@ -1368,7 +1465,7 @@ export default function LiveSalesView({ currentEmpresa }: LiveSalesViewProps) {
                   className="flex-1 py-3 px-4 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold text-xs rounded-2xl shadow-lg shadow-emerald-900/20 transition-all flex items-center justify-center gap-2 cursor-pointer"
                 >
                   <Send className="w-4 h-4" />
-                  <span>📲 Enviar Cuenta por WhatsApp</span>
+                  <span>{L('📲 Enviar Cuenta por WhatsApp', '📲 Send Total via WhatsApp')}</span>
                 </button>
 
                 {/* BOTÓN ESTADO: PAGO O DESPACHO */}
@@ -1378,7 +1475,7 @@ export default function LiveSalesView({ currentEmpresa }: LiveSalesViewProps) {
                     className="py-3 px-4 bg-purple-600 hover:bg-purple-700 active:scale-95 text-white font-bold text-xs rounded-2xl shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer"
                   >
                     <Truck className="w-4 h-4" />
-                    <span>Marcar Despachada (Contra Entrega)</span>
+                    <span>{L('Marcar Despachada (Contra Entrega)', 'Mark Shipped (COD)')}</span>
                   </button>
                 ) : (
                   <button
@@ -1386,7 +1483,7 @@ export default function LiveSalesView({ currentEmpresa }: LiveSalesViewProps) {
                     className="py-3 px-4 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white font-bold text-xs rounded-2xl shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer"
                   >
                     <CheckCircle2 className="w-4 h-4" />
-                    <span>Confirmar Boleta / Liquidada</span>
+                    <span>{L('Confirmar Boleta / Liquidada', 'Confirm Receipt / Paid')}</span>
                   </button>
                 )}
 
@@ -1395,10 +1492,10 @@ export default function LiveSalesView({ currentEmpresa }: LiveSalesViewProps) {
                   type="button"
                   onClick={() => handleDeleteBag(currentActiveBag)}
                   className="py-3 px-4 bg-rose-50 hover:bg-rose-600 border border-rose-200 text-rose-700 hover:text-white font-bold text-xs rounded-2xl transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-xs group"
-                  title="Eliminar canasta y devolver prendas al stock físico"
+                  title={L('Eliminar canasta y devolver prendas al stock físico', 'Delete bag and return items to physical stock')}
                 >
                   <Trash2 className="w-4 h-4 text-rose-600 group-hover:text-white transition-colors" />
-                  <span>Eliminar Canasta</span>
+                  <span>{L('Eliminar Canasta', 'Delete Bag')}</span>
                 </button>
               </div>
 
@@ -1406,8 +1503,8 @@ export default function LiveSalesView({ currentEmpresa }: LiveSalesViewProps) {
           ) : (
             <div className="bg-white rounded-3xl border border-slate-200 p-12 text-center space-y-3">
               <ShoppingBag className="w-12 h-12 text-slate-300 mx-auto" />
-              <h3 className="text-sm font-bold text-slate-700">No hay canasta seleccionada</h3>
-              <p className="text-xs text-slate-400">Crea una nueva clienta en el botón superior o selecciona una existente.</p>
+              <h3 className="text-sm font-bold text-slate-700">{L('No hay canasta seleccionada', 'No bag selected')}</h3>
+              <p className="text-xs text-slate-400">{L('Crea una nueva clienta en el botón superior o selecciona una existente.', 'Create a new customer with the button above or select an existing bag.')}</p>
             </div>
           )}
 
@@ -1424,8 +1521,8 @@ export default function LiveSalesView({ currentEmpresa }: LiveSalesViewProps) {
                   <Flame className="w-4 h-4 fill-current" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-black text-slate-900">Precio Remate Live</h3>
-                  <p className="text-[11px] text-slate-400">Ajusta el precio especial al vuelo</p>
+                  <h3 className="text-sm font-black text-slate-900">{L('Precio Remate Live', 'Live Flash Deal Price')}</h3>
+                  <p className="text-[11px] text-slate-400">{L('Ajusta el precio especial al vuelo', 'Adjust the special price on the fly')}</p>
                 </div>
               </div>
               <button 
@@ -1439,34 +1536,34 @@ export default function LiveSalesView({ currentEmpresa }: LiveSalesViewProps) {
             <div className="space-y-1">
               <p className="text-xs font-bold text-slate-800 line-clamp-1">{editingItemPrice.nombre}</p>
               <p className="text-[11px] text-slate-400">
-                Precio Normal: <strong className="font-mono text-slate-700">Q {editingItemPrice.originalPrice.toFixed(2)}</strong>
+                {L('Precio Normal:', 'Regular Price:')} <strong className="font-mono text-slate-700">{money(editingItemPrice.originalPrice)}</strong>
               </p>
             </div>
 
             {/* BOTONES RÁPIDOS DE DESCUENTO TÁCTIL */}
             <div className="space-y-1.5">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Botones Rápidos de Remate:</span>
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{L('Botones Rápidos de Remate:', 'Quick Flash Deal Buttons:')}</span>
               <div className="grid grid-cols-3 gap-1.5">
                 <button
                   type="button"
                   onClick={() => handleApplyDiscount(editingItemPrice.originalPrice - 10)}
                   className="py-1.5 bg-slate-100 hover:bg-amber-100 font-bold text-xs rounded-xl border border-slate-200 transition-colors"
                 >
-                  - Q 10
+                  - {currencySymbol} 10
                 </button>
                 <button
                   type="button"
                   onClick={() => handleApplyDiscount(editingItemPrice.originalPrice - 20)}
                   className="py-1.5 bg-slate-100 hover:bg-amber-100 font-bold text-xs rounded-xl border border-slate-200 transition-colors"
                 >
-                  - Q 20
+                  - {currencySymbol} 20
                 </button>
                 <button
                   type="button"
                   onClick={() => handleApplyDiscount(editingItemPrice.originalPrice - 50)}
                   className="py-1.5 bg-slate-100 hover:bg-amber-100 font-bold text-xs rounded-xl border border-slate-200 transition-colors"
                 >
-                  - Q 50
+                  - {currencySymbol} 50
                 </button>
                 <button
                   type="button"
@@ -1480,23 +1577,23 @@ export default function LiveSalesView({ currentEmpresa }: LiveSalesViewProps) {
                   onClick={() => handleApplyDiscount(editingItemPrice.originalPrice * 0.50)}
                   className="py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs rounded-xl border border-rose-200 transition-colors"
                 >
-                  - 50% Mitad
+                  {L('- 50% Mitad', '- 50% Half Off')}
                 </button>
                 <button
                   type="button"
                   onClick={() => handleApplyDiscount(editingItemPrice.originalPrice)}
                   className="py-1.5 bg-slate-100 hover:bg-slate-200 font-bold text-[10px] rounded-xl border border-slate-200 transition-colors"
                 >
-                  Restablecer
+                  {L('Restablecer', 'Reset')}
                 </button>
               </div>
             </div>
 
             {/* PRECIO PERSONALIZADO MANUAL */}
             <div className="space-y-1.5 pt-2">
-              <label className="text-xs font-black text-slate-800">O ingresar precio final exacto (Q):</label>
+              <label className="text-xs font-black text-slate-800">{L(`O ingresar precio final exacto (${currencySymbol}):`, `Or enter exact final price (${currencySymbol}):`)}</label>
               <div className="relative">
-                <span className="absolute left-3.5 top-2.5 text-xs font-black text-slate-500">Q</span>
+                <span className="absolute left-3.5 top-2.5 text-xs font-black text-slate-500">{currencySymbol}</span>
                 <input
                   type="number"
                   step="0.01"
@@ -1513,14 +1610,14 @@ export default function LiveSalesView({ currentEmpresa }: LiveSalesViewProps) {
                 onClick={() => setEditingItemPrice(null)}
                 className="px-4 py-2.5 rounded-xl text-xs font-black border-2 border-slate-300 bg-white text-slate-700 hover:bg-slate-100 cursor-pointer"
               >
-                Cancelar
+                {L('Cancelar', 'Cancel')}
               </button>
               <button
                 type="button"
                 onClick={() => handleApplyDiscount(parseFloat(customPriceInput) || 0)}
                 className="flex-1 py-2.5 rounded-xl text-xs font-black bg-amber-500 hover:bg-amber-600 text-white shadow-md shadow-amber-500/25 active:scale-98 transition-all cursor-pointer"
               >
-                Aplicar Precio
+                {L('Aplicar Precio', 'Apply Price')}
               </button>
             </div>
           </div>
@@ -1537,8 +1634,8 @@ export default function LiveSalesView({ currentEmpresa }: LiveSalesViewProps) {
                   <UserPlus className="w-5 h-5 text-purple-700" />
                 </div>
                 <div>
-                  <h3 className="text-base font-black text-slate-900 leading-tight">Nueva Clienta de TikTok Live</h3>
-                  <p className="text-xs text-slate-500 font-medium">Crea su canasta de apartado al vuelo</p>
+                  <h3 className="text-base font-black text-slate-900 leading-tight">{L('Nueva Clienta de TikTok Live', 'New TikTok Live Customer')}</h3>
+                  <p className="text-xs text-slate-500 font-medium">{L('Crea su canasta de apartado al vuelo', 'Create their hold bag on the fly')}</p>
                 </div>
               </div>
               <button 
@@ -1554,13 +1651,13 @@ export default function LiveSalesView({ currentEmpresa }: LiveSalesViewProps) {
               <div>
                 <label className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-1.5 mb-1.5">
                   <User className="w-4 h-4 text-purple-600" />
-                  <span>Nombre Completo</span>
+                  <span>{L('Nombre Completo', 'Full Name')}</span>
                   <span className="text-rose-600">*</span>
                 </label>
                 <input
                   type="text"
                   required
-                  placeholder="Ej. Sofía Méndez"
+                  placeholder={L('Ej. Sofía Méndez', 'e.g. Sophia Miller')}
                   value={newBagForm.cliente_nombre}
                   onChange={(e) => setNewBagForm({ ...newBagForm, cliente_nombre: e.target.value })}
                   style={{ color: '#090d16', WebkitTextFillColor: '#090d16' }}
@@ -1572,11 +1669,11 @@ export default function LiveSalesView({ currentEmpresa }: LiveSalesViewProps) {
                 <div>
                   <label className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-1.5 mb-1.5">
                     <span className="w-4 h-4 rounded-full bg-purple-100 text-purple-700 text-xs font-black flex items-center justify-center">@</span>
-                    <span>Usuario TikTok</span>
+                    <span>{L('Usuario TikTok', 'TikTok Handle')}</span>
                   </label>
                   <input
                     type="text"
-                    placeholder="@sofia_gt"
+                    placeholder={L('@sofia_gt', '@sophia_live')}
                     value={newBagForm.usuario_tiktok}
                     onChange={(e) => setNewBagForm({ ...newBagForm, usuario_tiktok: e.target.value })}
                     style={{ color: '#090d16', WebkitTextFillColor: '#090d16' }}
@@ -1604,12 +1701,12 @@ export default function LiveSalesView({ currentEmpresa }: LiveSalesViewProps) {
               <div>
                 <label className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-1.5 mb-1.5">
                   <MapPin className="w-4 h-4 text-blue-600" />
-                  <span>Dirección de Envío</span>
-                  <span className="text-[11px] font-semibold text-slate-500 normal-case">(Opcional)</span>
+                  <span>{L('Dirección de Envío', 'Shipping Address')}</span>
+                  <span className="text-[11px] font-semibold text-slate-500 normal-case">{L('(Opcional)', '(Optional)')}</span>
                 </label>
                 <input
                   type="text"
-                  placeholder="Ej. Colonia San Cristóbal Zona 8 de Mixco"
+                  placeholder={L('Ej. Colonia San Cristóbal Zona 8 de Mixco', 'e.g. 742 Evergreen Terrace, Apt 4B')}
                   value={newBagForm.direccion_envio}
                   onChange={(e) => setNewBagForm({ ...newBagForm, direccion_envio: e.target.value })}
                   style={{ color: '#090d16', WebkitTextFillColor: '#090d16' }}
@@ -1624,14 +1721,14 @@ export default function LiveSalesView({ currentEmpresa }: LiveSalesViewProps) {
                 onClick={() => setShowNewBagModal(false)}
                 className="px-4 py-2.5 rounded-xl text-xs font-black border-2 border-slate-300 bg-white text-slate-700 hover:bg-slate-100 hover:text-slate-900 transition-colors cursor-pointer"
               >
-                Cancelar
+                {L('Cancelar', 'Cancel')}
               </button>
               <button
                 type="submit"
                 className="flex-1 py-2.5 rounded-xl text-xs font-black bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white shadow-md shadow-purple-500/25 active:scale-98 transition-all cursor-pointer flex items-center justify-center gap-1.5"
               >
                 <UserPlus className="w-4 h-4" />
-                <span>Crear Canasta</span>
+                <span>{L('Crear Canasta', 'Create Bag')}</span>
               </button>
             </div>
           </form>
@@ -1647,16 +1744,16 @@ export default function LiveSalesView({ currentEmpresa }: LiveSalesViewProps) {
                 <Play className="w-5 h-5 fill-current" />
               </div>
               <div>
-                <h3 className="text-base font-black text-slate-900 leading-tight">Iniciar Transmisión Live</h3>
-                <p className="text-xs text-slate-500 font-medium">Activa el contador y métricas en vivo</p>
+                <h3 className="text-base font-black text-slate-900 leading-tight">{L('Iniciar Transmisión Live', 'Start Live Broadcast')}</h3>
+                <p className="text-xs text-slate-500 font-medium">{L('Activa el contador y métricas en vivo', 'Activate live counter and real-time metrics')}</p>
               </div>
             </div>
 
             <div>
-              <label className="text-xs font-black text-slate-800 block mb-1.5">Título de la Transmisión *</label>
+              <label className="text-xs font-black text-slate-800 block mb-1.5">{L('Título de la Transmisión *', 'Stream Title *')}</label>
               <input
                 type="text"
-                placeholder="Ej. Liquidación de Ropa de Temporada"
+                placeholder={L('Ej. Liquidación de Ropa de Temporada', 'e.g. Seasonal Fashion Clearance')}
                 value={newLiveTitle}
                 onChange={(e) => setNewLiveTitle(e.target.value)}
                 className="w-full px-3.5 py-2.5 bg-slate-50 hover:bg-white focus:bg-white border-2 border-slate-300 focus:border-rose-500 rounded-xl text-xs font-bold text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-4 focus:ring-rose-500/15 shadow-xs transition-all"
@@ -1668,7 +1765,7 @@ export default function LiveSalesView({ currentEmpresa }: LiveSalesViewProps) {
                 onClick={() => setShowStartLiveModal(false)}
                 className="px-4 py-2.5 rounded-xl text-xs font-black border-2 border-slate-300 bg-white text-slate-700 hover:bg-slate-100 cursor-pointer"
               >
-                Cancelar
+                {L('Cancelar', 'Cancel')}
               </button>
               <button
                 onClick={() => {
@@ -1678,7 +1775,7 @@ export default function LiveSalesView({ currentEmpresa }: LiveSalesViewProps) {
                 className="flex-1 py-2.5 rounded-xl text-xs font-black bg-rose-600 hover:bg-rose-700 text-white shadow-md shadow-rose-500/25 active:scale-98 transition-all cursor-pointer flex items-center justify-center gap-1.5"
               >
                 <Play className="w-4 h-4 fill-current" />
-                <span>¡Comenzar Live!</span>
+                <span>{L('¡Comenzar Live!', 'Go Live!')}</span>
               </button>
             </div>
           </div>
@@ -1723,7 +1820,7 @@ export default function LiveSalesView({ currentEmpresa }: LiveSalesViewProps) {
                 type="button" 
                 onClick={() => setEnlargedImageItem(null)}
                 className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 rounded-xl transition-colors cursor-pointer"
-                title="Cerrar imagen"
+                title={L('Cerrar imagen', 'Close image')}
               >
                 <X className="w-5 h-5" />
               </button>
@@ -1741,8 +1838,8 @@ export default function LiveSalesView({ currentEmpresa }: LiveSalesViewProps) {
             {/* Pie con Información y Acción Directa */}
             <div className="p-4 bg-slate-50 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
               <div className="flex items-center gap-4 text-slate-600">
-                <span>Precio: <strong className="text-purple-700 font-mono text-sm">Q {enlargedImageItem.precioVenta.toFixed(2)}</strong></span>
-                <span>Stock Disponible: <strong className="text-slate-900 font-mono">{enlargedImageItem.stockTotal} unidades</strong></span>
+                <span>{L('Precio:', 'Price:')} <strong className="text-purple-700 font-mono text-sm">{money(enlargedImageItem.precioVenta)}</strong></span>
+                <span>{L('Stock Disponible:', 'Available Stock:')} <strong className="text-slate-900 font-mono">{enlargedImageItem.stockTotal} {L('unidades', 'units')}</strong></span>
               </div>
               <div className="flex items-center gap-2 w-full sm:w-auto">
                 <button
@@ -1750,7 +1847,7 @@ export default function LiveSalesView({ currentEmpresa }: LiveSalesViewProps) {
                   onClick={() => setEnlargedImageItem(null)}
                   className="flex-1 sm:flex-none px-4 py-2 border border-slate-200 hover:bg-slate-100 text-slate-700 rounded-xl text-xs font-bold transition-all cursor-pointer"
                 >
-                  Cerrar
+                  {L('Cerrar', 'Close')}
                 </button>
                 <button
                   type="button"
@@ -1758,7 +1855,10 @@ export default function LiveSalesView({ currentEmpresa }: LiveSalesViewProps) {
                     const reserved = getStockReservationCount(enlargedImageItem.id);
                     const avail = Math.max(0, enlargedImageItem.stockTotal - reserved);
                     if (avail <= 0) {
-                      alert(`¡Atención! "${enlargedImageItem.nombre}" no tiene unidades disponibles.`);
+                      alert(L(
+                        `¡Atención! "${enlargedImageItem.nombre}" no tiene unidades disponibles.`,
+                        `Notice! "${enlargedImageItem.nombre}" has no available units.`
+                      ));
                       return;
                     }
                     if (currentActiveBag) {
@@ -1771,7 +1871,7 @@ export default function LiveSalesView({ currentEmpresa }: LiveSalesViewProps) {
                   className="flex-1 sm:flex-none px-5 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-purple-500/20 flex items-center justify-center gap-1.5 cursor-pointer"
                 >
                   <Plus className="w-3.5 h-3.5" />
-                  Agregar a Canasta
+                  {L('Agregar a Canasta', 'Add to Bag')}
                 </button>
               </div>
             </div>
@@ -1791,10 +1891,10 @@ export default function LiveSalesView({ currentEmpresa }: LiveSalesViewProps) {
                 </div>
                 <div>
                   <h3 className="text-base font-black text-slate-900 leading-tight">
-                    Corte de Caja & Resumen del Live
+                    {L('Corte de Caja & Resumen del Live', 'Live Cash Cut & Summary')}
                   </h3>
                   <p className="text-xs text-slate-500 font-medium">
-                    {currentSession?.titulo || 'Transmisión TikTok Live'}
+                    {currentSession?.titulo || L('Transmisión TikTok Live', 'TikTok Live Broadcast')}
                   </p>
                 </div>
               </div>
@@ -1811,25 +1911,25 @@ export default function LiveSalesView({ currentEmpresa }: LiveSalesViewProps) {
             <div className="grid grid-cols-2 gap-3">
               <div className="p-3.5 rounded-2xl bg-gradient-to-br from-purple-50 to-indigo-50 border border-purple-200/80">
                 <span className="text-[10px] font-black uppercase tracking-wider text-purple-700 flex items-center gap-1">
-                  <Flame className="w-3.5 h-3.5" /> Total Ventas Live
+                  <Flame className="w-3.5 h-3.5" /> {L('Total Ventas Live', 'Total Live Sales')}
                 </span>
                 <p className="text-2xl font-black text-purple-900 font-mono mt-1">
-                  Q {metrics.totalVentasLivePrendas.toFixed(2)}
+                  {money(metrics.totalVentasLivePrendas)}
                 </p>
                 <span className="text-[10px] text-purple-600 font-bold">
-                  {metrics.totalApartadas} prendas vendidas
+                  {metrics.totalApartadas} {L('prendas vendidas', 'items sold')}
                 </span>
               </div>
 
               <div className="p-3.5 rounded-2xl bg-gradient-to-br from-emerald-50 to-teal-50 border border-emerald-200/80">
                 <span className="text-[10px] font-black uppercase tracking-wider text-emerald-700 flex items-center gap-1">
-                  <DollarSign className="w-3.5 h-3.5" /> Gran Total Unificado
+                  <DollarSign className="w-3.5 h-3.5" /> {L('Gran Total Unificado', 'Combined Grand Total')}
                 </span>
                 <p className="text-2xl font-black text-emerald-900 font-mono mt-1">
-                  Q {metrics.totalVentas.toFixed(2)}
+                  {money(metrics.totalVentas)}
                 </p>
                 <span className="text-[10px] text-emerald-700 font-bold">
-                  Live + SHEIN + Envíos
+                  {L('Live + SHEIN + Envíos', 'Live + SHEIN + Shipping')}
                 </span>
               </div>
             </div>
@@ -1839,38 +1939,38 @@ export default function LiveSalesView({ currentEmpresa }: LiveSalesViewProps) {
               <div className="flex justify-between font-bold text-slate-700">
                 <span className="flex items-center gap-1.5">
                   <ShoppingBag className="w-4 h-4 text-purple-600" />
-                  Total Canastas / Clientas:
+                  {L('Total Canastas / Clientas:', 'Total Bags / Customers:')}
                 </span>
-                <span className="font-mono text-slate-900 font-black">{bags.length} clientas</span>
+                <span className="font-mono text-slate-900 font-black">{bags.length} {L('clientas', 'customers')}</span>
               </div>
 
               <div className="flex justify-between font-bold text-slate-700">
                 <span className="flex items-center gap-1.5">
                   <Link2 className="w-4 h-4 text-purple-600" />
-                  Canastas Unificadas con SHEIN:
+                  {L('Canastas Unificadas con SHEIN:', 'Bags Combined with SHEIN:')}
                 </span>
                 <span className="font-mono text-purple-700 font-black">
-                  {metrics.canastasUnificadas} (Q {metrics.totalVentasShein.toFixed(2)})
+                  {metrics.canastasUnificadas} ({money(metrics.totalVentasShein)})
                 </span>
               </div>
 
               <div className="flex justify-between font-bold text-slate-700">
                 <span className="flex items-center gap-1.5">
                   <Truck className="w-4 h-4 text-blue-600" />
-                  Con Envío de Paquetería:
+                  {L('Con Envío de Paquetería:', 'With Parcel Shipping:')}
                 </span>
                 <span className="font-mono text-slate-900 font-black">
-                  {metrics.canastasConEnvio} (Q {metrics.totalEnvios.toFixed(2)})
+                  {metrics.canastasConEnvio} ({money(metrics.totalEnvios)})
                 </span>
               </div>
 
               <div className="flex justify-between font-bold text-slate-700">
                 <span className="flex items-center gap-1.5">
                   <Check className="w-4 h-4 text-emerald-600" />
-                  Entregas Personales (Q 0.00):
+                  {L(`Entregas Personales (${money(0)}):`, `Local Pickups (${money(0)}):`)}
                 </span>
                 <span className="font-mono text-emerald-700 font-black">
-                  {metrics.canastasEntregaPersonal} clientas
+                  {metrics.canastasEntregaPersonal} {L('clientas', 'customers')}
                 </span>
               </div>
             </div>
@@ -1878,8 +1978,8 @@ export default function LiveSalesView({ currentEmpresa }: LiveSalesViewProps) {
             {/* Listado Resumido de Clientas */}
             <div className="space-y-2">
               <div className="flex items-center justify-between text-xs font-black text-slate-900">
-                <span>Detalle de Canastas del Live</span>
-                <span className="text-slate-400 font-medium">({bags.length} registradas)</span>
+                <span>{L('Detalle de Canastas del Live', 'Live Bags Breakdown')}</span>
+                <span className="text-slate-400 font-medium">({bags.length} {L('registradas', 'recorded')})</span>
               </div>
               <div className="max-h-48 overflow-y-auto space-y-1.5 pr-1 text-xs">
                 {bags.map(b => (
@@ -1887,19 +1987,19 @@ export default function LiveSalesView({ currentEmpresa }: LiveSalesViewProps) {
                     <div>
                       <p className="font-black text-slate-900">{b.cliente_nombre}</p>
                       <div className="flex items-center gap-2 text-[10px] text-slate-500 font-medium">
-                        <span>{b.items.length} prenda(s) Live</span>
+                        <span>{b.items.length} {L('prenda(s) Live', 'Live item(s)')}</span>
                         {b.es_unificada_shein && <span className="text-purple-600 font-bold">• + SHEIN</span>}
-                        <span>• {b.incluye_envio === false ? 'Entrega Personal' : (b.empresa_envio || 'Guatex')}</span>
+                        <span>• {b.incluye_envio === false ? L('Entrega Personal', 'Local Pickup') : trCourier(b.empresa_envio)}</span>
                       </div>
                     </div>
                     <div className="text-right">
-                      <span className="font-mono font-black text-slate-900 text-xs">Q {b.total.toFixed(2)}</span>
+                      <span className="font-mono font-black text-slate-900 text-xs">{money(b.total)}</span>
                       <span className={`block text-[9px] font-black uppercase ${
                         b.estado === 'abierta' ? 'text-amber-600' :
                         b.estado === 'pendiente_pago' ? 'text-blue-600' :
                         b.estado === 'liquidada' ? 'text-emerald-600' : 'text-slate-500'
                       }`}>
-                        {b.estado === 'abierta' ? 'Abierta' : b.estado === 'pendiente_pago' ? 'Por Cobrar' : b.estado}
+                        {trBagStatusShort(b.estado)}
                       </span>
                     </div>
                   </div>
@@ -1912,18 +2012,18 @@ export default function LiveSalesView({ currentEmpresa }: LiveSalesViewProps) {
               <button
                 type="button"
                 onClick={() => {
-                  let text = `📊 CORTE DE CAJA - ${currentSession?.titulo || 'TIKTOK LIVE'}\n`;
-                  text += `📅 Fecha: ${new Date().toLocaleDateString('es-GT')}\n`;
+                  let text = `📊 ${L('CORTE DE CAJA', 'LIVE CASH CUT')} - ${currentSession?.titulo || 'TIKTOK LIVE'}\n`;
+                  text += `📅 ${L('Fecha:', 'Date:')} ${new Date().toLocaleDateString(locale)}\n`;
                   text += `━━━━━━━━━━━━━━━━━━━━━\n`;
-                  text += `💰 Total Ventas Live (Prendas): Q ${metrics.totalVentasLivePrendas.toFixed(2)}\n`;
-                  text += `👗 Total Prendas Vendidas: ${metrics.totalApartadas} piezas\n`;
-                  text += `📦 Total Unificado SHEIN: Q ${metrics.totalVentasShein.toFixed(2)}\n`;
-                  text += `🚚 Total Envíos: Q ${metrics.totalEnvios.toFixed(2)}\n`;
-                  text += `💵 GRAN TOTAL GENERAL: Q ${metrics.totalVentas.toFixed(2)}\n`;
+                  text += `💰 ${L('Total Ventas Live (Prendas):', 'Total Live Sales (Items):')} ${money(metrics.totalVentasLivePrendas)}\n`;
+                  text += `👗 ${L('Total Prendas Vendidas:', 'Total Items Sold:')} ${metrics.totalApartadas} ${L('piezas', 'pcs')}\n`;
+                  text += `📦 ${L('Total Unificado SHEIN:', 'Combined SHEIN Total:')} ${money(metrics.totalVentasShein)}\n`;
+                  text += `🚚 ${L('Total Envíos:', 'Total Shipping:')} ${money(metrics.totalEnvios)}\n`;
+                  text += `💵 ${L('GRAN TOTAL GENERAL:', 'GRAND TOTAL:')} ${money(metrics.totalVentas)}\n`;
                   text += `━━━━━━━━━━━━━━━━━━━━━\n`;
-                  text += `🛍️ CLIENTAS (${bags.length}):\n`;
+                  text += `🛍️ ${L('CLIENTAS', 'CUSTOMERS')} (${bags.length}):\n`;
                   bags.forEach((b, i) => {
-                    text += `${i + 1}. ${b.cliente_nombre} - Q ${b.total.toFixed(2)} (${b.items.length} prendas${b.es_unificada_shein ? ' + SHEIN' : ''})\n`;
+                    text += `${i + 1}. ${b.cliente_nombre} - ${money(b.total)} (${b.items.length} ${L('prendas', 'items')}${b.es_unificada_shein ? ' + SHEIN' : ''})\n`;
                   });
                   navigator.clipboard.writeText(text);
                   setCopiedSummary(true);
@@ -1932,7 +2032,7 @@ export default function LiveSalesView({ currentEmpresa }: LiveSalesViewProps) {
                 className="py-2.5 px-4 rounded-xl text-xs font-black border-2 border-slate-300 bg-white text-slate-700 hover:bg-slate-100 transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
               >
                 {copiedSummary ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4" />}
-                <span>{copiedSummary ? '¡Reporte Copiado!' : 'Copiar Reporte'}</span>
+                <span>{copiedSummary ? L('¡Reporte Copiado!', 'Report Copied!') : L('Copiar Reporte', 'Copy Report')}</span>
               </button>
 
               {isLiveActive ? (
@@ -1945,7 +2045,7 @@ export default function LiveSalesView({ currentEmpresa }: LiveSalesViewProps) {
                   className="flex-1 py-2.5 rounded-xl text-xs font-black bg-rose-600 hover:bg-rose-700 active:scale-95 text-white shadow-md shadow-rose-600/25 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
                 >
                   <Square className="w-4 h-4 fill-current" />
-                  <span>Finalizar Transmisión Live</span>
+                  <span>{L('Finalizar Transmisión Live', 'End Live Broadcast')}</span>
                 </button>
               ) : (
                 <button
@@ -1953,7 +2053,7 @@ export default function LiveSalesView({ currentEmpresa }: LiveSalesViewProps) {
                   onClick={() => setShowEndLiveModal(false)}
                   className="flex-1 py-2.5 rounded-xl text-xs font-black bg-purple-600 hover:bg-purple-700 text-white shadow-md shadow-purple-600/25 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
                 >
-                  <span>Continuar a Cobranza</span>
+                  <span>{L('Continuar a Cobranza', 'Continue to Collections')}</span>
                 </button>
               )}
             </div>
@@ -1972,8 +2072,8 @@ export default function LiveSalesView({ currentEmpresa }: LiveSalesViewProps) {
                   <Settings className="w-5 h-5 text-purple-700" />
                 </div>
                 <div>
-                  <h3 className="text-base font-black text-slate-900 leading-tight">Reglas de Cobro & Vencimiento</h3>
-                  <p className="text-xs text-slate-500 font-medium">Ajusta los plazos de apartado para tu negocio</p>
+                  <h3 className="text-base font-black text-slate-900 leading-tight">{L('Reglas de Cobro & Vencimiento', 'Billing & Hold Expiration Rules')}</h3>
+                  <p className="text-xs text-slate-500 font-medium">{L('Ajusta los plazos de apartado para tu negocio', 'Configure reservation deadlines for your store')}</p>
                 </div>
               </div>
               <button 
@@ -1988,7 +2088,7 @@ export default function LiveSalesView({ currentEmpresa }: LiveSalesViewProps) {
             {/* Selector de Modalidad de Cobro */}
             <div className="space-y-3">
               <label className="text-xs font-black text-slate-900 uppercase tracking-wider block">
-                Modalidad de Plazo y Vencimiento:
+                {L('Modalidad de Plazo y Vencimiento:', 'Payment Window & Expiration Mode:')}
               </label>
 
               {/* Opción 1: Quincenal & Fin de Mes (+5 días de gracia) */}
@@ -2009,13 +2109,17 @@ export default function LiveSalesView({ currentEmpresa }: LiveSalesViewProps) {
                 />
                 <div className="flex-1">
                   <div className="flex items-center gap-2">
-                    <span className="text-xs font-black text-slate-900">Ciclo Quincenal & Fin de Mes (+5 días de gracia)</span>
+                    <span className="text-xs font-black text-slate-900">{L('Ciclo Quincenal & Fin de Mes (+5 días de gracia)', 'Bi-Weekly & Month-End Cycle (+5-day grace)')}</span>
                     <span className="px-2 py-0.5 rounded text-[9px] font-black uppercase bg-purple-200 text-purple-900">
-                      Recomendado SHEIN
+                      {L('Recomendado SHEIN', 'SHEIN Recommended')}
                     </span>
                   </div>
                   <p className="text-xs text-slate-600 mt-1 leading-relaxed">
-                    Compras del 1 al 15 vencen el <strong>20</strong>. Compras del 16 a fin de mes vencen el <strong>5</strong> del siguiente mes. Ideal para ventas al crédito y pedidos coordinados con salarios.
+                    {isEn ? (
+                      <>Orders from the 1st–15th are due on the <strong>20th</strong>. Orders from the 16th–month-end are due on the <strong>5th</strong> of next month. Ideal for credit sales and payday cycles.</>
+                    ) : (
+                      <>Compras del 1 al 15 vencen el <strong>20</strong>. Compras del 16 a fin de mes vencen el <strong>5</strong> del siguiente mes. Ideal para ventas al crédito y pedidos coordinados con salarios.</>
+                    )}
                   </p>
                 </div>
               </div>
@@ -2038,13 +2142,16 @@ export default function LiveSalesView({ currentEmpresa }: LiveSalesViewProps) {
                 />
                 <div className="flex-1">
                   <div className="flex items-center gap-2">
-                    <span className="text-xs font-black text-slate-900">Cobro Rápido / 24 Horas (Al día siguiente)</span>
+                    <span className="text-xs font-black text-slate-900">{L('Cobro Rápido / 24 Horas (Al día siguiente)', 'Fast Payment / 24 Hours (Next Day)')}</span>
                     <span className="px-2 py-0.5 rounded text-[9px] font-black uppercase bg-amber-100 text-amber-900">
-                      Venta Rápida
+                      {L('Venta Rápida', 'Quick Turnover')}
                     </span>
                   </div>
                   <p className="text-xs text-slate-600 mt-1 leading-relaxed">
-                    La clienta debe enviar boleta de pago dentro de 24 horas tras el Live. Si no cancela, la canasta se marca como vencida para devolver las prendas al inventario.
+                    {L(
+                      'La clienta debe enviar boleta de pago dentro de 24 horas tras el Live. Si no cancela, la canasta se marca como vencida para devolver las prendas al inventario.',
+                      'The customer must submit payment proof within 24 hours after the Live. If unpaid, the bag is marked overdue so items can be returned to inventory.'
+                    )}
                   </p>
                 </div>
               </div>
@@ -2066,13 +2173,13 @@ export default function LiveSalesView({ currentEmpresa }: LiveSalesViewProps) {
                   className="mt-1 w-4 h-4 text-purple-600 focus:ring-purple-500 cursor-pointer"
                 />
                 <div className="flex-1 space-y-2">
-                  <span className="text-xs font-black text-slate-900 block">Plazo Personalizado en Días</span>
+                  <span className="text-xs font-black text-slate-900 block">{L('Plazo Personalizado en Días', 'Custom Window in Days')}</span>
                   <p className="text-xs text-slate-600 leading-relaxed">
-                    Establece cuántos días naturales tiene la clienta para pagar su apartado tras el Live.
+                    {L('Establece cuántos días naturales tiene la clienta para pagar su apartado tras el Live.', 'Set how many calendar days customers have to pay for their reserved bag after the Live.')}
                   </p>
                   {tempPolicy.tipo === 'dias' && (
                     <div className="flex items-center gap-3 pt-1">
-                      <label className="text-xs font-bold text-slate-700">Días de plazo:</label>
+                      <label className="text-xs font-bold text-slate-700">{L('Días de plazo:', 'Window days:')}</label>
                       <input
                         type="number"
                         min="1"
@@ -2082,7 +2189,7 @@ export default function LiveSalesView({ currentEmpresa }: LiveSalesViewProps) {
                         style={{ color: '#090d16', WebkitTextFillColor: '#090d16' }}
                         className="w-20 px-3 py-1.5 bg-white border-2 border-purple-300 focus:border-purple-600 rounded-xl text-xs font-mono font-black text-slate-950 focus:outline-none"
                       />
-                      <span className="text-xs font-medium text-slate-500">día(s) naturales</span>
+                      <span className="text-xs font-medium text-slate-500">{L('día(s) naturales', 'calendar day(s)')}</span>
                     </div>
                   )}
                 </div>
@@ -2105,13 +2212,13 @@ export default function LiveSalesView({ currentEmpresa }: LiveSalesViewProps) {
                   className="mt-1 w-4 h-4 text-purple-600 focus:ring-purple-500 cursor-pointer"
                 />
                 <div className="flex-1 space-y-2">
-                  <span className="text-xs font-black text-slate-900 block">Plazo Personalizado en Horas</span>
+                  <span className="text-xs font-black text-slate-900 block">{L('Plazo Personalizado en Horas', 'Custom Window in Hours')}</span>
                   <p className="text-xs text-slate-600 leading-relaxed">
-                    Para remates con límite estricto en horas (ej. 12 horas, 48 horas).
+                    {L('Para remates con límite estricto en horas (ej. 12 horas, 48 horas).', 'For flash deals with strict hour limits (e.g. 12 hours, 48 hours).')}
                   </p>
                   {tempPolicy.tipo === 'horas' && (
                     <div className="flex items-center gap-3 pt-1">
-                      <label className="text-xs font-bold text-slate-700">Horas de plazo:</label>
+                      <label className="text-xs font-bold text-slate-700">{L('Horas de plazo:', 'Window hours:')}</label>
                       <input
                         type="number"
                         min="1"
@@ -2121,7 +2228,7 @@ export default function LiveSalesView({ currentEmpresa }: LiveSalesViewProps) {
                         style={{ color: '#090d16', WebkitTextFillColor: '#090d16' }}
                         className="w-20 px-3 py-1.5 bg-white border-2 border-purple-300 focus:border-purple-600 rounded-xl text-xs font-mono font-black text-slate-950 focus:outline-none"
                       />
-                      <span className="text-xs font-medium text-slate-500">hora(s) desde el Live</span>
+                      <span className="text-xs font-medium text-slate-500">{L('hora(s) desde el Live', 'hour(s) after Live')}</span>
                     </div>
                   )}
                 </div>
@@ -2134,10 +2241,13 @@ export default function LiveSalesView({ currentEmpresa }: LiveSalesViewProps) {
                 <div className="space-y-0.5">
                   <span className="text-xs font-black text-slate-900 flex items-center gap-2">
                     <Link2 className="w-4 h-4 text-purple-600" />
-                    ¿Tu tienda vende pedidos o prendas de SHEIN?
+                    {L('¿Tu tienda vende pedidos o prendas de SHEIN?', 'Does your store sell SHEIN orders or items?')}
                   </span>
                   <p className="text-[11px] text-slate-500 font-medium leading-relaxed">
-                    Permite consolidar saldos de SHEIN con prendas del Live en un solo paquete y enviar una sola cuenta de WhatsApp.
+                    {L(
+                      'Permite consolidar saldos de SHEIN con prendas del Live en un solo paquete y enviar una sola cuenta de WhatsApp.',
+                      'Allows combining SHEIN balances with Live items into a single package and sending one consolidated WhatsApp bill.'
+                    )}
                   </p>
                 </div>
                 <input
@@ -2156,7 +2266,7 @@ export default function LiveSalesView({ currentEmpresa }: LiveSalesViewProps) {
                 onClick={() => setShowPolicyModal(false)}
                 className="flex-1 py-2.5 rounded-xl text-xs font-black border-2 border-slate-300 bg-white text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
               >
-                Cancelar
+                {L('Cancelar', 'Cancel')}
               </button>
               <button
                 type="button"
@@ -2164,7 +2274,7 @@ export default function LiveSalesView({ currentEmpresa }: LiveSalesViewProps) {
                 className="flex-1 py-2.5 rounded-xl text-xs font-black bg-purple-600 hover:bg-purple-700 text-white shadow-md shadow-purple-600/25 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
               >
                 <Check className="w-4 h-4" />
-                <span>Guardar Reglas de Cobro</span>
+                <span>{L('Guardar Reglas de Cobro', 'Save Billing Rules')}</span>
               </button>
             </div>
           </div>

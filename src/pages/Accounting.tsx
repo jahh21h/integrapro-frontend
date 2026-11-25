@@ -19,12 +19,36 @@ import { CuentaContable, Partida, DeclaracionFiscalSAT, RetencionSAT, EmpresaSaa
 import { calculateMonthlyTaxSettlement, getTipoRegimenSAT } from '../utils/tax';
 import { exportToExcelCsv } from '../utils/export';
 import { accountingApi } from '../api';
+import { useLanguage } from '../context/LanguageContext';
 
 interface AccountingProps {
   currentEmpresa?: EmpresaSaaS;
 }
 
 export default function Accounting({ currentEmpresa }: AccountingProps = {}) {
+  const { L, money, currencySymbol, trRegime } = useLanguage();
+
+  const trAccountType = (tipo: string) => {
+    switch (tipo) {
+      case 'activo': return L('Activo', 'Asset');
+      case 'pasivo': return L('Pasivo', 'Liability');
+      case 'capital': return L('Capital', 'Equity');
+      case 'ingreso': return L('Ingreso', 'Revenue');
+      case 'costo': return L('Costo', 'Cost');
+      case 'gasto': return L('Gasto', 'Expense');
+      default: return tipo;
+    }
+  };
+
+  const trRefType = (ref?: string) => {
+    if (!ref) return L('Manual', 'Manual');
+    const low = ref.toLowerCase();
+    if (low === 'venta' || low === 'ventas') return L('Venta', 'Sale');
+    if (low === 'compra' || low === 'compras') return L('Compra', 'Purchase');
+    if (low === 'nomina' || low === 'nómina' || low === 'planilla') return L('Nómina', 'Payroll');
+    if (low === 'manual') return L('Manual', 'Manual');
+    return ref;
+  };
   const empresaActiva: EmpresaSaaS = currentEmpresa || {
     id: 1,
     nombre: 'Fashion Styles',
@@ -174,16 +198,33 @@ export default function Accounting({ currentEmpresa }: AccountingProps = {}) {
   const totalHaberNuevo = newPartida.detalles.reduce((acc, d) => acc + (parseFloat(d.haber as any) || 0), 0);
   const estaCuadrada = Math.abs(totalDebeNuevo - totalHaberNuevo) < 0.01 && totalDebeNuevo > 0;
 
+  const formCodeDisplay =
+    tipoRegimen === 'general'
+      ? L('SAT-2046 (IVA General)', 'Form 2046 (Standard VAT)')
+      : tipoRegimen === 'pequeno_contribuyente'
+      ? L('SAT-2047 (Pequeño Contribuyente)', 'Form 2047 (Small Business)')
+      : L('No Aplica (Régimen Informal / Exento)', 'N/A (Tax-Exempt / Informal Regime)');
+
+  const formShortCode =
+    tipoRegimen === 'general'
+      ? L('SAT-2046', 'Form 2046')
+      : tipoRegimen === 'pequeno_contribuyente'
+      ? L('SAT-2047', 'Form 2047')
+      : L('EXENTO', 'EXEMPT');
+
   const handleSavePartida = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!estaCuadrada) {
-      alert('Error: La partida contable debe estar cuadrada. El Total Debe debe ser igual al Total Haber.');
+      alert(L(
+        'Error: La partida contable debe estar cuadrada. El Total Debe debe ser igual al Total Haber.',
+        'Error: The journal entry must be balanced. Total Debit must equal Total Credit.'
+      ));
       return;
     }
 
     const payload = {
       fecha: newPartida.fecha,
-      concepto: newPartida.concepto || 'Asiento de ajuste contable manual',
+      concepto: newPartida.concepto || L('Asiento de ajuste contable manual', 'Manual accounting adjustment entry'),
       detalles: newPartida.detalles.map(d => ({
         id_cuenta: Number(d.id_cuenta),
         debe: parseFloat(d.debe as any) || 0,
@@ -196,7 +237,7 @@ export default function Accounting({ currentEmpresa }: AccountingProps = {}) {
       await accountingApi.createPartida(payload);
       await loadAccountingLive();
     } catch (err: any) {
-      alert(err?.response?.data?.message || 'No se pudo guardar la partida en el servidor.');
+      alert(err?.response?.data?.message || L('No se pudo guardar la partida en el servidor.', 'Could not save the journal entry on the server.'));
       return;
     }
 
@@ -223,7 +264,7 @@ export default function Accounting({ currentEmpresa }: AccountingProps = {}) {
       });
       await loadAccountingLive();
     } catch (err: any) {
-      alert(err?.response?.data?.message || 'No se pudo crear la cuenta contable.');
+      alert(err?.response?.data?.message || L('No se pudo crear la cuenta contable.', 'Could not create the accounting account.'));
       return;
     }
     setShowNewCuentaModal(false);
@@ -238,25 +279,25 @@ export default function Accounting({ currentEmpresa }: AccountingProps = {}) {
   const handleExportAccounting = () => {
     if (activeTab === 'partidas') {
       const data = partidas.map(p => ({
-        'No. Partida': p.numero,
-        'Fecha': p.fecha,
-        'Concepto': p.concepto,
-        'Referencia': p.referencia_tipo || 'Manual',
-        'Total Debe (Q)': p.total_debe.toFixed(2),
-        'Total Haber (Q)': p.total_haber.toFixed(2),
-        'Cuadrada': Math.abs(p.total_debe - p.total_haber) < 0.01 ? 'SÍ' : 'NO'
+        [L('No. Partida', 'Entry #')]: p.numero,
+        [L('Fecha', 'Date')]: p.fecha,
+        [L('Concepto', 'Description')]: p.concepto,
+        [L('Referencia', 'Reference')]: trRefType(p.referencia_tipo),
+        [L(`Total Debe (${currencySymbol})`, `Total Debit (${currencySymbol})`)]: p.total_debe.toFixed(2),
+        [L(`Total Haber (${currencySymbol})`, `Total Credit (${currencySymbol})`)]: p.total_haber.toFixed(2),
+        [L('Cuadrada', 'Balanced')]: Math.abs(p.total_debe - p.total_haber) < 0.01 ? L('SÍ', 'YES') : L('NO', 'NO')
       }));
-      exportToExcelCsv(data, `libro_diario_${empresaActiva.nombre.replace(/\s+/g, '_')}`);
+      exportToExcelCsv(data, `${L('libro_diario', 'general_journal')}_${empresaActiva.nombre.replace(/\s+/g, '_')}`);
     } else {
       const data = cuentas.map(c => ({
-        'Código': c.codigo,
-        'Nombre': c.nombre,
-        'Clasificación': c.tipo.toUpperCase(),
-        'Nivel': c.nivel,
-        'Estado': c.activa ? 'Activa' : 'Inactiva',
-        'Saldo Actual (Q)': (c.saldo || 0).toFixed(2)
+        [L('Código', 'Code')]: c.codigo,
+        [L('Nombre', 'Name')]: c.nombre,
+        [L('Clasificación', 'Classification')]: trAccountType(c.tipo).toUpperCase(),
+        [L('Nivel', 'Level')]: c.nivel,
+        [L('Estado', 'Status')]: c.activa ? L('Activa', 'Active') : L('Inactiva', 'Inactive'),
+        [L(`Saldo Actual (${currencySymbol})`, `Current Balance (${currencySymbol})`)]: (c.saldo || 0).toFixed(2)
       }));
-      exportToExcelCsv(data, `nomenclatura_contable_${empresaActiva.nombre.replace(/\s+/g, '_')}`);
+      exportToExcelCsv(data, `${L('nomenclatura_contable', 'chart_of_accounts')}_${empresaActiva.nombre.replace(/\s+/g, '_')}`);
     }
   };
 
@@ -270,11 +311,14 @@ export default function Accounting({ currentEmpresa }: AccountingProps = {}) {
               <Landmark className="w-5 h-5" />
             </span>
             <h1 className="text-xl font-bold text-slate-800 tracking-tight">
-              Contabilidad General & Fiscalidad SAT
+              {L('Contabilidad General & Fiscalidad SAT', 'General Accounting & Tax Compliance')}
             </h1>
           </div>
           <p className="text-xs text-slate-500 mt-1">
-            Nomenclatura contable de Guatemala, Libro Diario con cuadratura estricta Debe/Haber y cálculo fiscal SAT (IVA 12% / Retenciones).
+            {L(
+              'Nomenclatura contable de Guatemala, Libro Diario con cuadratura estricta Debe/Haber y cálculo fiscal SAT (IVA 12% / Retenciones).',
+              'Standard Chart of Accounts, General Journal with strict Debit/Credit balancing, and tax calculations (12% VAT / Withholdings).'
+            )}
           </p>
         </div>
 
@@ -283,10 +327,10 @@ export default function Accounting({ currentEmpresa }: AccountingProps = {}) {
             type="button"
             onClick={handleExportAccounting}
             className="px-3.5 py-2.5 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold rounded-xl flex items-center gap-2 transition-colors border border-slate-200 shadow-sm"
-            title="Exportar datos contables a Excel CSV"
+            title={L('Exportar datos contables a Excel CSV', 'Export accounting data to Excel CSV')}
           >
             <Download className="w-4 h-4 text-slate-500" />
-            <span className="hidden sm:inline">Exportar Excel</span>
+            <span className="hidden sm:inline">{L('Exportar Excel', 'Export Excel')}</span>
           </button>
           <button 
             type="button"
@@ -294,7 +338,7 @@ export default function Accounting({ currentEmpresa }: AccountingProps = {}) {
             className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl flex items-center gap-2 transition-colors border border-slate-200"
           >
             <Plus className="w-4 h-4 text-slate-600" />
-            Nueva Cuenta
+            {L('Nueva Cuenta', 'New Account')}
           </button>
           <button 
             type="button"
@@ -302,7 +346,7 @@ export default function Accounting({ currentEmpresa }: AccountingProps = {}) {
             className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-xl flex items-center gap-2 shadow-sm transition-colors"
           >
             <BookOpen className="w-4 h-4" />
-            Registrar Partida Diario
+            {L('Registrar Partida Diario', 'New Journal Entry')}
           </button>
         </div>
       </div>
@@ -311,12 +355,12 @@ export default function Accounting({ currentEmpresa }: AccountingProps = {}) {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm flex items-center justify-between">
           <div>
-            <p className="text-xs font-semibold text-slate-400">Total Activo Circulante</p>
+            <p className="text-xs font-semibold text-slate-400">{L('Total Activo Circulante', 'Total Current Assets')}</p>
             <p className="text-2xl font-black text-slate-800 mt-1">
-              Q296,846.21
+              {money(296846.21)}
             </p>
             <span className="text-[11px] text-emerald-600 font-medium flex items-center gap-1 mt-1">
-              <CheckCircle2 className="w-3.5 h-3.5" /> Caja, Bancos e Inventario
+              <CheckCircle2 className="w-3.5 h-3.5" /> {L('Caja, Bancos e Inventario', 'Cash, Banks & Inventory')}
             </span>
           </div>
           <div className="w-11 h-11 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold">
@@ -326,12 +370,12 @@ export default function Accounting({ currentEmpresa }: AccountingProps = {}) {
 
         <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm flex items-center justify-between">
           <div>
-            <p className="text-xs font-semibold text-slate-400">Total Pasivo Exigible</p>
+            <p className="text-xs font-semibold text-slate-400">{L('Total Pasivo Exigible', 'Total Current Liabilities')}</p>
             <p className="text-2xl font-black text-amber-600 mt-1">
-              Q43,432.86
+              {money(43432.86)}
             </p>
             <span className="text-[11px] text-slate-500 font-medium mt-1">
-              Proveedores + IVA Débito SAT
+              {L('Proveedores + IVA Débito SAT', 'Suppliers + Output VAT Payable')}
             </span>
           </div>
           <div className="w-11 h-11 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center font-bold">
@@ -341,12 +385,12 @@ export default function Accounting({ currentEmpresa }: AccountingProps = {}) {
 
         <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm flex items-center justify-between">
           <div>
-            <p className="text-xs font-semibold text-slate-400">IVA a Pagar SAT (Mes)</p>
+            <p className="text-xs font-semibold text-slate-400">{L('IVA a Pagar SAT (Mes)', 'Monthly VAT Payable')}</p>
             <p className="text-2xl font-black text-rose-600 mt-1">
-              Q7,457.15
+              {money(7457.15)}
             </p>
             <span className="text-[11px] text-rose-500 font-medium flex items-center gap-1 mt-1">
-              Débito Q11.4k - Crédito Q3.9k
+              {L(`Débito ${currencySymbol}11.4k - Crédito ${currencySymbol}3.9k`, `Output ${currencySymbol}11.4k - Input ${currencySymbol}3.9k`)}
             </span>
           </div>
           <div className="w-11 h-11 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center font-bold">
@@ -356,12 +400,12 @@ export default function Accounting({ currentEmpresa }: AccountingProps = {}) {
 
         <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm flex items-center justify-between">
           <div>
-            <p className="text-xs font-semibold text-slate-400">Partidas Cuadradas</p>
+            <p className="text-xs font-semibold text-slate-400">{L('Partidas Cuadradas', 'Balanced Entries')}</p>
             <p className="text-2xl font-black text-emerald-600 mt-1">
               100%
             </p>
             <span className="text-[11px] text-emerald-600 font-medium flex items-center gap-1 mt-1">
-              Balance General en Cero
+              {L('Balance General en Cero', 'Zero-Variance Trial Balance')}
             </span>
           </div>
           <div className="w-11 h-11 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold">
@@ -382,7 +426,7 @@ export default function Accounting({ currentEmpresa }: AccountingProps = {}) {
           }`}
         >
           <Layers className="w-4 h-4" />
-          Nomenclatura Contable ({cuentas.length})
+          {L('Nomenclatura Contable', 'Chart of Accounts')} ({cuentas.length})
         </button>
         <button
           type="button"
@@ -394,7 +438,7 @@ export default function Accounting({ currentEmpresa }: AccountingProps = {}) {
           }`}
         >
           <BookOpen className="w-4 h-4" />
-          Libro Diario / Partidas ({partidas.length})
+          {L('Libro Diario / Partidas', 'General Journal / Entries')} ({partidas.length})
         </button>
         <button
           type="button"
@@ -406,7 +450,7 @@ export default function Accounting({ currentEmpresa }: AccountingProps = {}) {
           }`}
         >
           <Calculator className="w-4 h-4" />
-          Declaraciones Fiscales SAT (IVA)
+          {L('Declaraciones Fiscales SAT (IVA)', 'Tax Filings (VAT)')}
         </button>
         <button
           type="button"
@@ -418,7 +462,7 @@ export default function Accounting({ currentEmpresa }: AccountingProps = {}) {
           }`}
         >
           <FileSpreadsheet className="w-4 h-4" />
-          Retenciones SAT ({retenciones.length})
+          {L('Retenciones SAT', 'Tax Withholdings')} ({retenciones.length})
         </button>
         <button
           type="button"
@@ -430,7 +474,7 @@ export default function Accounting({ currentEmpresa }: AccountingProps = {}) {
           }`}
         >
           <PieChart className="w-4 h-4" />
-          Estados Financieros
+          {L('Estados Financieros', 'Financial Statements')}
         </button>
       </div>
 
@@ -444,12 +488,12 @@ export default function Accounting({ currentEmpresa }: AccountingProps = {}) {
                 type="text"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Buscar por código o nombre de cuenta..."
+                placeholder={L('Buscar por código o nombre de cuenta...', 'Search by account code or name...')}
                 className="w-full pl-9 pr-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
               />
             </div>
             <div className="text-xs text-slate-500 font-medium">
-              Estructura Oficial del Plan de Cuentas (Guatemala)
+              {L('Estructura Oficial del Plan de Cuentas (Guatemala)', 'Official Chart of Accounts Structure')}
             </div>
           </div>
 
@@ -457,12 +501,12 @@ export default function Accounting({ currentEmpresa }: AccountingProps = {}) {
             <table className="w-full text-left text-xs text-slate-600">
               <thead className="bg-slate-50 text-slate-700 font-semibold uppercase text-[10px] tracking-wider border-b border-slate-200">
                 <tr>
-                  <th className="py-3 px-4">Código</th>
-                  <th className="py-3 px-4">Nombre de la Cuenta</th>
-                  <th className="py-3 px-4">Clasificación / Tipo</th>
-                  <th className="py-3 px-4 text-center">Nivel</th>
-                  <th className="py-3 px-4 text-center">Estado</th>
-                  <th className="py-3 px-4 text-right">Saldo Actual</th>
+                  <th className="py-3 px-4">{L('Código', 'Code')}</th>
+                  <th className="py-3 px-4">{L('Nombre de la Cuenta', 'Account Name')}</th>
+                  <th className="py-3 px-4">{L('Clasificación / Tipo', 'Classification / Type')}</th>
+                  <th className="py-3 px-4 text-center">{L('Nivel', 'Level')}</th>
+                  <th className="py-3 px-4 text-center">{L('Estado', 'Status')}</th>
+                  <th className="py-3 px-4 text-right">{L('Saldo Actual', 'Current Balance')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 font-mono">
@@ -488,19 +532,19 @@ export default function Accounting({ currentEmpresa }: AccountingProps = {}) {
                           cuenta.tipo === 'costo' ? 'bg-purple-100 text-purple-800' :
                           'bg-rose-100 text-rose-800'
                         }`}>
-                          {cuenta.tipo}
+                          {trAccountType(cuenta.tipo)}
                         </span>
                       </td>
                       <td className="py-3.5 px-4 text-center text-slate-500 font-mono">
-                        Nivel {cuenta.nivel}
+                        {L('Nivel', 'Level')} {cuenta.nivel}
                       </td>
                       <td className="py-3.5 px-4 text-center">
                         <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700">
-                          Activa
+                          {cuenta.activa ? L('Activa', 'Active') : L('Inactiva', 'Inactive')}
                         </span>
                       </td>
                       <td className="py-3.5 px-4 text-right font-black text-slate-900 text-sm">
-                        Q{(cuenta.saldo || 0).toLocaleString('es-GT', { minimumFractionDigits: 2 })}
+                        {money(cuenta.saldo || 0)}
                       </td>
                     </tr>
                   ))}
@@ -513,8 +557,8 @@ export default function Accounting({ currentEmpresa }: AccountingProps = {}) {
       {activeTab === 'partidas' && (
         <div className="bg-white rounded-b-2xl border border-slate-200/80 shadow-sm overflow-hidden">
           <div className="p-4 border-b border-slate-100 flex items-center justify-between">
-            <h2 className="text-sm font-bold text-slate-800">Libro Diario General (Asientos Contables)</h2>
-            <span className="text-xs text-slate-500">{partidas.length} Partidas Registradas</span>
+            <h2 className="text-sm font-bold text-slate-800">{L('Libro Diario General (Asientos Contables)', 'General Journal (Journal Entries)')}</h2>
+            <span className="text-xs text-slate-500">{partidas.length} {L('Partidas Registradas', 'Entries Recorded')}</span>
           </div>
 
           <div className="divide-y divide-slate-200">
@@ -523,7 +567,7 @@ export default function Accounting({ currentEmpresa }: AccountingProps = {}) {
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
                   <div className="flex items-center gap-3">
                     <span className="px-2.5 py-1 bg-indigo-50 text-indigo-700 font-mono font-bold rounded-lg text-xs border border-indigo-200/60">
-                      Partida No. {partida.numero}
+                      {L('Partida No.', 'Entry #')} {partida.numero}
                     </span>
                     <div className="flex items-center gap-1.5 text-xs text-slate-500">
                       <Calendar className="w-3.5 h-3.5 text-slate-400" />
@@ -531,7 +575,7 @@ export default function Accounting({ currentEmpresa }: AccountingProps = {}) {
                     </div>
                     {partida.referencia_tipo && (
                       <span className="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-md font-semibold">
-                        Ref: {partida.referencia_tipo} #{partida.referencia_id}
+                        Ref: {trRefType(partida.referencia_tipo)} {partida.referencia_id ? `#${partida.referencia_id}` : ''}
                       </span>
                     )}
                   </div>
@@ -539,20 +583,20 @@ export default function Accounting({ currentEmpresa }: AccountingProps = {}) {
                   <div className="flex items-center gap-2">
                     <span className="text-xs font-bold text-emerald-600 flex items-center gap-1 bg-emerald-50 px-2 py-1 rounded-lg">
                       <CheckCircle2 className="w-3.5 h-3.5" />
-                      Cuadrada: Q{partida.total_debe.toLocaleString('es-GT', { minimumFractionDigits: 2 })}
+                      {L('Cuadrada:', 'Balanced:')} {money(partida.total_debe)}
                     </span>
                     <button
                       type="button"
                       onClick={() => setSelectedPartida(partida)}
                       className="px-2.5 py-1 bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 font-semibold text-xs rounded-lg"
                     >
-                      Ver Detalle
+                      {L('Ver Detalle', 'View Details')}
                     </button>
                   </div>
                 </div>
 
                 <p className="text-xs text-slate-700 font-medium mb-3">
-                  <span className="text-slate-400 font-semibold">Concepto: </span>
+                  <span className="text-slate-400 font-semibold">{L('Concepto:', 'Description:')} </span>
                   {partida.concepto}
                 </p>
 
@@ -561,11 +605,11 @@ export default function Accounting({ currentEmpresa }: AccountingProps = {}) {
                   <table className="w-full text-left text-xs">
                     <thead className="bg-slate-50 text-slate-600 font-semibold border-b border-slate-200 text-[10px] uppercase">
                       <tr>
-                        <th className="py-2 px-3">Código</th>
-                        <th className="py-2 px-3">Cuenta Contable</th>
-                        <th className="py-2 px-3">Glosa</th>
-                        <th className="py-2 px-3 text-right">Debe (Q)</th>
-                        <th className="py-2 px-3 text-right">Haber (Q)</th>
+                        <th className="py-2 px-3">{L('Código', 'Code')}</th>
+                        <th className="py-2 px-3">{L('Cuenta Contable', 'Account')}</th>
+                        <th className="py-2 px-3">{L('Glosa', 'Memo')}</th>
+                        <th className="py-2 px-3 text-right">{L(`Debe (${currencySymbol})`, `Debit (${currencySymbol})`)}</th>
+                        <th className="py-2 px-3 text-right">{L(`Haber (${currencySymbol})`, `Credit (${currencySymbol})`)}</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
@@ -575,19 +619,19 @@ export default function Accounting({ currentEmpresa }: AccountingProps = {}) {
                           <td className="py-2 px-3 font-medium text-slate-800">{det.cuenta_nombre}</td>
                           <td className="py-2 px-3 text-slate-500 italic text-[11px]">{det.glosa}</td>
                           <td className="py-2 px-3 text-right font-bold text-slate-800">
-                            {det.debe > 0 ? `Q${det.debe.toFixed(2)}` : '-'}
+                            {det.debe > 0 ? money(det.debe) : '-'}
                           </td>
                           <td className="py-2 px-3 text-right font-bold text-slate-800">
-                            {det.haber > 0 ? `Q${det.haber.toFixed(2)}` : '-'}
+                            {det.haber > 0 ? money(det.haber) : '-'}
                           </td>
                         </tr>
                       ))}
                     </tbody>
                     <tfoot className="bg-slate-100/80 font-bold border-t border-slate-200 text-xs text-slate-900">
                       <tr>
-                        <td colSpan={3} className="py-2 px-3 text-right">Sumas Iguales:</td>
-                        <td className="py-2 px-3 text-right text-indigo-700 font-black">Q{partida.total_debe.toFixed(2)}</td>
-                        <td className="py-2 px-3 text-right text-indigo-700 font-black">Q{partida.total_haber.toFixed(2)}</td>
+                        <td colSpan={3} className="py-2 px-3 text-right">{L('Sumas Iguales:', 'Balanced Totals:')}</td>
+                        <td className="py-2 px-3 text-right text-indigo-700 font-black">{money(partida.total_debe)}</td>
+                        <td className="py-2 px-3 text-right text-indigo-700 font-black">{money(partida.total_haber)}</td>
                       </tr>
                     </tfoot>
                   </table>
@@ -604,25 +648,25 @@ export default function Accounting({ currentEmpresa }: AccountingProps = {}) {
             <div>
               <div className="flex items-center gap-2 mb-1">
                 <span className="font-mono text-xs font-black px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded-lg">
-                  {liquidacionActual.codigoFormulario}
+                  {formCodeDisplay}
                 </span>
                 <span className="text-xs font-semibold text-slate-400">
-                  • Empresa: <strong className="text-slate-700">{empresaActiva.nombre}</strong>
+                  • {L('Empresa:', 'Company:')} <strong className="text-slate-700">{empresaActiva.nombre}</strong>
                 </span>
               </div>
               <h2 className="text-base font-bold text-slate-800">
                 {tipoRegimen === 'general' 
-                  ? 'Liquidación Mensual de IVA General (SAT-2046)' 
+                  ? L('Liquidación Mensual de IVA General (SAT-2046)', 'Monthly Standard VAT Settlement (Form 2046)')
                   : tipoRegimen === 'pequeno_contribuyente'
-                  ? 'Liquidación Mensual de Pequeño Contribuyente (SAT-2047)'
-                  : 'Régimen Informal / Exento de IVA (Sin Declaración Mensual)'}
+                  ? L('Liquidación Mensual de Pequeño Contribuyente (SAT-2047)', 'Monthly Small Business Tax Settlement (Form 2047)')
+                  : L('Régimen Informal / Exento de IVA (Sin Declaración Mensual)', 'Tax-Exempt / Informal Regime (No Monthly Filing)')}
               </h2>
               <p className="text-xs text-slate-500">
                 {tipoRegimen === 'general'
-                  ? 'Cálculo de Débito Fiscal contra Crédito Fiscal y aplicación de retenciones.'
+                  ? L('Cálculo de Débito Fiscal contra Crédito Fiscal y aplicación de retenciones.', 'Calculation of Output VAT against Input VAT credit and tax withholdings.')
                   : tipoRegimen === 'pequeno_contribuyente'
-                  ? 'Cálculo directo del 5% sobre ventas brutas facturadas (Art. 47 al 50 Decreto 27-92 SAT).'
-                  : 'Los negocios en régimen informal/exento no generan débito fiscal ni declaran formularios SAT-2046/2047.'}
+                  ? L('Cálculo directo del 5% sobre ventas brutas facturadas (Art. 47 al 50 Decreto 27-92 SAT).', 'Direct 5% flat calculation on gross invoiced sales under Small Business tax rules.')
+                  : L('Los negocios en régimen informal/exento no generan débito fiscal ni declaran formularios SAT-2046/2047.', 'Businesses under a tax-exempt/informal regime do not generate output VAT or file monthly tax returns.')}
               </p>
             </div>
             <div className="flex items-center gap-2">
@@ -633,7 +677,7 @@ export default function Accounting({ currentEmpresa }: AccountingProps = {}) {
                   ? 'bg-purple-50 text-purple-800 border-purple-200'
                   : 'bg-amber-50 text-amber-800 border-amber-200'
               }`}>
-                {empresaActiva.regimen}
+                {trRegime(empresaActiva.regimen)}
               </span>
             </div>
           </div>
@@ -642,8 +686,13 @@ export default function Accounting({ currentEmpresa }: AccountingProps = {}) {
             <div className="p-4 bg-amber-50 rounded-xl border border-amber-200 text-amber-900 text-xs flex items-center gap-3">
               <AlertTriangle className="w-5 h-5 flex-shrink-0 text-amber-600" />
               <div>
-                <p className="font-bold">Régimen Informal / No Emisor de Factura Electrónica FEL</p>
-                <p className="mt-0.5 text-amber-700">Esta empresa opera en modalidad exenta / informal. Las operaciones en caja generan comprobantes internos y el impuesto a enterar ante SAT es Q 0.00.</p>
+                <p className="font-bold">{L('Régimen Informal / No Emisor de Factura Electrónica FEL', 'Tax-Exempt Regime / Non-E-Invoice Issuer')}</p>
+                <p className="mt-0.5 text-amber-700">
+                  {L(
+                    `Esta empresa opera en modalidad exenta / informal. Las operaciones en caja generan comprobantes internos y el impuesto a enterar ante SAT es ${money(0)}.`,
+                    `This company operates under a tax-exempt/informal regime. POS operations generate internal receipts and the tax payable to the Tax Authority is ${money(0)}.`
+                  )}
+                </p>
               </div>
             </div>
           )}
@@ -653,26 +702,26 @@ export default function Accounting({ currentEmpresa }: AccountingProps = {}) {
             <div className="p-5 bg-slate-50 rounded-2xl border border-slate-200 space-y-3">
               <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-2">
                 <span className="w-2.5 h-2.5 rounded-full bg-indigo-600"></span>
-                1. Ventas & Débito Fiscal / Impuesto Bruto
+                {L('1. Ventas & Débito Fiscal / Impuesto Bruto', '1. Sales & Output VAT / Gross Tax')}
               </h3>
               <div className="space-y-2 text-xs">
                 <div className="flex justify-between text-slate-600">
-                  <span>Ventas Brutas Facturadas:</span>
-                  <span className="font-bold text-slate-900">Q {liquidacionActual.ventasBrutas.toLocaleString('es-GT', { minimumFractionDigits: 2 })}</span>
+                  <span>{L('Ventas Brutas Facturadas:', 'Gross Invoiced Sales:')}</span>
+                  <span className="font-bold text-slate-900">{money(liquidacionActual.ventasBrutas)}</span>
                 </div>
                 <div className="flex justify-between text-slate-600">
-                  <span>Base Imponible Ventas:</span>
-                  <span className="font-medium text-slate-700">Q {liquidacionActual.baseImponibleVentas.toLocaleString('es-GT', { minimumFractionDigits: 2 })}</span>
+                  <span>{L('Base Imponible Ventas:', 'Taxable Sales Base:')}</span>
+                  <span className="font-medium text-slate-700">{money(liquidacionActual.baseImponibleVentas)}</span>
                 </div>
                 <div className="flex justify-between text-indigo-700 font-bold border-t border-slate-200 pt-2 text-sm">
                   <span>
                     {tipoRegimen === 'general' 
-                      ? 'Débito Fiscal Generado (12%):' 
+                      ? L('Débito Fiscal Generado (12%):', 'Output VAT Generated (12%):')
                       : tipoRegimen === 'pequeno_contribuyente'
-                      ? 'Impuesto Determinado (5% SAT):'
-                      : 'Impuesto Determinado (0% Exento):'}
+                      ? L('Impuesto Determinado (5% SAT):', 'Assessed Tax (5% Flat):')
+                      : L('Impuesto Determinado (0% Exento):', 'Assessed Tax (0% Exempt):')}
                   </span>
-                  <span>Q {liquidacionActual.impuestoDeterminado.toLocaleString('es-GT', { minimumFractionDigits: 2 })}</span>
+                  <span>{money(liquidacionActual.impuestoDeterminado)}</span>
                 </div>
               </div>
             </div>
@@ -680,31 +729,37 @@ export default function Accounting({ currentEmpresa }: AccountingProps = {}) {
             <div className="p-5 bg-slate-50 rounded-2xl border border-slate-200 space-y-3">
               <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-2">
                 <span className={`w-2.5 h-2.5 rounded-full ${tipoRegimen === 'general' ? 'bg-emerald-600' : 'bg-slate-400'}`}></span>
-                2. Compras & Crédito Fiscal
+                {L('2. Compras & Crédito Fiscal', '2. Purchases & Input VAT Credit')}
               </h3>
               <div className="space-y-2 text-xs">
                 <div className="flex justify-between text-slate-600">
-                  <span>Compras y Gastos del Mes:</span>
-                  <span className="font-bold text-slate-900">Q {liquidacionActual.comprasBrutas.toLocaleString('es-GT', { minimumFractionDigits: 2 })}</span>
+                  <span>{L('Compras y Gastos del Mes:', 'Monthly Purchases & Expenses:')}</span>
+                  <span className="font-bold text-slate-900">{money(liquidacionActual.comprasBrutas)}</span>
                 </div>
                 <div className="flex justify-between text-slate-600">
-                  <span>Base Imponible Compras:</span>
-                  <span className="font-medium text-slate-700">Q {liquidacionActual.baseImponibleCompras.toLocaleString('es-GT', { minimumFractionDigits: 2 })}</span>
+                  <span>{L('Base Imponible Compras:', 'Taxable Purchases Base:')}</span>
+                  <span className="font-medium text-slate-700">{money(liquidacionActual.baseImponibleCompras)}</span>
                 </div>
                 <div className={`flex justify-between font-bold border-t border-slate-200 pt-2 text-sm ${
                   tipoRegimen === 'general' ? 'text-emerald-700' : 'text-slate-400'
                 }`}>
-                  <span>Crédito Fiscal Deducible:</span>
-                  <span>Q {liquidacionActual.creditoFiscal.toLocaleString('es-GT', { minimumFractionDigits: 2 })}</span>
+                  <span>{L('Crédito Fiscal Deducible:', 'Deductible Tax Credit:')}</span>
+                  <span>{money(liquidacionActual.creditoFiscal)}</span>
                 </div>
                 {tipoRegimen === 'pequeno_contribuyente' && (
                   <p className="text-[10px] text-amber-700 bg-amber-50 p-2 rounded-lg border border-amber-200 leading-tight">
-                    ⚠️ {liquidacionActual.creditoFiscalExplicacion}
+                    ⚠️ {L(
+                      'Las compras no generan crédito fiscal en Pequeño Contribuyente (Art. 49 Dto. 27-92).',
+                      'Purchases do not generate deductible VAT tax credit under the Small Business regime.'
+                    )}
                   </p>
                 )}
                 {tipoRegimen === 'exento' && (
                   <p className="text-[10px] text-amber-700 bg-amber-50 p-2 rounded-lg border border-amber-200 leading-tight">
-                    ℹ️ Régimen no afecto a IVA. No aplica deducción de crédito fiscal en compras.
+                    ℹ️ {L(
+                      'Régimen no afecto a IVA. No aplica deducción de crédito fiscal en compras.',
+                      'Tax-exempt regime. Input VAT credit deduction on purchases does not apply.'
+                    )}
                   </p>
                 )}
               </div>
@@ -720,53 +775,61 @@ export default function Accounting({ currentEmpresa }: AccountingProps = {}) {
               : 'bg-amber-50/50 border-amber-100'
           }`}>
             <div>
-              <p className="text-xs font-semibold text-slate-500">Impuesto Neto Determinado:</p>
+              <p className="text-xs font-semibold text-slate-500">{L('Impuesto Neto Determinado:', 'Net Assessed Tax:')}</p>
               <p className="text-xs text-slate-600 mt-0.5">
                 {tipoRegimen === 'general'
-                  ? `Débito (Q${liquidacionActual.debitoFiscal.toFixed(2)}) - Crédito (Q${liquidacionActual.creditoFiscal.toFixed(2)}) - Retenciones IVA (Q${liquidacionActual.retencionesIvaRecibidas.toFixed(2)})`
+                  ? L(
+                      `Débito (${money(liquidacionActual.debitoFiscal)}) - Crédito (${money(liquidacionActual.creditoFiscal)}) - Retenciones IVA (${money(liquidacionActual.retencionesIvaRecibidas)})`,
+                      `Output VAT (${money(liquidacionActual.debitoFiscal)}) - Input Credit (${money(liquidacionActual.creditoFiscal)}) - VAT Withholdings (${money(liquidacionActual.retencionesIvaRecibidas)})`
+                    )
                   : tipoRegimen === 'pequeno_contribuyente'
-                  ? `Impuesto 5% (Q${liquidacionActual.impuestoDeterminado.toFixed(2)}) - Retenciones IVA Recibidas (Q${liquidacionActual.retencionesIvaRecibidas.toFixed(2)})`
-                  : 'Régimen Informal: 0.00% de Impuesto SAT (Exento de IVA)'}
+                  ? L(
+                      `Impuesto 5% (${money(liquidacionActual.impuestoDeterminado)}) - Retenciones IVA Recibidas (${money(liquidacionActual.retencionesIvaRecibidas)})`,
+                      `5% Flat Tax (${money(liquidacionActual.impuestoDeterminado)}) - VAT Withholdings Received (${money(liquidacionActual.retencionesIvaRecibidas)})`
+                    )
+                  : L('Régimen Informal: 0.00% de Impuesto SAT (Exento de IVA)', 'Informal Regime: 0.00% Tax Authority Liability (VAT Exempt)')}
               </p>
             </div>
             <div className="text-right">
               <span className="text-xs font-bold text-slate-500 uppercase">
-                {tipoRegimen === 'exento' ? 'Total Tributario:' : `Total a Enterar a SAT (${liquidacionActual.codigoFormulario.split(' ')[0]}):`}
+                {tipoRegimen === 'exento'
+                  ? L('Total Tributario:', 'Total Tax Due:')
+                  : L(`Total a Enterar a SAT (${formShortCode}):`, `Total Payable to Tax Authority (${formShortCode}):`)}
               </span>
-              <p className="text-2xl font-black text-indigo-700">Q {liquidacionActual.totalAPagarSAT.toLocaleString('es-GT', { minimumFractionDigits: 2 })}</p>
+              <p className="text-2xl font-black text-indigo-700">{money(liquidacionActual.totalAPagarSAT)}</p>
             </div>
           </div>
 
           {/* Historial de Declaraciones Presentadas */}
           <div>
             <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-3">
-              Historial de Formularios Presentados ante SAT
+              {L('Historial de Formularios Presentados ante SAT', 'Tax Authority Filing History')}
             </h3>
             <div className="border border-slate-200 rounded-xl overflow-hidden">
               <table className="w-full text-left text-xs">
                 <thead className="bg-slate-50 text-slate-700 font-semibold border-b border-slate-200 text-[10px] uppercase">
                   <tr>
-                    <th className="py-2.5 px-3">Período Fiscal</th>
-                    <th className="py-2.5 px-3">No. Formulario SAT</th>
-                    <th className="py-2.5 px-3 text-right">Débito Fiscal</th>
-                    <th className="py-2.5 px-3 text-right">Crédito Fiscal</th>
-                    <th className="py-2.5 px-3 text-right">Impuesto Pagado</th>
-                    <th className="py-2.5 px-3 text-center">Estado</th>
+                    <th className="py-2.5 px-3">{L('Período Fiscal', 'Tax Period')}</th>
+                    <th className="py-2.5 px-3">{L('No. Formulario SAT', 'Tax Form #')}</th>
+                    <th className="py-2.5 px-3 text-right">{L('Débito Fiscal', 'Output VAT')}</th>
+                    <th className="py-2.5 px-3 text-right">{L('Crédito Fiscal', 'Input VAT Credit')}</th>
+                    <th className="py-2.5 px-3 text-right">{L('Impuesto Pagado', 'Tax Paid')}</th>
+                    <th className="py-2.5 px-3 text-center">{L('Estado', 'Status')}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {declaraciones.map((dec) => (
                     <tr key={dec.id_declaracion} className="hover:bg-slate-50/80">
                       <td className="py-2.5 px-3 font-semibold text-slate-800">
-                        Mes {dec.mes} / {dec.anio}
+                        {L('Mes', 'Month')} {dec.mes} / {dec.anio}
                       </td>
                       <td className="py-2.5 px-3 font-mono text-slate-600">{dec.numero_formulario_sat}</td>
-                      <td className="py-2.5 px-3 text-right text-slate-700 font-medium">Q{dec.iva_debito_fiscal.toFixed(2)}</td>
-                      <td className="py-2.5 px-3 text-right text-emerald-600 font-medium">Q{dec.iva_credito_fiscal.toFixed(2)}</td>
-                      <td className="py-2.5 px-3 text-right font-black text-indigo-700">Q{dec.impuesto_a_pagar.toFixed(2)}</td>
+                      <td className="py-2.5 px-3 text-right text-slate-700 font-medium">{money(dec.iva_debito_fiscal)}</td>
+                      <td className="py-2.5 px-3 text-right text-emerald-600 font-medium">{money(dec.iva_credito_fiscal)}</td>
+                      <td className="py-2.5 px-3 text-right font-black text-indigo-700">{money(dec.impuesto_a_pagar)}</td>
                       <td className="py-2.5 px-3 text-center">
                         <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700">
-                          Pagada SAT
+                          {L('Pagada SAT', 'Filed & Paid')}
                         </span>
                       </td>
                     </tr>
@@ -781,20 +844,20 @@ export default function Accounting({ currentEmpresa }: AccountingProps = {}) {
       {activeTab === 'retenciones' && (
         <div className="bg-white rounded-b-2xl border border-slate-200/80 shadow-sm overflow-hidden">
           <div className="p-4 border-b border-slate-100 flex items-center justify-between">
-            <h2 className="text-sm font-bold text-slate-800">Constancias de Retención SAT (IVA & ISR)</h2>
-            <span className="text-xs text-slate-500">{retenciones.length} Constancias Registradas</span>
+            <h2 className="text-sm font-bold text-slate-800">{L('Constancias de Retención SAT (IVA & ISR)', 'Tax Withholding Certificates (VAT & Income Tax)')}</h2>
+            <span className="text-xs text-slate-500">{retenciones.length} {L('Constancias Registradas', 'Certificates Recorded')}</span>
           </div>
 
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs text-slate-600">
               <thead className="bg-slate-50 text-slate-700 font-semibold uppercase text-[10px] tracking-wider border-b border-slate-200">
                 <tr>
-                  <th className="py-3 px-4">Fecha</th>
-                  <th className="py-3 px-4">No. Constancia / Documento</th>
-                  <th className="py-3 px-4">Tipo Retención</th>
-                  <th className="py-3 px-4">Entidad Retenedora / Colaborador</th>
-                  <th className="py-3 px-4">Concepto</th>
-                  <th className="py-3 px-4 text-right">Monto Retenido</th>
+                  <th className="py-3 px-4">{L('Fecha', 'Date')}</th>
+                  <th className="py-3 px-4">{L('No. Constancia / Documento', 'Certificate / Document #')}</th>
+                  <th className="py-3 px-4">{L('Tipo Retención', 'Withholding Type')}</th>
+                  <th className="py-3 px-4">{L('Entidad Retenedora / Colaborador', 'Withholding Entity / Employee')}</th>
+                  <th className="py-3 px-4">{L('Concepto', 'Description')}</th>
+                  <th className="py-3 px-4 text-right">{L('Monto Retenido', 'Amount Withheld')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -808,14 +871,17 @@ export default function Accounting({ currentEmpresa }: AccountingProps = {}) {
                         ret.tipo === 'isr_opcional' ? 'bg-purple-100 text-purple-700' :
                         'bg-amber-100 text-amber-700'
                       }`}>
-                        {ret.tipo === 'iva_recibida' ? 'Retención IVA Recibida' :
-                         ret.tipo === 'isr_opcional' ? 'Retención ISR 5%' : 'ISR Asalariados'}
+                        {ret.tipo === 'iva_recibida'
+                          ? L('Retención IVA Recibida', 'VAT Withholding Received')
+                          : ret.tipo === 'isr_opcional'
+                          ? L('Retención ISR 5%', '5% Income Tax Withholding')
+                          : L('ISR Asalariados', 'Employee Income Tax')}
                       </span>
                     </td>
                     <td className="py-3.5 px-4 font-medium text-slate-800">{ret.entidad_nombre}</td>
                     <td className="py-3.5 px-4 text-slate-500">{ret.descripcion}</td>
                     <td className="py-3.5 px-4 text-right font-black text-slate-900 text-sm">
-                      Q{ret.monto.toLocaleString('es-GT', { minimumFractionDigits: 2 })}
+                      {money(ret.monto)}
                     </td>
                   </tr>
                 ))}
@@ -829,8 +895,8 @@ export default function Accounting({ currentEmpresa }: AccountingProps = {}) {
         <div className="bg-white rounded-b-2xl border border-slate-200/80 shadow-sm p-6 space-y-6">
           <div className="flex items-center justify-between border-b border-slate-100 pb-4">
             <div>
-              <h2 className="text-base font-bold text-slate-800">Estados Financieros Ejecutivos</h2>
-              <p className="text-xs text-slate-500">Balance General y Estado de Resultados consolidado.</p>
+              <h2 className="text-base font-bold text-slate-800">{L('Estados Financieros Ejecutivos', 'Executive Financial Statements')}</h2>
+              <p className="text-xs text-slate-500">{L('Balance General y Estado de Resultados consolidado.', 'Consolidated Balance Sheet and Income Statement.')}</p>
             </div>
             <button
               type="button"
@@ -838,7 +904,7 @@ export default function Accounting({ currentEmpresa }: AccountingProps = {}) {
               className="px-4 py-2 bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 font-semibold text-xs rounded-xl flex items-center gap-2 shadow-sm"
             >
               <Printer className="w-4 h-4" />
-              Imprimir Balance
+              {L('Imprimir Balance', 'Print Statement')}
             </button>
           </div>
 
@@ -847,54 +913,54 @@ export default function Accounting({ currentEmpresa }: AccountingProps = {}) {
             <div className="p-5 bg-slate-50 rounded-2xl border border-slate-200 space-y-4">
               <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-2">
                 <Landmark className="w-4 h-4 text-indigo-600" />
-                Balance General (Situación Financiera)
+                {L('Balance General (Situación Financiera)', 'Balance Sheet (Financial Position)')}
               </h3>
               <div className="space-y-2 text-xs">
                 <div className="flex justify-between font-bold text-slate-800">
-                  <span>ACTIVO TOTAL:</span>
-                  <span>Q296,846.21</span>
+                  <span>{L('ACTIVO TOTAL:', 'TOTAL ASSETS:')}</span>
+                  <span>{money(296846.21)}</span>
                 </div>
                 <div className="pl-3 space-y-1 text-slate-600 text-[11px]">
                   <div className="flex justify-between">
-                    <span>• Disponible (Caja y Bancos):</span>
-                    <span>Q174,340.50</span>
+                    <span>• {L('Disponible (Caja y Bancos):', 'Cash & Bank Equivalents:')}</span>
+                    <span>{money(174340.50)}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span>• Exigible (Clientes y Cuentas por Cobrar):</span>
-                    <span>Q34,200.00</span>
+                    <span>• {L('Exigible (Clientes y Cuentas por Cobrar):', 'Accounts Receivable (Customers):')}</span>
+                    <span>{money(34200.00)}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span>• Realizable (Inventario):</span>
-                    <span>Q84,320.00</span>
+                    <span>• {L('Realizable (Inventario):', 'Merchandise Inventory:')}</span>
+                    <span>{money(84320.00)}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span>• Crédito Fiscal IVA:</span>
-                    <span>Q3,985.71</span>
+                    <span>• {L('Crédito Fiscal IVA:', 'Input VAT Tax Credit:')}</span>
+                    <span>{money(3985.71)}</span>
                   </div>
                 </div>
 
                 <div className="flex justify-between font-bold text-slate-800 border-t border-slate-200 pt-2">
-                  <span>PASIVO TOTAL:</span>
-                  <span>Q43,432.86</span>
+                  <span>{L('PASIVO TOTAL:', 'TOTAL LIABILITIES:')}</span>
+                  <span>{money(43432.86)}</span>
                 </div>
                 <div className="pl-3 space-y-1 text-slate-600 text-[11px]">
                   <div className="flex justify-between">
-                    <span>• Proveedores Comerciales:</span>
-                    <span>Q27,650.00</span>
+                    <span>• {L('Proveedores Comerciales:', 'Trade Accounts Payable:')}</span>
+                    <span>{money(27650.00)}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span>• Obligaciones Fiscales SAT:</span>
-                    <span>Q12,892.86</span>
+                    <span>• {L('Obligaciones Fiscales SAT:', 'Tax Authority Liabilities:')}</span>
+                    <span>{money(12892.86)}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span>• Cuotas Laborales IGSS:</span>
-                    <span>Q2,890.00</span>
+                    <span>• {L('Cuotas Laborales IGSS:', 'Social Security Contributions:')}</span>
+                    <span>{money(2890.00)}</span>
                   </div>
                 </div>
 
                 <div className="flex justify-between font-black text-indigo-700 border-t border-slate-300 pt-2 text-sm">
-                  <span>PATRIMONIO / CAPITAL CONTABLE:</span>
-                  <span>Q253,413.35</span>
+                  <span>{L('PATRIMONIO / CAPITAL CONTABLE:', 'SHAREHOLDERS EQUITY:')}</span>
+                  <span>{money(253413.35)}</span>
                 </div>
               </div>
             </div>
@@ -903,29 +969,29 @@ export default function Accounting({ currentEmpresa }: AccountingProps = {}) {
             <div className="p-5 bg-slate-50 rounded-2xl border border-slate-200 space-y-4">
               <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-2">
                 <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
-                Estado de Resultados (Pérdidas y Ganancias)
+                {L('Estado de Resultados (Pérdidas y Ganancias)', 'Income Statement (Profit & Loss)')}
               </h3>
               <div className="space-y-2 text-xs">
                 <div className="flex justify-between font-bold text-slate-800">
-                  <span>Ingresos por Ventas Netas:</span>
-                  <span className="text-emerald-700">Q95,357.14</span>
+                  <span>{L('Ingresos por Ventas Netas:', 'Net Sales Revenue:')}</span>
+                  <span className="text-emerald-700">{money(95357.14)}</span>
                 </div>
                 <div className="flex justify-between text-slate-600">
-                  <span>(-) Costo de Mercadería Vendida:</span>
-                  <span className="text-rose-600 font-semibold">(Q54,100.00)</span>
+                  <span>{L('(-) Costo de Mercadería Vendida:', '(-) Cost of Goods Sold (COGS):')}</span>
+                  <span className="text-rose-600 font-semibold">({money(54100.00)})</span>
                 </div>
                 <div className="flex justify-between font-bold text-slate-800 border-t border-slate-200 pt-1.5">
-                  <span>Utilidad Bruta en Ventas:</span>
-                  <span className="font-extrabold text-slate-900">Q41,257.14</span>
+                  <span>{L('Utilidad Bruta en Ventas:', 'Gross Profit:')}</span>
+                  <span className="font-extrabold text-slate-900">{money(41257.14)}</span>
                 </div>
 
                 <div className="flex justify-between text-slate-600 pt-1">
-                  <span>(-) Gastos de Operación y Sueldos:</span>
-                  <span className="text-rose-600 font-semibold">(Q19,750.00)</span>
+                  <span>{L('(-) Gastos de Operación y Sueldos:', '(-) Operating Expenses & Payroll:')}</span>
+                  <span className="text-rose-600 font-semibold">({money(19750.00)})</span>
                 </div>
                 <div className="flex justify-between font-black text-emerald-700 border-t border-slate-300 pt-2 text-sm">
-                  <span>UTILIDAD OPERACIONAL NETA:</span>
-                  <span>Q21,507.14</span>
+                  <span>{L('UTILIDAD OPERACIONAL NETA:', 'NET OPERATING INCOME:')}</span>
+                  <span>{money(21507.14)}</span>
                 </div>
               </div>
             </div>
@@ -940,7 +1006,7 @@ export default function Accounting({ currentEmpresa }: AccountingProps = {}) {
             <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/80">
               <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
                 <BookOpen className="w-5 h-5 text-indigo-600" />
-                Crear Asiento Contable (Libro Diario)
+                {L('Crear Asiento Contable (Libro Diario)', 'Create Journal Entry (General Journal)')}
               </h3>
               <button
                 type="button"
@@ -954,7 +1020,7 @@ export default function Accounting({ currentEmpresa }: AccountingProps = {}) {
             <form onSubmit={handleSavePartida} className="p-6 space-y-4 text-xs max-h-[75vh] overflow-y-auto">
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Fecha Asiento:</label>
+                  <label className="block font-semibold text-slate-700 mb-1">{L('Fecha Asiento:', 'Entry Date:')}</label>
                   <input
                     type="date"
                     required
@@ -964,11 +1030,11 @@ export default function Accounting({ currentEmpresa }: AccountingProps = {}) {
                   />
                 </div>
                 <div className="sm:col-span-2">
-                  <label className="block font-semibold text-slate-700 mb-1">Concepto General de la Partida:</label>
+                  <label className="block font-semibold text-slate-700 mb-1">{L('Concepto General de la Partida:', 'General Entry Description:')}</label>
                   <input
                     type="text"
                     required
-                    placeholder="Ej. Registro de ajuste contable por depreciaciones..."
+                    placeholder={L('Ej. Registro de ajuste contable por depreciaciones...', 'e.g. Monthly depreciation adjustment entry...')}
                     value={newPartida.concepto}
                     onChange={(e) => setNewPartida({ ...newPartida, concepto: e.target.value })}
                     className="w-full px-3 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none"
@@ -979,13 +1045,13 @@ export default function Accounting({ currentEmpresa }: AccountingProps = {}) {
               {/* Líneas Debe / Haber */}
               <div className="border-t border-slate-200 pt-4">
                 <div className="flex items-center justify-between mb-2">
-                  <h4 className="font-bold text-slate-800">Cuentas Contables y Movimientos</h4>
+                  <h4 className="font-bold text-slate-800">{L('Cuentas Contables y Movimientos', 'Ledger Accounts & Line Items')}</h4>
                   <button
                     type="button"
                     onClick={addDetalleRow}
                     className="text-indigo-600 font-bold hover:underline flex items-center gap-1"
                   >
-                    <Plus className="w-3.5 h-3.5" /> Agregar Cuenta
+                    <Plus className="w-3.5 h-3.5" /> {L('Agregar Cuenta', 'Add Account')}
                   </button>
                 </div>
 
@@ -1008,7 +1074,7 @@ export default function Accounting({ currentEmpresa }: AccountingProps = {}) {
                       <div className="w-32">
                         <input
                           type="text"
-                          placeholder="Glosa específica"
+                          placeholder={L('Glosa específica', 'Line memo')}
                           value={det.glosa}
                           onChange={(e) => handleDetalleChange(idx, 'glosa', e.target.value)}
                           className="w-full px-2 py-1.5 bg-white border border-slate-300 rounded-lg text-xs"
@@ -1018,7 +1084,7 @@ export default function Accounting({ currentEmpresa }: AccountingProps = {}) {
                         <input
                           type="number"
                           step="0.01"
-                          placeholder="Debe (Q)"
+                          placeholder={L(`Debe (${currencySymbol})`, `Debit (${currencySymbol})`)}
                           value={det.debe || ''}
                           onChange={(e) => handleDetalleChange(idx, 'debe', e.target.value)}
                           className="w-full px-2 py-1.5 bg-white border border-slate-300 rounded-lg text-xs text-right font-medium"
@@ -1028,7 +1094,7 @@ export default function Accounting({ currentEmpresa }: AccountingProps = {}) {
                         <input
                           type="number"
                           step="0.01"
-                          placeholder="Haber (Q)"
+                          placeholder={L(`Haber (${currencySymbol})`, `Credit (${currencySymbol})`)}
                           value={det.haber || ''}
                           onChange={(e) => handleDetalleChange(idx, 'haber', e.target.value)}
                           className="w-full px-2 py-1.5 bg-white border border-slate-300 rounded-lg text-xs text-right font-medium"
@@ -1058,22 +1124,24 @@ export default function Accounting({ currentEmpresa }: AccountingProps = {}) {
                   )}
                   <div>
                     <span className={`font-bold block ${estaCuadrada ? 'text-emerald-800' : 'text-rose-800'}`}>
-                      {estaCuadrada ? '¡Partida Balanceada y Cuadrada!' : 'Partida Descuadrada'}
+                      {estaCuadrada
+                        ? L('¡Partida Balanceada y Cuadrada!', 'Journal Entry Balanced!')
+                        : L('Partida Descuadrada', 'Unbalanced Entry')}
                     </span>
                     <span className="text-[11px] text-slate-500">
-                      Diferencia: Q{Math.abs(totalDebeNuevo - totalHaberNuevo).toFixed(2)}
+                      {L('Diferencia:', 'Difference:')} {money(Math.abs(totalDebeNuevo - totalHaberNuevo))}
                     </span>
                   </div>
                 </div>
 
                 <div className="flex items-center gap-6 text-right">
                   <div>
-                    <span className="text-[10px] text-slate-500 block uppercase font-bold">Total Debe</span>
-                    <span className="text-base font-black text-slate-800">Q{totalDebeNuevo.toFixed(2)}</span>
+                    <span className="text-[10px] text-slate-500 block uppercase font-bold">{L('Total Debe', 'Total Debit')}</span>
+                    <span className="text-base font-black text-slate-800">{money(totalDebeNuevo)}</span>
                   </div>
                   <div>
-                    <span className="text-[10px] text-slate-500 block uppercase font-bold">Total Haber</span>
-                    <span className="text-base font-black text-slate-800">Q{totalHaberNuevo.toFixed(2)}</span>
+                    <span className="text-[10px] text-slate-500 block uppercase font-bold">{L('Total Haber', 'Total Credit')}</span>
+                    <span className="text-base font-black text-slate-800">{money(totalHaberNuevo)}</span>
                   </div>
                 </div>
               </div>
@@ -1084,7 +1152,7 @@ export default function Accounting({ currentEmpresa }: AccountingProps = {}) {
                   onClick={() => setShowNewPartidaModal(false)}
                   className="px-4 py-2 border border-slate-200 text-slate-600 font-semibold rounded-xl"
                 >
-                  Cancelar
+                  {L('Cancelar', 'Cancel')}
                 </button>
                 <button
                   type="submit"
@@ -1093,7 +1161,7 @@ export default function Accounting({ currentEmpresa }: AccountingProps = {}) {
                     estaCuadrada ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-slate-400 cursor-not-allowed'
                   }`}
                 >
-                  Registrar en Libro Diario
+                  {L('Registrar en Libro Diario', 'Post to General Journal')}
                 </button>
               </div>
             </form>
@@ -1108,7 +1176,7 @@ export default function Accounting({ currentEmpresa }: AccountingProps = {}) {
             <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/80">
               <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
                 <Landmark className="w-4 h-4 text-indigo-600" />
-                Agregar Cuenta al Catálogo Contable
+                {L('Agregar Cuenta al Catálogo Contable', 'Add Account to Chart of Accounts')}
               </h3>
               <button
                 type="button"
@@ -1121,11 +1189,11 @@ export default function Accounting({ currentEmpresa }: AccountingProps = {}) {
 
             <form onSubmit={handleSaveCuenta} className="p-5 space-y-4 text-xs">
               <div>
-                <label className="block font-semibold text-slate-700 mb-1">Código de Cuenta:</label>
+                <label className="block font-semibold text-slate-700 mb-1">{L('Código de Cuenta:', 'Account Code:')}</label>
                 <input
                   type="text"
                   required
-                  placeholder="Ej. 1.1.10 o 6.1.05"
+                  placeholder={L('Ej. 1.1.10 o 6.1.05', 'e.g. 1.1.10 or 6.1.05')}
                   value={newCuenta.codigo}
                   onChange={(e) => setNewCuenta({ ...newCuenta, codigo: e.target.value })}
                   className="w-full px-3 py-2 font-mono font-bold text-slate-800 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none"
@@ -1133,11 +1201,11 @@ export default function Accounting({ currentEmpresa }: AccountingProps = {}) {
               </div>
 
               <div>
-                <label className="block font-semibold text-slate-700 mb-1">Nombre de la Cuenta:</label>
+                <label className="block font-semibold text-slate-700 mb-1">{L('Nombre de la Cuenta:', 'Account Name:')}</label>
                 <input
                   type="text"
                   required
-                  placeholder="Ej. Gastos de Combustible y Transporte"
+                  placeholder={L('Ej. Gastos de Combustible y Transporte', 'e.g. Fuel & Transportation Expenses')}
                   value={newCuenta.nombre}
                   onChange={(e) => setNewCuenta({ ...newCuenta, nombre: e.target.value })}
                   className="w-full px-3 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none"
@@ -1146,30 +1214,30 @@ export default function Accounting({ currentEmpresa }: AccountingProps = {}) {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Tipo / Naturaleza:</label>
+                  <label className="block font-semibold text-slate-700 mb-1">{L('Tipo / Naturaleza:', 'Type / Category:')}</label>
                   <select
                     value={newCuenta.tipo}
                     onChange={(e) => setNewCuenta({ ...newCuenta, tipo: e.target.value as any })}
                     className="w-full px-3 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none"
                   >
-                    <option value="activo">1. Activo</option>
-                    <option value="pasivo">2. Pasivo</option>
-                    <option value="capital">3. Capital</option>
-                    <option value="ingreso">4. Ingresos</option>
-                    <option value="costo">5. Costos</option>
-                    <option value="gasto">6. Gastos</option>
+                    <option value="activo">{L('1. Activo', '1. Asset')}</option>
+                    <option value="pasivo">{L('2. Pasivo', '2. Liability')}</option>
+                    <option value="capital">{L('3. Capital', '3. Equity')}</option>
+                    <option value="ingreso">{L('4. Ingresos', '4. Revenue')}</option>
+                    <option value="costo">{L('5. Costos', '5. Costs')}</option>
+                    <option value="gasto">{L('6. Gastos', '6. Expenses')}</option>
                   </select>
                 </div>
                 <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Nivel Jerárquico:</label>
+                  <label className="block font-semibold text-slate-700 mb-1">{L('Nivel Jerárquico:', 'Hierarchy Level:')}</label>
                   <select
                     value={newCuenta.nivel}
                     onChange={(e) => setNewCuenta({ ...newCuenta, nivel: Number(e.target.value) })}
                     className="w-full px-3 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none"
                   >
-                    <option value={1}>Nivel 1 (Mayor General)</option>
-                    <option value={2}>Nivel 2 (Sub-rubro)</option>
-                    <option value={3}>Nivel 3 (Detalle Operativo)</option>
+                    <option value={1}>{L('Nivel 1 (Mayor General)', 'Level 1 (General Ledger)')}</option>
+                    <option value={2}>{L('Nivel 2 (Sub-rubro)', 'Level 2 (Sub-account)')}</option>
+                    <option value={3}>{L('Nivel 3 (Detalle Operativo)', 'Level 3 (Operational Detail)')}</option>
                   </select>
                 </div>
               </div>
@@ -1180,13 +1248,13 @@ export default function Accounting({ currentEmpresa }: AccountingProps = {}) {
                   onClick={() => setShowNewCuentaModal(false)}
                   className="px-4 py-2 border border-slate-200 text-slate-600 font-semibold rounded-xl"
                 >
-                  Cancelar
+                  {L('Cancelar', 'Cancel')}
                 </button>
                 <button
                   type="submit"
                   className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-sm"
                 >
-                  Guardar Cuenta
+                  {L('Guardar Cuenta', 'Save Account')}
                 </button>
               </div>
             </form>
@@ -1201,7 +1269,7 @@ export default function Accounting({ currentEmpresa }: AccountingProps = {}) {
             <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/80">
               <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
                 <BookOpen className="w-5 h-5 text-indigo-600" />
-                Partida Contable No. {selectedPartida.numero}
+                {L('Partida Contable No.', 'Journal Entry #')} {selectedPartida.numero}
               </h3>
               <button
                 type="button"
@@ -1215,8 +1283,10 @@ export default function Accounting({ currentEmpresa }: AccountingProps = {}) {
             <div className="p-5 space-y-4 text-xs">
               <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-1">
                 <div className="flex justify-between text-slate-500">
-                  <span>Fecha: {selectedPartida.fecha}</span>
-                  {selectedPartida.referencia_tipo && <span>Ref: {selectedPartida.referencia_tipo} #{selectedPartida.referencia_id}</span>}
+                  <span>{L('Fecha:', 'Date:')} {selectedPartida.fecha}</span>
+                  {selectedPartida.referencia_tipo && (
+                    <span>Ref: {trRefType(selectedPartida.referencia_tipo)} {selectedPartida.referencia_id ? `#${selectedPartida.referencia_id}` : ''}</span>
+                  )}
                 </div>
                 <div className="font-semibold text-slate-800">{selectedPartida.concepto}</div>
               </div>
@@ -1225,9 +1295,9 @@ export default function Accounting({ currentEmpresa }: AccountingProps = {}) {
                 <table className="w-full text-left text-xs">
                   <thead className="bg-slate-100 font-semibold text-slate-700">
                     <tr>
-                      <th className="py-2 px-3">Cuenta</th>
-                      <th className="py-2 px-3 text-right">Debe</th>
-                      <th className="py-2 px-3 text-right">Haber</th>
+                      <th className="py-2 px-3">{L('Cuenta', 'Account')}</th>
+                      <th className="py-2 px-3 text-right">{L('Debe', 'Debit')}</th>
+                      <th className="py-2 px-3 text-right">{L('Haber', 'Credit')}</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
@@ -1237,16 +1307,16 @@ export default function Accounting({ currentEmpresa }: AccountingProps = {}) {
                           <span className="font-mono text-slate-500 block text-[10px]">{d.cuenta_codigo}</span>
                           <span className="font-bold text-slate-800">{d.cuenta_nombre}</span>
                         </td>
-                        <td className="py-2 px-3 text-right font-medium">{d.debe > 0 ? `Q${d.debe.toFixed(2)}` : '-'}</td>
-                        <td className="py-2 px-3 text-right font-medium">{d.haber > 0 ? `Q${d.haber.toFixed(2)}` : '-'}</td>
+                        <td className="py-2 px-3 text-right font-medium">{d.debe > 0 ? money(d.debe) : '-'}</td>
+                        <td className="py-2 px-3 text-right font-medium">{d.haber > 0 ? money(d.haber) : '-'}</td>
                       </tr>
                     ))}
                   </tbody>
                   <tfoot className="bg-slate-50 font-bold border-t border-slate-200 text-xs text-slate-900">
                     <tr>
-                      <td className="py-2 px-3 text-right">Totales:</td>
-                      <td className="py-2 px-3 text-right text-indigo-700 font-black">Q{selectedPartida.total_debe.toFixed(2)}</td>
-                      <td className="py-2 px-3 text-right text-indigo-700 font-black">Q{selectedPartida.total_haber.toFixed(2)}</td>
+                      <td className="py-2 px-3 text-right">{L('Totales:', 'Totals:')}</td>
+                      <td className="py-2 px-3 text-right text-indigo-700 font-black">{money(selectedPartida.total_debe)}</td>
+                      <td className="py-2 px-3 text-right text-indigo-700 font-black">{money(selectedPartida.total_haber)}</td>
                     </tr>
                   </tfoot>
                 </table>
@@ -1260,14 +1330,14 @@ export default function Accounting({ currentEmpresa }: AccountingProps = {}) {
                 className="px-4 py-2 bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 font-semibold text-xs rounded-xl flex items-center gap-2"
               >
                 <Printer className="w-4 h-4" />
-                Imprimir Partida
+                {L('Imprimir Partida', 'Print Entry')}
               </button>
               <button
                 type="button"
                 onClick={() => setSelectedPartida(null)}
                 className="px-4 py-2 bg-slate-800 text-white font-semibold text-xs rounded-xl"
               >
-                Cerrar
+                {L('Cerrar', 'Close')}
               </button>
             </div>
           </div>

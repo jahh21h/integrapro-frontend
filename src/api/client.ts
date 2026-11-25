@@ -21,6 +21,8 @@ apiClient.interceptors.request.use((config) => {
   if (activeEmpresaId) {
     config.headers['X-Empresa-ID'] = activeEmpresaId;
   }
+  const activeLang = localStorage.getItem('integrapro_lang') === 'en' ? 'en' : 'es';
+  config.headers['Accept-Language'] = activeLang;
   return config;
 }, (error) => {
   return Promise.reject(error);

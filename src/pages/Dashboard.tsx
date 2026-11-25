@@ -40,6 +40,7 @@ import { EmpresaSaaS } from '../types';
 import TimeFormatToggle from '../components/TimeFormatToggle';
 import { getTipoRegimenSAT, formatRegimenLabel } from '../utils/tax';
 import { dashboardApi, salesApi, inventoryApi, branchesApi } from '../api';
+import { useLanguage } from '../context/LanguageContext';
 
 ChartJS.register(
   CategoryScale,
@@ -97,18 +98,18 @@ const defaultEmpresasList: EmpresaSaaS[] = [
 ];
 
 const MESES = [
-  { idx: 0, nombre: 'Enero', abrv: 'Ene' },
-  { idx: 1, nombre: 'Febrero', abrv: 'Feb' },
-  { idx: 2, nombre: 'Marzo', abrv: 'Mar' },
-  { idx: 3, nombre: 'Abril', abrv: 'Abr' },
-  { idx: 4, nombre: 'Mayo', abrv: 'May' },
-  { idx: 5, nombre: 'Junio', abrv: 'Jun' },
-  { idx: 6, nombre: 'Julio', abrv: 'Jul' },
-  { idx: 7, nombre: 'Agosto', abrv: 'Ago' },
-  { idx: 8, nombre: 'Septiembre', abrv: 'Sep' },
-  { idx: 9, nombre: 'Octubre', abrv: 'Oct' },
-  { idx: 10, nombre: 'Noviembre', abrv: 'Nov' },
-  { idx: 11, nombre: 'Diciembre', abrv: 'Dic' },
+  { idx: 0, nombre: 'Enero', nombreEn: 'January', abrv: 'Ene', abrvEn: 'Jan' },
+  { idx: 1, nombre: 'Febrero', nombreEn: 'February', abrv: 'Feb', abrvEn: 'Feb' },
+  { idx: 2, nombre: 'Marzo', nombreEn: 'March', abrv: 'Mar', abrvEn: 'Mar' },
+  { idx: 3, nombre: 'Abril', nombreEn: 'April', abrv: 'Abr', abrvEn: 'Apr' },
+  { idx: 4, nombre: 'Mayo', nombreEn: 'May', abrv: 'May', abrvEn: 'May' },
+  { idx: 5, nombre: 'Junio', nombreEn: 'June', abrv: 'Jun', abrvEn: 'Jun' },
+  { idx: 6, nombre: 'Julio', nombreEn: 'July', abrv: 'Jul', abrvEn: 'Jul' },
+  { idx: 7, nombre: 'Agosto', nombreEn: 'August', abrv: 'Ago', abrvEn: 'Aug' },
+  { idx: 8, nombre: 'Septiembre', nombreEn: 'September', abrv: 'Sep', abrvEn: 'Sep' },
+  { idx: 9, nombre: 'Octubre', nombreEn: 'October', abrv: 'Oct', abrvEn: 'Oct' },
+  { idx: 10, nombre: 'Noviembre', nombreEn: 'November', abrv: 'Nov', abrvEn: 'Nov' },
+  { idx: 11, nombre: 'Diciembre', nombreEn: 'December', abrv: 'Dic', abrvEn: 'Dec' },
 ];
 
 interface DashboardProps {
@@ -124,6 +125,28 @@ export default function Dashboard({
   selectedEmpresaId = 1,
   onSelectEmpresa
 }: DashboardProps) {
+  const {
+    L,
+    isEn,
+    money,
+    currencySymbol,
+    currencyCode,
+    locale,
+    taxIdLabel,
+    trRegime,
+    trTaxId,
+  } = useLanguage();
+
+  const trBranchName = (raw?: string | null) => {
+    const s = String(raw || '');
+    if (s === 'Sucursal Principal - Tienda & Bodega Central') {
+      return L('Sucursal Principal - Tienda & Bodega Central', 'Main Branch - Store & Central Warehouse');
+    }
+    if (s === 'Sucursal Principal') return L('Sucursal Principal', 'Main Branch');
+    if (s === 'Sucursal Demo Principal') return L('Sucursal Demo Principal', 'Main Demo Branch');
+    return isEn ? s.replace(/^Sucursal\b/i, 'Branch') : s;
+  };
+
   const [activeEmpresaId, setActiveEmpresaId] = useState<number>(selectedEmpresaId);
   // Permite simular interactivamente el caso de tener solo 1 empresa configurada vs varias empresas
   const [singleCompanyMode, setSingleCompanyMode] = useState<boolean>(false);
@@ -595,26 +618,26 @@ export default function Dashboard({
   // DETERMINACIÓN DINÁMICA DE LOS MESES SEGÚN EL FILTRO TEMPORAL
   // Índices: 0: Ene, 1: Feb ... 10: Nov, 11: Dic
   let monthIndices = [10]; // Por defecto Noviembre 2026 (mes actual en curso)
-  let periodTitle = 'Mes de Noviembre 2026';
+  let periodTitle = L('Mes de Noviembre 2026', 'November 2026');
 
   if (dateRange.preset.startsWith('mes_') && dateRange.preset !== 'mes_actual') {
     const mIdx = parseInt(dateRange.preset.replace('mes_', ''), 10);
     if (!isNaN(mIdx) && mIdx >= 0 && mIdx <= 11) {
       monthIndices = [mIdx];
-      periodTitle = `Mes de ${MESES[mIdx].nombre} 2026`;
+      periodTitle = L(`Mes de ${MESES[mIdx].nombre} 2026`, `${MESES[mIdx].nombreEn} 2026`);
     }
   } else if (dateRange.preset === 'mes_actual') {
     monthIndices = [10];
-    periodTitle = 'Mes de Noviembre 2026';
+    periodTitle = L('Mes de Noviembre 2026', 'November 2026');
   } else if (dateRange.preset === 'trimestre') {
     monthIndices = [8, 9, 10]; // Septiembre, Octubre, Noviembre
-    periodTitle = 'Último Trimestre (Septiembre - Noviembre 2026)';
+    periodTitle = L('Último Trimestre (Septiembre - Noviembre 2026)', 'Last Quarter (September - November 2026)');
   } else if (dateRange.preset === 'semestre') {
     monthIndices = [5, 6, 7, 8, 9, 10]; // Junio a Noviembre
-    periodTitle = 'Semestre Anterior (Junio - Noviembre 2026)';
+    periodTitle = L('Semestre Anterior (Junio - Noviembre 2026)', 'Previous Semester (June - November 2026)');
   } else if (dateRange.preset === 'anio') {
     monthIndices = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
-    periodTitle = 'Año Fiscal Completo 2026';
+    periodTitle = L('Año Fiscal Completo 2026', 'Full Fiscal Year 2026');
   } else if (dateRange.preset === 'custom') {
     const startM = new Date(dateRange.startDate).getMonth();
     const endM = new Date(dateRange.endDate).getMonth();
@@ -624,7 +647,10 @@ export default function Dashboard({
     for (let i = minM; i <= maxM; i++) {
       monthIndices.push(i);
     }
-    periodTitle = `Rango Filtrado (${dateRange.startDate} al ${dateRange.endDate})`;
+    periodTitle = L(
+      `Rango Filtrado (${dateRange.startDate} al ${dateRange.endDate})`,
+      `Filtered Range (${dateRange.startDate} to ${dateRange.endDate})`
+    );
   }
 
   // CÁLCULOS DINÁMICOS ACUMULADOS EN BASE AL FILTRO Y EMPRESA SELECCIONADA
@@ -639,7 +665,7 @@ export default function Dashboard({
   const crecimientoOrdenesPct = pastYearOrders > 0 ? (((activeOrdenes - pastYearOrders) / pastYearOrders) * 100).toFixed(1) : '8.2';
 
   // Impuestos Dinámicos según Régimen Tributario de la Empresa (ImpuestosStatsWidget)
-  const regimenDisplay = formatRegimenLabel(currentEmpresa.regimen);
+  const regimenDisplay = isEn ? trRegime(currentEmpresa.regimen) : formatRegimenLabel(currentEmpresa.regimen);
   const tipoRegimen = getTipoRegimenSAT(currentEmpresa.regimen);
   const esGeneral = tipoRegimen === 'general';
   const esPequeno = tipoRegimen === 'pequeno_contribuyente';
@@ -660,11 +686,14 @@ export default function Dashboard({
 
   // 1. Gráfica de Ventas Mensuales (VentasMensualesChartWidget / PruebaVentasChart)
   const lineChartData = {
-    labels: ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'],
+    labels: MESES.map((m) => (isEn ? m.abrvEn : m.abrv)),
     datasets: [
       {
         fill: true,
-        label: `Ventas 2026 (Q) • ${currentEmpresa.nombre.split(' ')[0]}`,
+        label: L(
+          `Ventas 2026 (${currencySymbol}) • ${currentEmpresa.nombre.split(' ')[0]}`,
+          `2026 Sales (${currencySymbol}) • ${currentEmpresa.nombre.split(' ')[0]}`
+        ),
         data: currentLedger.monthlySales2026,
         borderColor: '#4f46e5',
         backgroundColor: 'rgba(79, 70, 229, 0.12)',
@@ -676,7 +705,7 @@ export default function Dashboard({
       },
       {
         fill: false,
-        label: 'Año Anterior 2025 (Q)',
+        label: L(`Año Anterior 2025 (${currencySymbol})`, `Prior Year 2025 (${currencySymbol})`),
         data: currentLedger.monthlySales2025,
         borderColor: '#94a3b8',
         borderDash: [5, 5],
@@ -701,12 +730,15 @@ export default function Dashboard({
         titleFont: { size: 12, weight: 700 },
         bodyFont: { size: 12 },
         cornerRadius: 8,
+        callbacks: {
+          label: (context: any) => `${context.dataset.label}: ${money(Number(context.raw) || 0)}`
+        }
       }
     },
     scales: {
       y: {
         grid: { color: 'rgba(226, 232, 240, 0.6)' },
-        ticks: { callback: (value: any) => `Q${Number(value) / 1000}k`, font: { size: 10 } }
+        ticks: { callback: (value: any) => `${currencySymbol}${Number(value) / 1000}k`, font: { size: 10 } }
       },
       x: { grid: { display: false }, ticks: { font: { size: 10 } } }
     }
@@ -714,10 +746,10 @@ export default function Dashboard({
 
   // 2. Gráfica Comparativa Período Seleccionado vs Promedio Semestral (ComparacionMesVsSemestreWidget)
   const comparisonBarData = {
-    labels: ['Promedio Semestre Anterior', `${periodTitle.split('(')[0]}`],
+    labels: [L('Promedio Semestre Anterior', 'Prior Semester Avg.'), `${periodTitle.split('(')[0].trim()}`],
     datasets: [
       {
-        label: 'Número de Ventas / Transacciones',
+        label: L('Número de Ventas / Transacciones', 'Number of Sales / Transactions'),
         data: [Math.round(semesterAvgOrders), activeOrdenes],
         backgroundColor: 'rgba(54, 162, 235, 0.8)',
         borderColor: 'rgb(54, 162, 235)',
@@ -726,7 +758,7 @@ export default function Dashboard({
         yAxisID: 'y'
       },
       {
-        label: 'Ingresos Totales (Miles de Quetzales)',
+        label: L('Ingresos Totales (Miles de Quetzales)', `Total Revenue (Thousands ${currencyCode})`),
         data: [
           parseFloat((semesterAvgSales / 1000).toFixed(2)),
           parseFloat((activeVentas / 1000).toFixed(2))
@@ -752,9 +784,9 @@ export default function Dashboard({
         callbacks: {
           label: (context: any) => {
             if (context.datasetIndex === 1) {
-              return `Ingresos: Q ${(context.raw * 1000).toLocaleString('es-GT', { minimumFractionDigits: 2 })}`;
+              return `${L('Ingresos:', 'Revenue:')} ${money((Number(context.raw) || 0) * 1000)}`;
             }
-            return `Transacciones: ${context.raw} ventas`;
+            return `${L('Transacciones:', 'Transactions:')} ${context.raw} ${L('ventas', 'sales')}`;
           }
         }
       }
@@ -765,14 +797,14 @@ export default function Dashboard({
         position: 'left' as const,
         grid: { color: 'rgba(226, 232, 240, 0.6)' },
         ticks: { font: { size: 10 } },
-        title: { display: true, text: 'Ventas', font: { size: 10, weight: 700 } }
+        title: { display: true, text: L('Ventas', 'Sales'), font: { size: 10, weight: 700 } }
       },
       y1: {
         type: 'linear' as const,
         position: 'right' as const,
         grid: { drawOnChartArea: false },
-        ticks: { callback: (v: any) => `Q${v}k`, font: { size: 10 } },
-        title: { display: true, text: 'Miles Q', font: { size: 10, weight: 700 } }
+        ticks: { callback: (v: any) => `${currencySymbol}${v}k`, font: { size: 10 } },
+        title: { display: true, text: L('Miles Q', `Thousands ${currencySymbol}`), font: { size: 10, weight: 700 } }
       },
       x: { grid: { display: false }, ticks: { font: { size: 10, weight: 600 } } }
     }
@@ -785,8 +817,14 @@ export default function Dashboard({
 
   const doughnutData = {
     labels: [
-      `Promedio Semestral (${Math.round(semesterAvgOrders)} ventas • ${pctSemester}%)`,
-      `Período Seleccionado (${activeOrdenes} ventas • ${pctSelected}%)`
+      L(
+        `Promedio Semestral (${Math.round(semesterAvgOrders)} ventas • ${pctSemester}%)`,
+        `Semester Avg. (${Math.round(semesterAvgOrders)} sales • ${pctSemester}%)`
+      ),
+      L(
+        `Período Seleccionado (${activeOrdenes} ventas • ${pctSelected}%)`,
+        `Selected Period (${activeOrdenes} sales • ${pctSelected}%)`
+      )
     ],
     datasets: [
       {
@@ -820,10 +858,10 @@ export default function Dashboard({
 
   // 4. Gráfica de Inventario por Sucursal Dinámico (InventarioPorSucursalChartWidget)
   const branchInventoryBarData = {
-    labels: currentLedger.sucursales.map(s => `${s.nombre.split('-')[0].trim()} (${s.stock} unid • Q${(s.valorCosto / 1000).toFixed(1)}k)`),
+    labels: currentLedger.sucursales.map(s => `${trBranchName(s.nombre).split('-')[0].trim()} (${s.stock} ${L('unid', 'units')} • ${currencySymbol}${(s.valorCosto / 1000).toFixed(1)}k)`),
     datasets: [
       {
-        label: 'Stock Físico (Unidades)',
+        label: L('Stock Físico (Unidades)', 'Physical Stock (Units)'),
         data: currentLedger.sucursales.map(s => s.stock),
         backgroundColor: 'rgba(99, 102, 241, 0.8)',
         borderColor: 'rgb(99, 102, 241)',
@@ -831,7 +869,7 @@ export default function Dashboard({
         borderRadius: 8
       },
       {
-        label: 'Valor en Quetzales (Costo / 100)',
+        label: L('Valor en Quetzales (Costo / 100)', `Value in ${currencyCode} (Cost / 100)`),
         data: currentLedger.sucursales.map(s => Math.round(s.valorCosto / 100)),
         backgroundColor: 'rgba(245, 158, 11, 0.8)',
         borderColor: 'rgb(245, 158, 11)',
@@ -853,9 +891,9 @@ export default function Dashboard({
         callbacks: {
           label: (context: any) => {
             if (context.datasetIndex === 1) {
-              return `Valor Costo: Q ${(context.raw * 100).toLocaleString('es-GT', { minimumFractionDigits: 2 })}`;
+              return `${L('Valor Costo:', 'Cost Value:')} ${money((Number(context.raw) || 0) * 100)}`;
             }
-            return `Stock: ${context.raw} unidades`;
+            return `${L('Stock:', 'Stock:')} ${context.raw} ${L('unidades', 'units')}`;
           }
         }
       }
@@ -884,21 +922,21 @@ export default function Dashboard({
               <div>
                 <div className="flex items-center gap-2">
                   <span className="text-[10px] font-extrabold uppercase tracking-wider text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-100">
-                    Empresa Seleccionada
+                    {L('Empresa Seleccionada', 'Selected Company')}
                   </span>
                   <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                    En Operación
+                    {L('En Operación', 'Active')}
                   </span>
                   <span className="text-xs text-slate-400 font-medium">
-                    ({effectiveEmpresas.length} empresas disponibles)
+                    ({effectiveEmpresas.length} {L('empresas disponibles', 'companies available')})
                   </span>
                 </div>
                 <h2 className="text-base font-black text-slate-900 mt-0.5">
                   {currentEmpresa.nombre}
                 </h2>
                 <p className="text-xs text-slate-500 font-medium">
-                  Razón Social: <span className="text-slate-700">{currentEmpresa.razon_social}</span> • NIT: <span className="font-mono font-bold text-slate-700">{currentEmpresa.nit}</span> • {regimenDisplay}
+                  {L('Razón Social:', 'Legal Name:')} <span className="text-slate-700">{currentEmpresa.razon_social}</span> • {taxIdLabel}: <span className="font-mono font-bold text-slate-700">{trTaxId(currentEmpresa.nit)}</span> • {regimenDisplay}
                 </p>
               </div>
             </div>
@@ -907,7 +945,7 @@ export default function Dashboard({
             <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
               <div className="relative w-full sm:w-auto">
                 <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">
-                  Seleccionar Empresa Activa:
+                  {L('Seleccionar Empresa Activa:', 'Select Active Company:')}
                 </label>
                 <div className="relative">
                   <select
@@ -917,7 +955,7 @@ export default function Dashboard({
                   >
                     {effectiveEmpresas.map((emp) => (
                       <option key={emp.id} value={emp.id}>
-                        {emp.nombre} (NIT: {emp.nit})
+                        {emp.nombre} ({taxIdLabel}: {trTaxId(emp.nit)})
                       </option>
                     ))}
                   </select>
@@ -929,10 +967,10 @@ export default function Dashboard({
               <button
                 type="button"
                 onClick={() => setSingleCompanyMode(true)}
-                title="Probar comportamiento cuando el sistema solo tiene 1 empresa registrada"
+                title={L('Probar comportamiento cuando el sistema solo tiene 1 empresa registrada', 'Preview single-company workspace behavior')}
                 className="self-end sm:self-auto mt-auto sm:mt-5 px-2.5 py-2 text-[10px] font-semibold text-slate-500 hover:text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors border border-slate-200 flex items-center gap-1 cursor-pointer"
               >
-                <span>Probar: 1 sola empresa</span>
+                <span>{L('Probar: 1 sola empresa', 'Preview: Single company')}</span>
               </button>
             </div>
           </div>
@@ -946,25 +984,25 @@ export default function Dashboard({
               <div>
                 <div className="flex items-center gap-2">
                   <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">
-                    Empresa Activa
+                    {L('Empresa Activa', 'Active Company')}
                   </span>
                   <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
                     <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                    Única Empresa Configurada
+                    {L('Única Empresa Configurada', 'Single Configured Company')}
                   </span>
                 </div>
                 <h2 className="text-base font-black text-slate-900 mt-0.5">
                   {currentEmpresa.nombre}
                 </h2>
                 <p className="text-xs text-slate-500 font-medium">
-                  Razón Social: <span className="text-slate-700">{currentEmpresa.razon_social}</span> • NIT: <span className="font-mono font-bold text-slate-700">{currentEmpresa.nit}</span> • {regimenDisplay}
+                  {L('Razón Social:', 'Legal Name:')} <span className="text-slate-700">{currentEmpresa.razon_social}</span> • {taxIdLabel}: <span className="font-mono font-bold text-slate-700">{trTaxId(currentEmpresa.nit)}</span> • {regimenDisplay}
                 </p>
               </div>
             </div>
 
             <div className="flex items-center gap-2 self-start sm:self-auto">
               <span className="text-xs font-mono font-bold text-slate-700 bg-slate-100 px-3 py-1.5 rounded-xl border border-slate-200">
-                NIT: {currentEmpresa.nit}
+                {taxIdLabel}: {trTaxId(currentEmpresa.nit)}
               </span>
               {/* Botón para volver a modo multi-empresa */}
               {singleCompanyMode && (
@@ -974,7 +1012,7 @@ export default function Dashboard({
                   className="px-2.5 py-1.5 text-[10px] font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 rounded-xl transition-colors border border-indigo-200 flex items-center gap-1 cursor-pointer"
                 >
                   <Sparkles className="w-3 h-3" />
-                  <span>Restaurar multi-empresa (3)</span>
+                  <span>{L('Restaurar multi-empresa (3)', 'Restore multi-company (3)')}</span>
                 </button>
               )}
             </div>
@@ -988,10 +1026,13 @@ export default function Dashboard({
           <div>
             <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2">
               <Sparkles className="w-5 h-5 text-indigo-600" />
-              Dashboard Ejecutivo & Inteligencia de Negocios
+              {L('Dashboard Ejecutivo & Inteligencia de Negocios', 'Executive Dashboard & Business Intelligence')}
             </h1>
             <p className="text-xs text-slate-500 font-medium mt-0.5">
-              Consolidación en tiempo real • {effectiveEmpresas.length} empresa(s) • Todas las sucursales
+              {L(
+                `Consolidación en tiempo real • ${effectiveEmpresas.length} empresa(s) • Todas las sucursales`,
+                `Real-time consolidation • ${effectiveEmpresas.length} company(ies) • All branches`
+              )}
             </p>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
@@ -1007,7 +1048,7 @@ export default function Dashboard({
                   }`}
                 >
                   <Video className="w-3.5 h-3.5" />
-                  <span>Ventas TikTok Live</span>
+                  <span>{L('Ventas TikTok Live', 'TikTok Live Sales')}</span>
                 </button>
                 <button
                   type="button"
@@ -1019,14 +1060,14 @@ export default function Dashboard({
                   }`}
                 >
                   <BarChart3 className="w-3.5 h-3.5" />
-                  <span>Analítica General ERP</span>
+                  <span>{L('Analítica General ERP', 'General ERP Analytics')}</span>
                 </button>
               </div>
             )}
             {isLiveSeller && (
               <div className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-rose-500/10 via-pink-500/10 to-purple-500/10 border border-rose-300 rounded-xl text-rose-800 text-xs font-black shadow-xs">
                 <Video className="w-3.5 h-3.5 text-rose-600 animate-pulse" />
-                <span>Resultados de Venta en Vivo & Canastas</span>
+                <span>{L('Resultados de Venta en Vivo & Canastas', 'Live Sales & Carts Results')}</span>
               </div>
             )}
             <TimeFormatToggle variant="badge" />
@@ -1036,14 +1077,14 @@ export default function Dashboard({
               className="px-3.5 py-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 shadow-sm transition-all flex items-center gap-2 cursor-pointer"
             >
               <Download className="w-3.5 h-3.5 text-slate-500" />
-              <span>Exportar PDF</span>
+              <span>{L('Exportar PDF', 'Export PDF')}</span>
             </button>
             <button 
               type="button" 
               className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white rounded-xl text-xs font-bold shadow-md shadow-indigo-600/20 transition-all flex items-center gap-2 cursor-pointer"
             >
               <PlusCircle className="w-4 h-4" />
-              <span>Nueva Venta Rápida</span>
+              <span>{L('Nueva Venta Rápida', 'Quick New Sale')}</span>
             </button>
           </div>
         </div>
@@ -1052,7 +1093,7 @@ export default function Dashboard({
         <div className="pt-3 border-t border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1">
-              <Calendar className="w-3.5 h-3.5 text-indigo-500" /> Período:
+              <Calendar className="w-3.5 h-3.5 text-indigo-500" /> {L('Período:', 'Period:')}
             </span>
             <button
               type="button"
@@ -1063,7 +1104,7 @@ export default function Dashboard({
                   : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
               }`}
             >
-              Mes Actual (Nov)
+              {L('Mes Actual (Nov)', 'Current Month (Nov)')}
             </button>
             <button
               type="button"
@@ -1074,7 +1115,7 @@ export default function Dashboard({
                   : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
               }`}
             >
-              Último Trimestre
+              {L('Último Trimestre', 'Last Quarter')}
             </button>
             <button
               type="button"
@@ -1085,7 +1126,7 @@ export default function Dashboard({
                   : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
               }`}
             >
-              Semestre Anterior
+              {L('Semestre Anterior', 'Prior Semester')}
             </button>
             <button
               type="button"
@@ -1096,7 +1137,7 @@ export default function Dashboard({
                   : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
               }`}
             >
-              Año Completo 2026
+              {L('Año Completo 2026', 'Full Year 2026')}
             </button>
 
             {/* Selector Dinámico de Cualquier Mes Individual */}
@@ -1121,11 +1162,13 @@ export default function Dashboard({
                 }`}
               >
                 <option value="" className="bg-white text-slate-800">
-                  {dateRange.preset.startsWith('mes_') && dateRange.preset !== 'mes_actual' ? periodTitle : 'Explorar Mes Individual...'}
+                  {dateRange.preset.startsWith('mes_') && dateRange.preset !== 'mes_actual'
+                    ? periodTitle
+                    : L('Explorar Mes Individual...', 'Explore Individual Month...')}
                 </option>
                 {MESES.map((m) => (
                   <option key={m.idx} value={`mes_${m.idx}`} className="bg-white text-slate-800">
-                    Mes: {m.nombre} 2026
+                    {L(`Mes: ${m.nombre} 2026`, `Month: ${m.nombreEn} 2026`)}
                   </option>
                 ))}
               </select>
@@ -1137,7 +1180,7 @@ export default function Dashboard({
 
           <div className="flex items-center gap-2">
             <div className="flex items-center gap-1.5 bg-slate-50 px-2.5 py-1 rounded-xl border border-slate-200">
-              <span className="text-[10px] text-slate-400 font-bold">Desde:</span>
+              <span className="text-[10px] text-slate-400 font-bold">{L('Desde:', 'From:')}</span>
               <input
                 type="date"
                 value={dateRange.startDate}
@@ -1146,7 +1189,7 @@ export default function Dashboard({
               />
             </div>
             <div className="flex items-center gap-1.5 bg-slate-50 px-2.5 py-1 rounded-xl border border-slate-200">
-              <span className="text-[10px] text-slate-400 font-bold">Hasta:</span>
+              <span className="text-[10px] text-slate-400 font-bold">{L('Hasta:', 'To:')}</span>
               <input
                 type="date"
                 value={dateRange.endDate}
@@ -1162,14 +1205,17 @@ export default function Dashboard({
           <div className="flex items-center gap-2">
             <span className="inline-flex items-center gap-1.5 text-[11px] font-extrabold text-indigo-700 bg-indigo-50/80 px-2.5 py-1 rounded-lg border border-indigo-100">
               <span className="w-1.5 h-1.5 rounded-full bg-indigo-600 animate-ping" />
-              Datos Calculados: {periodTitle}
+              {L('Datos Calculados:', 'Calculated Data:')} {periodTitle}
             </span>
             <span className="text-[11px] text-slate-400 font-medium hidden sm:inline">
-              Consolidación dinámica de {monthIndices.length} {monthIndices.length === 1 ? 'mes' : 'meses'} para {currentEmpresa.nombre}
+              {L(
+                `Consolidación dinámica de ${monthIndices.length} ${monthIndices.length === 1 ? 'mes' : 'meses'} para ${currentEmpresa.nombre}`,
+                `Dynamic consolidation of ${monthIndices.length} ${monthIndices.length === 1 ? 'month' : 'months'} for ${currentEmpresa.nombre}`
+              )}
             </span>
           </div>
           <span className="text-[11px] text-slate-500 font-medium">
-            Régimen: <strong className="text-slate-700">{regimenDisplay}</strong>
+            {L('Régimen:', 'Tax Regime:')} <strong className="text-slate-700">{regimenDisplay}</strong>
           </span>
         </div>
       </div>
@@ -1184,7 +1230,9 @@ export default function Dashboard({
         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm relative overflow-hidden group hover:border-indigo-300 transition-all">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-              {dateRange.preset.startsWith('mes_') || dateRange.preset === 'mes_actual' ? 'Ventas del Mes' : 'Ventas del Período'}
+              {dateRange.preset.startsWith('mes_') || dateRange.preset === 'mes_actual'
+                ? L('Ventas del Mes', 'Monthly Sales')
+                : L('Ventas del Período', 'Period Sales')}
             </span>
             <div className="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
               <DollarSign className="w-4 h-4" />
@@ -1192,7 +1240,7 @@ export default function Dashboard({
           </div>
           <div className="mt-2 flex items-baseline gap-2">
             <span className="text-2xl font-black text-slate-900">
-              Q {activeVentas.toLocaleString('es-GT', { minimumFractionDigits: 2 })}
+              {money(activeVentas)}
             </span>
           </div>
           <div className="mt-3 flex items-center gap-1.5 text-xs font-semibold">
@@ -1201,21 +1249,21 @@ export default function Dashboard({
             }`}>
               <ArrowUpRight className="w-3 h-3 mr-0.5" /> {Number(crecimientoPorcentaje) >= 0 ? `+${crecimientoPorcentaje}%` : `${crecimientoPorcentaje}%`}
             </span>
-            <span className="text-slate-400 text-[11px] font-normal">vs. mismo período 2025</span>
+            <span className="text-slate-400 text-[11px] font-normal">{L('vs. mismo período 2025', 'vs. same period 2025')}</span>
           </div>
         </div>
 
         {/* KPI 2: Transacciones / Órdenes */}
         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm relative overflow-hidden group hover:border-indigo-300 transition-all">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Órdenes Realizadas</span>
+            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">{L('Órdenes Realizadas', 'Orders Completed')}</span>
             <div className="w-8 h-8 rounded-xl bg-sky-50 text-sky-600 flex items-center justify-center">
               <Receipt className="w-4 h-4" />
             </div>
           </div>
           <div className="mt-2 flex items-baseline gap-2">
             <span className="text-2xl font-black text-slate-900">
-              {activeOrdenes.toLocaleString('es-GT')}
+              {activeOrdenes.toLocaleString(locale)}
             </span>
           </div>
           <div className="mt-3 flex items-center gap-1.5 text-xs font-semibold">
@@ -1224,27 +1272,27 @@ export default function Dashboard({
             }`}>
               <ArrowUpRight className="w-3 h-3 mr-0.5" /> {Number(crecimientoOrdenesPct) >= 0 ? `+${crecimientoOrdenesPct}%` : `${crecimientoOrdenesPct}%`}
             </span>
-            <span className="text-slate-400 text-[11px] font-normal">ticket prom. Q{activeTicketPromedio.toFixed(2)}</span>
+            <span className="text-slate-400 text-[11px] font-normal">{L('ticket prom.', 'avg. ticket')} {money(activeTicketPromedio)}</span>
           </div>
         </div>
 
         {/* KPI 3: Stock Crítico / Alertas */}
         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm relative overflow-hidden group hover:border-amber-300 transition-all">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Stock Crítico</span>
+            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">{L('Stock Crítico', 'Critical Stock')}</span>
             <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
               <AlertTriangle className="w-4 h-4" />
             </div>
           </div>
           <div className="mt-2 flex items-baseline gap-2">
             <span className="text-2xl font-black text-amber-600">
-              {currentLedger.demandProducts.length} Ítems
+              {currentLedger.demandProducts.length} {L('Ítems', 'Items')}
             </span>
           </div>
           <div className="mt-3 flex items-center gap-1.5 text-xs font-semibold text-amber-700">
             <span className="inline-block w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
             <span className="text-[11px]">
-              Déficit total: {currentLedger.demandProducts.reduce((a, b) => a + b.deficit, 0)} unidades
+              {L('Déficit total:', 'Total deficit:')} {currentLedger.demandProducts.reduce((a, b) => a + b.deficit, 0)} {L('unidades', 'units')}
             </span>
           </div>
         </div>
@@ -1252,18 +1300,18 @@ export default function Dashboard({
         {/* KPI 4: Efectivo en Caja General */}
         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm relative overflow-hidden group hover:border-indigo-300 transition-all">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Caja General Activa</span>
+            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">{L('Caja General Activa', 'Active Cash Register')}</span>
             <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
               <TrendingUp className="w-4 h-4" />
             </div>
           </div>
           <div className="mt-2 flex items-baseline gap-2">
             <span className="text-2xl font-black text-slate-900">
-              Q {currentLedger.efectivoCaja.toLocaleString('es-GT', { minimumFractionDigits: 2 })}
+              {money(currentLedger.efectivoCaja)}
             </span>
           </div>
           <div className="mt-3 flex items-center gap-1.5 text-xs font-medium text-slate-400">
-            <span className="text-slate-700 font-semibold">{currentLedger.sucursales.length} sucursales</span> operando
+            <span className="text-slate-700 font-semibold">{currentLedger.sucursales.length} {L('sucursales', 'branches')}</span> {L('operando', 'operating')}
           </div>
         </div>
       </div>
@@ -1272,29 +1320,29 @@ export default function Dashboard({
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="bg-gradient-to-br from-white to-slate-50 p-5 rounded-2xl border border-slate-200 shadow-sm">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Total Facturado ({periodTitle.split('(')[0].trim()})</span>
+            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">{L('Total Facturado', 'Total Invoiced')} ({periodTitle.split('(')[0].trim()})</span>
             <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center">
               <DollarSign className="w-4 h-4" />
             </div>
           </div>
           <p className="text-2xl font-black text-slate-900 mt-2">
-            Q {activeVentas.toLocaleString('es-GT', { minimumFractionDigits: 2 })}
+            {money(activeVentas)}
           </p>
           <p className="text-xs text-slate-400 mt-1">
-            Base imponible cálculo tributario: <strong className="text-slate-700">Q {baseImponible.toLocaleString('es-GT', { minimumFractionDigits: 2 })}</strong>
+            {L('Base imponible cálculo tributario:', 'Taxable base for calculation:')} <strong className="text-slate-700">{money(baseImponible)}</strong>
           </p>
         </div>
 
         <div className="bg-gradient-to-br from-white to-slate-50 p-5 rounded-2xl border border-slate-200 shadow-sm">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Régimen Tributario SAT</span>
+            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">{L('Régimen Tributario SAT', 'Tax Regime')}</span>
             <div className="w-8 h-8 rounded-xl bg-slate-100 text-slate-700 flex items-center justify-center">
               <Building2 className="w-4 h-4" />
             </div>
           </div>
           <p className="text-xl font-black text-slate-900 mt-2 truncate">{regimenDisplay}</p>
           <p className="text-xs text-slate-400 mt-1">
-            Configurado en perfil fiscal de <strong className="text-slate-700">{currentEmpresa.nombre.split(' ')[0]}</strong>
+            {L('Configurado en perfil fiscal de', 'Configured in tax profile of')} <strong className="text-slate-700">{currentEmpresa.nombre.split(' ')[0]}</strong>
           </p>
         </div>
 
@@ -1309,7 +1357,11 @@ export default function Dashboard({
             <span className={`text-xs font-bold uppercase tracking-wider ${
               !esGeneral && !esPequeno ? 'text-amber-800' : esPequeno ? 'text-purple-700' : 'text-rose-700'
             }`}>
-              {!esGeneral && !esPequeno ? 'Régimen Informal (Sin IVA)' : esPequeno ? 'Monotributo SAT (5%)' : 'Impuesto Neto SAT a Enterar'}
+              {!esGeneral && !esPequeno
+                ? L('Régimen Informal (Sin IVA)', 'Tax-Exempt Regime (0% VAT)')
+                : esPequeno
+                ? L('Monotributo SAT (5%)', 'Flat Small Business Tax (5%)')
+                : L('Impuesto Neto SAT a Enterar', 'Net Tax Payable')}
             </span>
             <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${
               !esGeneral && !esPequeno ? 'bg-amber-100 text-amber-700' : esPequeno ? 'bg-purple-100 text-purple-700' : 'bg-rose-100 text-rose-700'
@@ -1320,16 +1372,25 @@ export default function Dashboard({
           <p className={`text-2xl font-black mt-2 ${
             !esGeneral && !esPequeno ? 'text-amber-900' : esPequeno ? 'text-purple-700' : 'text-rose-700'
           }`}>
-            Q {impuestoNetoSat.toLocaleString('es-GT', { minimumFractionDigits: 2 })}
+            {money(impuestoNetoSat)}
           </p>
           <p className={`text-xs mt-1 ${
             !esGeneral && !esPequeno ? 'text-amber-700 font-medium' : esPequeno ? 'text-purple-600/90' : 'text-rose-600/90'
           }`}>
             {esGeneral 
-              ? `12% Débito (Q ${(debitoFiscal).toLocaleString('es-GT', { minimumFractionDigits: 2 })}) - Retenciones (Q ${(retencionesIva).toLocaleString('es-GT', { minimumFractionDigits: 2 })})` 
+              ? L(
+                  `12% Débito (${money(debitoFiscal)}) - Retenciones (${money(retencionesIva)})`,
+                  `12% VAT Output (${money(debitoFiscal)}) - Withholdings (${money(retencionesIva)})`
+                )
               : esPequeno
-              ? `5% Pequeño Contribuyente (Q ${debitoFiscal.toLocaleString('es-GT', { minimumFractionDigits: 2 })})`
-              : 'Negocio Informal • 0% IVA (Sin obligación de Débito Fiscal SAT)'
+              ? L(
+                  `5% Pequeño Contribuyente (${money(debitoFiscal)})`,
+                  `5% Small Business Flat Tax (${money(debitoFiscal)})`
+                )
+              : L(
+                  'Negocio Informal • 0% IVA (Sin obligación de Débito Fiscal SAT)',
+                  'Tax-Exempt Business • 0% VAT (No VAT output liability)'
+                )
             }
           </p>
         </div>
@@ -1339,10 +1400,10 @@ export default function Dashboard({
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
           <div>
-            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Sucursales Activas</span>
-            <p className="text-2xl font-black text-slate-900 mt-1">{currentLedger.sucursales.length} Puntos de Venta</p>
+            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">{L('Sucursales Activas', 'Active Branches')}</span>
+            <p className="text-2xl font-black text-slate-900 mt-1">{currentLedger.sucursales.length} {L('Puntos de Venta', 'Points of Sale')}</p>
             <p className="text-xs text-emerald-600 font-semibold mt-1">
-              {currentLedger.sucursales.map(s => s.nombre.split('-')[0].trim()).join(', ')} operando
+              {currentLedger.sucursales.map(s => trBranchName(s.nombre).split('-')[0].trim()).join(', ')} {L('operando', 'operating')}
             </p>
           </div>
           <div className="w-11 h-11 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
@@ -1352,11 +1413,11 @@ export default function Dashboard({
 
         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
           <div>
-            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Valor Costo Inventario</span>
+            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">{L('Valor Costo Inventario', 'Inventory Cost Value')}</span>
             <p className="text-2xl font-black text-indigo-700 mt-1">
-              Q {totalValorCosto.toLocaleString('es-GT', { minimumFractionDigits: 2 })}
+              {money(totalValorCosto)}
             </p>
-            <p className="text-xs text-slate-400 mt-1">Inversión total a costo de compra</p>
+            <p className="text-xs text-slate-400 mt-1">{L('Inversión total a costo de compra', 'Total investment at purchase cost')}</p>
           </div>
           <div className="w-11 h-11 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
             <Layers className="w-6 h-6" />
@@ -1365,12 +1426,12 @@ export default function Dashboard({
 
         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
           <div>
-            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Productos en Stock</span>
+            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">{L('Productos en Stock', 'Products in Stock')}</span>
             <p className="text-2xl font-black text-cyan-700 mt-1">
-              {totalStockUnidades.toLocaleString('es-GT')} Unidades
+              {totalStockUnidades.toLocaleString(locale)} {L('Unidades', 'Units')}
             </p>
             <p className="text-xs text-slate-400 mt-1">
-              Distribuidas en {currentLedger.sucursales.length} sucursales activas
+              {L('Distribuidas en', 'Distributed across')} {currentLedger.sucursales.length} {L('sucursales activas', 'active branches')}
             </p>
           </div>
           <div className="w-11 h-11 rounded-2xl bg-cyan-50 text-cyan-600 flex items-center justify-center">
@@ -1389,12 +1450,12 @@ export default function Dashboard({
               <div>
                 <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
                   <LineChartIcon className="w-4 h-4 text-indigo-600" />
-                  Evolución Mensual de Ingresos y Proyección (VentasMensualesChartWidget)
+                  {L('Evolución Mensual de Ingresos y Proyección (VentasMensualesChartWidget)', 'Monthly Revenue Trend & Forecast')}
                 </h2>
-                <p className="text-xs text-slate-400">Comparativa mensual 2026 vs año fiscal anterior 2025</p>
+                <p className="text-xs text-slate-400">{L('Comparativa mensual 2026 vs año fiscal anterior 2025', 'Monthly comparison: 2026 vs. prior fiscal year 2025')}</p>
               </div>
               <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-indigo-50 text-indigo-700">
-                Año 2026
+                {L('Año 2026', 'Year 2026')}
               </span>
             </div>
             <div className="h-72 w-full">
@@ -1407,10 +1468,10 @@ export default function Dashboard({
             <div className="mb-2">
               <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
                 <PieChartIcon className="w-4 h-4 text-pink-600" />
-                Distribución: Mes Actual vs Semestre Anterior
+                {L('Distribución: Mes Actual vs Semestre Anterior', 'Distribution: Selected Period vs. Prior Semester')}
               </h2>
               <p className="text-xs text-slate-400">
-                ComparacionCircularMesSemestreWidget (Filament)
+                {L('ComparacionCircularMesSemestreWidget (Filament)', 'Period Share Breakdown')}
               </p>
             </div>
             <div className="h-64 w-full flex items-center justify-center">
@@ -1418,7 +1479,7 @@ export default function Dashboard({
             </div>
             <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-xs font-semibold text-slate-600">
               <span>{periodTitle.split('(')[0].trim()}:</span>
-              <span className="font-bold text-pink-600">{pctSelected}% del volumen</span>
+              <span className="font-bold text-pink-600">{pctSelected}% {L('del volumen', 'of volume')}</span>
             </div>
           </div>
         </div>
@@ -1431,10 +1492,10 @@ export default function Dashboard({
               <div>
                 <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
                   <BarChart3 className="w-4 h-4 text-sky-600" />
-                  Rendimiento: {periodTitle.split('(')[0].trim()} vs Promedio Semestral
+                  {L('Rendimiento:', 'Performance:')} {periodTitle.split('(')[0].trim()} {L('vs Promedio Semestral', 'vs. Semester Avg.')}
                 </h2>
                 <p className="text-xs text-slate-400">
-                  ComparacionMesVsSemestreWidget • Transacciones e Ingresos
+                  {L('ComparacionMesVsSemestreWidget • Transacciones e Ingresos', 'Transactions & Revenue Comparison')}
                 </p>
               </div>
               <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
@@ -1454,14 +1515,17 @@ export default function Dashboard({
               <div>
                 <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
                   <Store className="w-4 h-4 text-indigo-600" />
-                  Inventario por Sucursal (InventarioPorSucursalChartWidget)
+                  {L('Inventario por Sucursal (InventarioPorSucursalChartWidget)', 'Inventory by Branch')}
                 </h2>
                 <p className="text-xs text-slate-400">
-                  Stock físico en unidades y valoración en Quetzales (Costo)
+                  {L(
+                    'Stock físico en unidades y valoración en Quetzales (Costo)',
+                    `Physical stock in units and valuation in ${currencyCode} (Cost)`
+                  )}
                 </p>
               </div>
               <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">
-                {currentLedger.sucursales.length} Sucursales
+                {currentLedger.sucursales.length} {L('Sucursales', 'Branches')}
               </span>
             </div>
             <div className="h-64 w-full">
@@ -1477,16 +1541,24 @@ export default function Dashboard({
           <div className="flex items-center justify-center sm:justify-start gap-2">
             <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping" />
             <h3 className="text-sm font-bold text-white flex items-center gap-2">
-              Pulso Operativo en Tiempo Real Centralizado
+              {L('Pulso Operativo en Tiempo Real Centralizado', 'Centralized Real-Time Operations Pulse')}
             </h3>
           </div>
           <p className="text-xs text-slate-300">
-            Las tablas de <strong className="text-white">Últimas Ventas</strong>, <strong className="text-white">Cuentas por Cobrar</strong> y <strong className="text-white">Déficit de Demanda en Pre-Ventas</strong> ahora están activas directamente en el <span className="text-indigo-300 font-bold">Menú Principal (Bento Grid)</span> para acceso inmediato de apertura de turno.
+            {isEn ? (
+              <>
+                The <strong className="text-white">Latest Sales</strong>, <strong className="text-white">Accounts Receivable</strong>, and <strong className="text-white">Pre-Sale Demand Deficit</strong> tables are now live directly on the <span className="text-indigo-300 font-bold">Main Menu (Bento Grid)</span> for instant shift-opening visibility.
+              </>
+            ) : (
+              <>
+                Las tablas de <strong className="text-white">Últimas Ventas</strong>, <strong className="text-white">Cuentas por Cobrar</strong> y <strong className="text-white">Déficit de Demanda en Pre-Ventas</strong> ahora están activas directamente en el <span className="text-indigo-300 font-bold">Menú Principal (Bento Grid)</span> para acceso inmediato de apertura de turno.
+              </>
+            )}
           </p>
         </div>
         <div className="shrink-0">
           <span className="px-3.5 py-1.5 rounded-xl bg-white/10 text-indigo-200 border border-white/20 text-xs font-bold font-mono">
-            Dashboard Analítico Limpio ✓
+            {L('Dashboard Analítico Limpio ✓', 'Clean Analytics Dashboard ✓')}
           </span>
         </div>
       </div>

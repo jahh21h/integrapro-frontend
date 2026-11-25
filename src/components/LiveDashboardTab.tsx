@@ -11,6 +11,7 @@ import {
   Flame
 } from 'lucide-react';
 import { useLiveSales } from '../context/LiveSalesContext';
+import { useLanguage } from '../context/LanguageContext';
 import { EmpresaSaaS } from '../types';
 
 interface LiveDashboardTabProps {
@@ -19,6 +20,7 @@ interface LiveDashboardTabProps {
 
 export default function LiveDashboardTab({ empresa }: LiveDashboardTabProps) {
   const { bags } = useLiveSales();
+  const { L, money } = useLanguage();
 
   // Filtrar estrictamente canastas pertenecientes a la empresa actual
   const tenantBags = bags.filter(b => Number(b.empresa_id) === Number(empresa.id));
@@ -80,15 +82,18 @@ export default function LiveDashboardTab({ empresa }: LiveDashboardTabProps) {
           <div className="space-y-1.5 max-w-xl">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 backdrop-blur-md border border-white/15 text-xs font-semibold text-rose-300">
               <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
-              <span>Resultados Financieros • TikTok Live Express</span>
+              <span>{L('Resultados Financieros • TikTok Live Express', 'Financial Results • TikTok Live Express')}</span>
             </div>
             
             <h2 className="text-xl sm:text-2xl font-black tracking-tight text-white flex items-center gap-2.5">
-              <span>Métricas de {empresa.nombre}</span>
+              <span>{L(`Métricas de ${empresa.nombre}`, `${empresa.nombre} Metrics`)}</span>
             </h2>
             
             <p className="text-xs text-slate-300 leading-relaxed">
-              Monitoreo en vivo de ventas recaudadas, canastas apartadas, efectividad de cobranza por WhatsApp y pedidos para paquetería.
+              {L(
+                'Monitoreo en vivo de ventas recaudadas, canastas apartadas, efectividad de cobranza por WhatsApp y pedidos para paquetería.',
+                'Live tracking of collected sales, reserved baskets, WhatsApp collection rate, and courier shipping orders.'
+              )}
             </p>
           </div>
 
@@ -98,10 +103,10 @@ export default function LiveDashboardTab({ empresa }: LiveDashboardTabProps) {
             </div>
             <div>
               <span className="text-[10px] font-bold text-slate-300 uppercase tracking-wider block">
-                Total Recaudado en Vivo
+                {L('Total Recaudado en Vivo', 'Total Collected Live')}
               </span>
               <span className="text-2xl font-black text-emerald-400 font-mono tracking-tight">
-                Q {totalVentas.toFixed(2)}
+                {money(totalVentas)}
               </span>
             </div>
           </div>
@@ -114,12 +119,12 @@ export default function LiveDashboardTab({ empresa }: LiveDashboardTabProps) {
         {/* KPI 1: Prendas Vendidas */}
         <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm flex items-center justify-between">
           <div>
-            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">Prendas Apartadas</span>
+            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">{L('Prendas Apartadas', 'Reserved Items')}</span>
             <span className="text-2xl font-black text-slate-900 font-mono mt-1 block">
               {totalPrendas}
             </span>
             <span className="text-[10px] font-bold text-amber-600 flex items-center gap-1 mt-1">
-              <ShoppingBag className="w-3 h-3" /> Catálogo en Vivo
+              <ShoppingBag className="w-3 h-3" /> {L('Catálogo en Vivo', 'Live Catalog')}
             </span>
           </div>
           <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center font-bold">
@@ -130,12 +135,12 @@ export default function LiveDashboardTab({ empresa }: LiveDashboardTabProps) {
         {/* KPI 2: Canastas Totales */}
         <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm flex items-center justify-between">
           <div>
-            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">Canastas Clientes</span>
+            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">{L('Canastas Clientes', 'Customer Baskets')}</span>
             <span className="text-2xl font-black text-slate-900 font-mono mt-1 block">
               {validBags.length}
             </span>
             <span className="text-[10px] font-bold text-indigo-600 flex items-center gap-1 mt-1">
-              <Users className="w-3 h-3" /> Compradoras
+              <Users className="w-3 h-3" /> {L('Compradoras', 'Buyers')}
             </span>
           </div>
           <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold">
@@ -146,12 +151,12 @@ export default function LiveDashboardTab({ empresa }: LiveDashboardTabProps) {
         {/* KPI 3: Ticket Promedio */}
         <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm flex items-center justify-between">
           <div>
-            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">Ticket Promedio</span>
+            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">{L('Ticket Promedio', 'Average Order')}</span>
             <span className="text-2xl font-black text-slate-900 font-mono mt-1 block">
-              Q {ticketPromedio.toFixed(2)}
+              {money(ticketPromedio)}
             </span>
             <span className="text-[10px] font-bold text-emerald-600 flex items-center gap-1 mt-1">
-              <TrendingUp className="w-3 h-3" /> Por Canasta
+              <TrendingUp className="w-3 h-3" /> {L('Por Canasta', 'Per Basket')}
             </span>
           </div>
           <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold">
@@ -162,7 +167,7 @@ export default function LiveDashboardTab({ empresa }: LiveDashboardTabProps) {
         {/* KPI 4: Efectividad de Cobro */}
         <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm flex items-center justify-between">
           <div>
-            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">Tasa de Cobro</span>
+            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">{L('Tasa de Cobro', 'Collection Rate')}</span>
             <span className="text-2xl font-black text-purple-600 font-mono mt-1 block">
               {efectividadCobro}%
             </span>
@@ -185,10 +190,10 @@ export default function LiveDashboardTab({ empresa }: LiveDashboardTabProps) {
           <div className="flex items-center justify-between pb-3 border-b border-slate-100">
             <h3 className="text-sm font-black text-slate-900 flex items-center gap-2">
               <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-              Estatus de Cobranza de Canastas
+              {L('Estatus de Cobranza de Canastas', 'Basket Collection Status')}
             </h3>
             <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
-              {tenantBags.length} canastas registradas
+              {tenantBags.length} {L('canastas registradas', 'registered baskets')}
             </span>
           </div>
 
@@ -200,8 +205,8 @@ export default function LiveDashboardTab({ empresa }: LiveDashboardTabProps) {
                   <CheckCircle2 className="w-5 h-5" />
                 </div>
                 <div>
-                  <span className="text-xs font-black text-emerald-950 block">Pagadas & Verificadas</span>
-                  <span className="text-[10px] text-emerald-700">Comprobante recibido por WhatsApp</span>
+                  <span className="text-xs font-black text-emerald-950 block">{L('Pagadas & Verificadas', 'Paid & Verified')}</span>
+                  <span className="text-[10px] text-emerald-700">{L('Comprobante recibido por WhatsApp', 'Payment receipt verified via WhatsApp')}</span>
                 </div>
               </div>
               <div className="text-right">
@@ -209,7 +214,7 @@ export default function LiveDashboardTab({ empresa }: LiveDashboardTabProps) {
                   {canastasPagadas.length}
                 </span>
                 <span className="text-[10px] text-emerald-600 block">
-                  Q {canastasPagadas.reduce((a, b) => a + b.total, 0).toFixed(2)}
+                  {money(canastasPagadas.reduce((a, b) => a + b.total, 0))}
                 </span>
               </div>
             </div>
@@ -221,8 +226,8 @@ export default function LiveDashboardTab({ empresa }: LiveDashboardTabProps) {
                   <Clock className="w-5 h-5" />
                 </div>
                 <div>
-                  <span className="text-xs font-black text-amber-950 block">Pendientes de Pago</span>
-                  <span className="text-[10px] text-amber-700">Canastas abiertas con prendas reservadas</span>
+                  <span className="text-xs font-black text-amber-950 block">{L('Pendientes de Pago', 'Pending Payment')}</span>
+                  <span className="text-[10px] text-amber-700">{L('Canastas abiertas con prendas reservadas', 'Open baskets with reserved items')}</span>
                 </div>
               </div>
               <div className="text-right">
@@ -230,7 +235,7 @@ export default function LiveDashboardTab({ empresa }: LiveDashboardTabProps) {
                   {canastasPendientes.length}
                 </span>
                 <span className="text-[10px] text-amber-600 block">
-                  Q {canastasPendientes.reduce((a, b) => a + b.total, 0).toFixed(2)}
+                  {money(canastasPendientes.reduce((a, b) => a + b.total, 0))}
                 </span>
               </div>
             </div>
@@ -242,15 +247,15 @@ export default function LiveDashboardTab({ empresa }: LiveDashboardTabProps) {
                   <Package className="w-5 h-5" />
                 </div>
                 <div>
-                  <span className="text-xs font-black text-slate-700 block">Canceladas (Prendas Devueltas)</span>
-                  <span className="text-[10px] text-slate-500">Stock liberado de nuevo al inventario</span>
+                  <span className="text-xs font-black text-slate-700 block">{L('Canceladas (Prendas Devueltas)', 'Cancelled (Items Restocked)')}</span>
+                  <span className="text-[10px] text-slate-500">{L('Stock liberado de nuevo al inventario', 'Stock released back to inventory')}</span>
                 </div>
               </div>
               <div className="text-right">
                 <span className="text-base font-black text-slate-600 font-mono">
                   {canastasCanceladas.length}
                 </span>
-                <span className="text-[10px] text-slate-400 block">0 pérdidas</span>
+                <span className="text-[10px] text-slate-400 block">{L('0 pérdidas', '0 losses')}</span>
               </div>
             </div>
           </div>
@@ -261,10 +266,10 @@ export default function LiveDashboardTab({ empresa }: LiveDashboardTabProps) {
           <div className="flex items-center justify-between pb-3 border-b border-slate-100">
             <h3 className="text-sm font-black text-slate-900 flex items-center gap-2">
               <Landmark className="w-4 h-4 text-blue-600" />
-              Canales de Cobro & Logística
+              {L('Canales de Cobro & Logística', 'Payment Channels & Logistics')}
             </h3>
             <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
-              Transferencias + Contra Entrega
+              {L('Transferencias + Contra Entrega', 'Bank Transfers + Cash on Delivery')}
             </span>
           </div>
 
@@ -272,29 +277,29 @@ export default function LiveDashboardTab({ empresa }: LiveDashboardTabProps) {
             <div className="p-4 bg-blue-50/60 rounded-2xl border border-blue-100 space-y-1">
               <div className="flex items-center gap-1.5 text-blue-700">
                 <Landmark className="w-4 h-4" />
-                <span className="text-xs font-extrabold">Transferencias</span>
+                <span className="text-xs font-extrabold">{L('Transferencias', 'Bank Transfers')}</span>
               </div>
               <span className="text-lg font-black text-blue-950 font-mono block">
-                Q {totalTransferencias.toFixed(2)}
+                {money(totalTransferencias)}
               </span>
-              <span className="text-[10px] text-blue-600 block">BI • Banrural • BAC</span>
+              <span className="text-[10px] text-blue-600 block">{L('BI • Banrural • BAC', 'Configured Bank Accounts')}</span>
             </div>
 
             <div className="p-4 bg-purple-50/60 rounded-2xl border border-purple-100 space-y-1">
               <div className="flex items-center gap-1.5 text-purple-700">
                 <Truck className="w-4 h-4" />
-                <span className="text-xs font-extrabold">Contra Entrega</span>
+                <span className="text-xs font-extrabold">{L('Contra Entrega', 'Cash on Delivery')}</span>
               </div>
               <span className="text-lg font-black text-purple-950 font-mono block">
-                Q {totalContraEntrega.toFixed(2)}
+                {money(totalContraEntrega)}
               </span>
-              <span className="text-[10px] text-purple-600 block">Cobro al entregar paquete</span>
+              <span className="text-[10px] text-purple-600 block">{L('Cobro al entregar paquete', 'Payment upon package delivery')}</span>
             </div>
           </div>
 
           {/* Resumen de Paqueterías */}
           <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
-            <span className="text-[11px] font-bold text-slate-700 block">Despachos por Paquetería:</span>
+            <span className="text-[11px] font-bold text-slate-700 block">{L('Despachos por Paquetería:', 'Dispatches by Courier:')}</span>
             <div className="flex flex-wrap items-center gap-2">
               {Object.entries(courierCounts).length > 0 ? (
                 Object.entries(courierCounts).map(([courier, count]) => (
@@ -305,7 +310,7 @@ export default function LiveDashboardTab({ empresa }: LiveDashboardTabProps) {
                   </span>
                 ))
               ) : (
-                <span className="text-xs text-slate-400">Sin despachos aún</span>
+                <span className="text-xs text-slate-400">{L('Sin despachos aún', 'No dispatches yet')}</span>
               )}
             </div>
           </div>
@@ -315,10 +320,10 @@ export default function LiveDashboardTab({ empresa }: LiveDashboardTabProps) {
             <div className="p-3 bg-gradient-to-r from-amber-50 to-orange-50 rounded-2xl border border-amber-200 flex items-center justify-between text-xs">
               <span className="font-bold text-amber-900 flex items-center gap-1.5">
                 <Flame className="w-4 h-4 text-orange-500" />
-                {rematesVendidos} prendas vendidas en remates en vivo
+                {rematesVendidos} {L('prendas vendidas en remates en vivo', 'items sold in live flash sales')}
               </span>
               <span className="font-mono font-bold text-orange-700">
-                Ahorro: Q {totalAhorroRemates.toFixed(2)}
+                {L('Ahorro:', 'Savings:')} {money(totalAhorroRemates)}
               </span>
             </div>
           )}
@@ -332,12 +337,12 @@ export default function LiveDashboardTab({ empresa }: LiveDashboardTabProps) {
           <div>
             <h3 className="text-sm font-black text-slate-900 flex items-center gap-2">
               <Users className="w-4 h-4 text-indigo-600" />
-              Detalle de Compradoras en la Transmisión
+              {L('Detalle de Compradoras en la Transmisión', 'Live Broadcast Buyers Breakdown')}
             </h3>
-            <p className="text-xs text-slate-500">Canastas abiertas y estatus de cada clienta del Live</p>
+            <p className="text-xs text-slate-500">{L('Canastas abiertas y estatus de cada clienta del Live', 'Open baskets and payment status per live buyer')}</p>
           </div>
           <span className="text-xs font-bold text-indigo-600">
-            {validBags.length} canastas activas
+            {validBags.length} {L('canastas activas', 'active baskets')}
           </span>
         </div>
 
@@ -358,8 +363,8 @@ export default function LiveDashboardTab({ empresa }: LiveDashboardTabProps) {
                     )}
                   </div>
                   <p className="text-[11px] text-slate-500">
-                    {bag.items.length} prendas • {bag.items.map(it => it.nombre).slice(0, 2).join(', ')}
-                    {bag.items.length > 2 ? ` (+${bag.items.length - 2} más)` : ''}
+                    {bag.items.length} {L('prendas', 'items')} • {bag.items.map(it => it.nombre).slice(0, 2).join(', ')}
+                    {bag.items.length > 2 ? ` (+${bag.items.length - 2} ${L('más', 'more')})` : ''}
                   </p>
                 </div>
               </div>
@@ -370,11 +375,15 @@ export default function LiveDashboardTab({ empresa }: LiveDashboardTabProps) {
                     ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                     : 'bg-amber-50 text-amber-700 border border-amber-200'
                 }`}>
-                  {bag.estado === 'liquidada' ? 'Pagada / Liquidada' : bag.estado === 'despachada' ? 'Despachada' : 'Pendiente Pago'}
+                  {bag.estado === 'liquidada'
+                    ? L('Pagada / Liquidada', 'Paid / Settled')
+                    : bag.estado === 'despachada'
+                    ? L('Despachada', 'Shipped')
+                    : L('Pendiente Pago', 'Pending Payment')}
                 </span>
 
                 <span className="text-sm font-black text-slate-900 font-mono">
-                  Q {bag.total.toFixed(2)}
+                  {money(bag.total)}
                 </span>
               </div>
             </div>

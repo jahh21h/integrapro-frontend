@@ -1,14 +1,14 @@
 import { useState, useEffect } from 'react';
-import { 
-  Clock, 
-  Clock3, 
-  CheckCircle2, 
-  KeyRound, 
-  ShieldCheck, 
-  Delete, 
-  Building, 
-  Maximize2, 
-  Minimize2, 
+import {
+  Clock,
+  Clock3,
+  CheckCircle2,
+  KeyRound,
+  ShieldCheck,
+  Delete,
+  Building,
+  Maximize2,
+  Minimize2,
   UserCheck,
   Calendar,
   AlertCircle,
@@ -18,6 +18,7 @@ import {
 import { useTimeFormat } from '../context/TimeFormatContext';
 import { validarUbicacionMarcaje, GeofenceValidationResult } from '../utils/geofencing';
 import { attendanceApi, rrhhApi } from '../api';
+import { useLanguage } from '../context/LanguageContext';
 
 interface EmpleadoKiosco {
   id: number;
@@ -46,11 +47,33 @@ interface MarcajeHoy {
 }
 
 export default function AttendanceKiosk() {
+  const { L, locale, isEn } = useLanguage();
   const [currentTime, setCurrentTime] = useState(new Date());
   const { timeFormat, toggleTimeFormat, formatTime } = useTimeFormat();
   const [dpiInput, setDpiInput] = useState('');
   const [confirmSuccess, setConfirmSuccess] = useState<string | null>(null);
   const [isFullScreen, setIsFullScreen] = useState(false);
+
+  const trAttendanceStatus = (estado: 'Puntual' | 'Tarde' | 'Falta') => {
+    if (estado === 'Puntual') return L('Puntual', 'On Time');
+    if (estado === 'Tarde') return L('Tarde', 'Late');
+    return L('Falta', 'Absent');
+  };
+
+  const trBranchDisplay = (name: string) => {
+    if (!isEn) return name;
+    return name
+      .replace(/^Sucursal Central - Ciudad$/i, 'Central Branch - City')
+      .replace(/^Sucursal Norte - Carretera al Atlántico$/i, 'North Branch')
+      .replace(/^Sucursal Sur - Villa Nueva$/i, 'South Branch')
+      .replace(/^Sucursal Principal$/i, 'Main Branch')
+      .replace(/^Sucursal Central$/i, 'Central Branch')
+      .replace(/^Sucursal Norte$/i, 'North Branch')
+      .replace(/^Sucursal Sur$/i, 'South Branch')
+      .replace(/^Principal$/i, 'Main')
+      .replace(/^Norte$/i, 'North')
+      .replace(/^Sur$/i, 'South');
+  };
 
   // Coordenadas detectadas por el GPS del dispositivo (Inviolables por el usuario)
   const [userCoords, setUserCoords] = useState<{ lat: number; lng: number }>({
@@ -189,7 +212,10 @@ export default function AttendanceKiosk() {
     const existingIndex = marcajesHoy.findIndex(m => m.empleado === emp.nombre);
     if (existingIndex >= 0) {
       if (marcajesHoy[existingIndex].horaEntrada !== '---') {
-        setConfirmSuccess(`Aviso: ${emp.nombre} ya tiene registrada entrada hoy (${marcajesHoy[existingIndex].horaEntrada}).`);
+        setConfirmSuccess(L(
+          `Aviso: ${emp.nombre} ya tiene registrada entrada hoy (${marcajesHoy[existingIndex].horaEntrada}).`,
+          `Notice: ${emp.nombre} already clocked in today (${marcajesHoy[existingIndex].horaEntrada}).`
+        ));
         return;
       }
       const updated = [...marcajesHoy];
@@ -225,7 +251,10 @@ export default function AttendanceKiosk() {
       setMarcajesHoy([nuevo, ...marcajesHoy]);
     }
 
-    setConfirmSuccess(`¡Entrada registrada a las ${horaActualStr} (${estado}) para ${emp.nombre}! 📍 Ubicación en ${emp.sucursal} verificada por GPS (a ${geoValidation.distanciaMetros}m).`);
+    setConfirmSuccess(L(
+      `¡Entrada registrada a las ${horaActualStr} (${trAttendanceStatus(estado)}) para ${emp.nombre}! 📍 Ubicación en ${trBranchDisplay(emp.sucursal)} verificada por GPS (a ${geoValidation.distanciaMetros}m).`,
+      `Clock-in recorded at ${horaActualStr} (${trAttendanceStatus(estado)}) for ${emp.nombre}! 📍 Location at ${trBranchDisplay(emp.sucursal)} verified by GPS (${geoValidation.distanciaMetros}m away).`
+    ));
     setTimeout(() => {
       setConfirmSuccess(null);
       setDpiInput('');
@@ -258,11 +287,17 @@ export default function AttendanceKiosk() {
     if (existingIndex >= 0) {
       const rec = marcajesHoy[existingIndex];
       if (rec.horaEntrada === '---') {
-        setConfirmSuccess(`Aviso: No se puede registrar salida sin haber marcado entrada.`);
+        setConfirmSuccess(L(
+          'Aviso: No se puede registrar salida sin haber marcado entrada.',
+          'Notice: Cannot clock out without clocking in first.'
+        ));
         return;
       }
       if (rec.horaSalida !== '---') {
-        setConfirmSuccess(`Aviso: ${emp.nombre} ya registró su salida a las ${rec.horaSalida}.`);
+        setConfirmSuccess(L(
+          `Aviso: ${emp.nombre} ya registró su salida a las ${rec.horaSalida}.`,
+          `Notice: ${emp.nombre} already clocked out at ${rec.horaSalida}.`
+        ));
         return;
       }
       const updated = [...marcajesHoy];
@@ -277,31 +312,40 @@ export default function AttendanceKiosk() {
         }
       };
       setMarcajesHoy(updated);
-      setConfirmSuccess(`¡Salida registrada a las ${horaActualStr} para ${emp.nombre}! 📍 Ubicación verificada por GPS (a ${geoValidation.distanciaMetros}m). ¡Feliz descanso!`);
+      setConfirmSuccess(L(
+        `¡Salida registrada a las ${horaActualStr} para ${emp.nombre}! 📍 Ubicación verificada por GPS (a ${geoValidation.distanciaMetros}m). ¡Feliz descanso!`,
+        `Clock-out recorded at ${horaActualStr} for ${emp.nombre}! 📍 Location verified by GPS (${geoValidation.distanciaMetros}m away). Have a great rest!`
+      ));
       setTimeout(() => {
         setConfirmSuccess(null);
         setDpiInput('');
       }, 4000);
     } else {
-      setConfirmSuccess(`Aviso: No se puede registrar salida sin haber marcado entrada hoy.`);
+      setConfirmSuccess(L(
+        'Aviso: No se puede registrar salida sin haber marcado entrada hoy.',
+        'Notice: Cannot clock out without clocking in today.'
+      ));
     }
   };
 
   return (
     <div className={`space-y-6 ${isFullScreen ? 'fixed inset-0 z-50 bg-slate-900 p-6 overflow-y-auto' : ''}`}>
-      
+
       {/* Cabecera del Kiosco Autónomo */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-slate-200">
         <div>
           <h1 className="text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2.5">
-            Reloj Checador • Kiosco de Asistencia
+            {L('Reloj Checador • Kiosco de Asistencia', 'Time Clock • Attendance Kiosk')}
             <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1">
               <Clock3 className="w-3.5 h-3.5" />
-              Terminal Operativa
+              {L('Terminal Operativa', 'Terminal Online')}
             </span>
           </h1>
           <p className="text-xs text-slate-500 font-medium">
-            Terminal autónoma para colaboradores. Marcaje seguro por DPI o PIN sin acceso a datos salariales.
+            {L(
+              'Terminal autónoma para colaboradores. Marcaje seguro por DPI o PIN sin acceso a datos salariales.',
+              'Standalone employee terminal. Secure clock-in/out via National ID or PIN without access to payroll data.'
+            )}
           </p>
         </div>
 
@@ -312,7 +356,7 @@ export default function AttendanceKiosk() {
             className="px-3.5 py-2 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-bold rounded-xl text-xs shadow-sm flex items-center gap-1.5 transition-all"
           >
             {isFullScreen ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5 text-purple-600" />}
-            <span>{isFullScreen ? 'Salir de Pantalla Completa' : 'Fijar Pantalla Completa'}</span>
+            <span>{isFullScreen ? L('Salir de Pantalla Completa', 'Exit Full Screen') : L('Fijar Pantalla Completa', 'Enter Full Screen')}</span>
           </button>
         </div>
       </div>
@@ -322,18 +366,21 @@ export default function AttendanceKiosk() {
         <div className="space-y-1">
           <div className="flex items-center justify-center md:justify-start gap-2 text-xs font-extrabold uppercase tracking-widest text-purple-300">
             <Building className="w-4 h-4 text-purple-400" />
-            <span>Sucursal Central • Ciudad de Guatemala</span>
+            <span>{L('Sucursal Central • Ciudad de Guatemala', 'Central Branch • Main Headquarters')}</span>
           </div>
           <p className="text-xs text-slate-300">
-            Registro oficial de jornada laboral. Tolerancia de puntualidad hasta las 08:10 AM.
+            {L(
+              'Registro oficial de jornada laboral. Tolerancia de puntualidad hasta las 08:10 AM.',
+              'Official workday attendance log. On-time grace period until 08:10 AM.'
+            )}
           </p>
           <div className="flex flex-wrap items-center justify-center md:justify-start gap-2 pt-2">
             <span className="px-3 py-1 rounded-full text-xs font-bold bg-white/10 border border-white/10 flex items-center gap-1.5">
               <Calendar className="w-3.5 h-3.5 text-emerald-300" />
-              {currentTime.toLocaleDateString('es-GT', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+              {currentTime.toLocaleDateString(locale, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
             </span>
             <span className="px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-              {marcajesHoy.length} Presentes Hoy
+              {marcajesHoy.length} {L('Presentes Hoy', 'Present Today')}
             </span>
           </div>
         </div>
@@ -342,18 +389,18 @@ export default function AttendanceKiosk() {
         <div className="bg-black/30 backdrop-blur-md px-8 py-5 rounded-3xl border border-white/10 shadow-inner flex flex-col items-center">
           <div className="flex items-center justify-between w-full gap-4 mb-1.5">
             <span className="text-[10px] font-extrabold text-purple-300 uppercase tracking-widest">
-              Hora Oficial SAT / Guatemala
+              {L('Hora Oficial SAT / Guatemala', 'Official Local Time')}
             </span>
             <button
               type="button"
               onClick={toggleTimeFormat}
               className="px-2.5 py-1 rounded-xl bg-white/10 hover:bg-white/20 border border-white/20 text-[10px] font-extrabold text-purple-200 transition-all flex items-center gap-1.5 cursor-pointer shadow-sm"
-              title="Clic para cambiar entre 12 horas (AM/PM) y 24 horas"
+              title={L('Clic para cambiar entre 12 horas (AM/PM) y 24 horas', 'Click to toggle between 12-hour (AM/PM) and 24-hour format')}
             >
               <Clock className="w-3 h-3 text-purple-300" />
               <span>{timeFormat === '12h' ? '12H (AM/PM)' : '24H'}</span>
               <span className="text-[8px] bg-purple-500/40 px-1 py-0.2 rounded border border-purple-300/30">
-                Cambiar
+                {L('Cambiar', 'Switch')}
               </span>
             </button>
           </div>
@@ -371,20 +418,23 @@ export default function AttendanceKiosk() {
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <span className="font-black text-slate-800">Control de Presencia Física por Geocerca (Anti-Fraude):</span>
+              <span className="font-black text-slate-800">{L('Control de Presencia Física por Geocerca (Anti-Fraude):', 'Physical Presence Geofence Control (Anti-Fraud):')}</span>
               <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100 text-emerald-800 border border-emerald-200">
-                🟢 Validación Satelital Activa
+                {L('🟢 Validación Satelital Activa', '🟢 Satellite Validation Active')}
               </span>
             </div>
             <p className="text-[11px] text-slate-500 mt-0.5">
-              Esta terminal valida por hardware y GPS satelital que los marcajes ocurran exclusivamente dentro del perímetro oficial de la sucursal (Radio máximo: 50 metros).
+              {L(
+                'Esta terminal valida por hardware y GPS satelital que los marcajes ocurran exclusivamente dentro del perímetro oficial de la sucursal (Radio máximo: 50 metros).',
+                'This terminal verifies via hardware and satellite GPS that clock-ins occur strictly within the official branch perimeter (Max radius: 50 meters).'
+              )}
             </p>
           </div>
         </div>
 
         <div className="flex items-center gap-2 px-3 py-1.5 rounded-2xl bg-slate-50 border border-slate-200 text-slate-600 text-[11px] font-mono font-bold shrink-0">
           <MapPin className="w-3.5 h-3.5 text-indigo-600" />
-          <span>Sucursal Central • GPS 14.5986, -90.5187</span>
+          <span>{L('Sucursal Central', 'Central Branch')} • GPS 14.5986, -90.5187</span>
         </div>
       </div>
 
@@ -394,14 +444,14 @@ export default function AttendanceKiosk() {
           <CheckCircle2 className="w-7 h-7 text-emerald-600 shrink-0" />
           <div className="flex-1">
             <p className="text-sm font-black">{confirmSuccess}</p>
-            <p className="text-xs text-emerald-700 font-normal mt-0.5">La terminal se reiniciará automáticamente para el siguiente colaborador.</p>
+            <p className="text-xs text-emerald-700 font-normal mt-0.5">{L('La terminal se reiniciará automáticamente para el siguiente colaborador.', 'The terminal will automatically reset for the next employee.')}</p>
           </div>
         </div>
       )}
 
       {/* Grid Central del Kiosco: Ingreso de DPI + Teclado Táctil + Tarjeta de Identificación */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        
+
         {/* Panel Izquierdo (7 Cols): Digitación de DPI y Teclado Táctil */}
         <div className="lg:col-span-7 bg-white p-6 rounded-3xl border border-slate-200 shadow-sm space-y-5">
           <div className="flex items-center justify-between pb-3 border-b border-slate-100">
@@ -410,8 +460,8 @@ export default function AttendanceKiosk() {
                 <KeyRound className="w-5 h-5" />
               </div>
               <div>
-                <h3 className="text-sm font-black text-slate-900">Identificación por DPI</h3>
-                <p className="text-[11px] text-slate-400">Ingresa tu número de DPI de 13 dígitos para validar tu turno</p>
+                <h3 className="text-sm font-black text-slate-900">{L('Identificación por DPI', 'ID Number Verification')}</h3>
+                <p className="text-[11px] text-slate-400">{L('Ingresa tu número de DPI de 13 dígitos para validar tu turno', 'Enter your 13-digit ID number to validate your shift')}</p>
               </div>
             </div>
             {dpiInput && (
@@ -420,7 +470,7 @@ export default function AttendanceKiosk() {
                 onClick={handleClear}
                 className="px-2.5 py-1 text-xs font-bold text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
               >
-                Limpiar
+                {L('Limpiar', 'Clear')}
               </button>
             )}
           </div>
@@ -431,7 +481,7 @@ export default function AttendanceKiosk() {
               <input
                 type="text"
                 autoFocus
-                placeholder="Digita tu DPI (ej. 2450 89124 0101)..."
+                placeholder={L('Digita tu DPI (ej. 2450 89124 0101)...', 'Enter your ID (e.g. 2450 89124 0101)...')}
                 value={dpiInput}
                 maxLength={15}
                 onChange={(e) => setDpiInput(formatDpiGuatemala(e.target.value))}
@@ -443,7 +493,7 @@ export default function AttendanceKiosk() {
           {/* Teclado Táctil en Pantalla (Touch Keypad) */}
           <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200">
             <span className="text-[10px] font-extrabold uppercase text-slate-400 block mb-2.5 text-center tracking-wider">
-              Teclado Táctil para Terminal
+              {L('Teclado Táctil para Terminal', 'Terminal Touch Keypad')}
             </span>
             <div className="grid grid-cols-3 gap-2.5 max-w-sm mx-auto">
               {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((digit) => (
@@ -461,7 +511,7 @@ export default function AttendanceKiosk() {
                 onClick={handleClear}
                 className="py-3 bg-slate-100 hover:bg-rose-50 hover:text-rose-700 active:scale-95 text-xs font-black text-slate-600 rounded-2xl border border-slate-200 shadow-xs transition-all flex items-center justify-center cursor-pointer"
               >
-                BORRAR TODO
+                {L('BORRAR TODO', 'CLEAR ALL')}
               </button>
               <button
                 type="button"
@@ -486,27 +536,25 @@ export default function AttendanceKiosk() {
             <div className="flex items-center justify-between text-xs">
               <span className="font-bold text-slate-700 flex items-center gap-1.5">
                 <ShieldCheck className="w-4 h-4 text-purple-600" />
-                Verificación de Dígitos de DPI
+                {L('Verificación de Dígitos de DPI', 'ID Digit Verification')}
               </span>
-              <span className={`font-mono font-black px-2.5 py-0.5 rounded-full text-xs ${
-                rawInput.length === 13
-                  ? 'bg-emerald-100 text-emerald-800'
-                  : rawInput.length > 0
+              <span className={`font-mono font-black px-2.5 py-0.5 rounded-full text-xs ${rawInput.length === 13
+                ? 'bg-emerald-100 text-emerald-800'
+                : rawInput.length > 0
                   ? 'bg-purple-100 text-purple-800'
                   : 'bg-slate-200 text-slate-600'
-              }`}>
-                {rawInput.length} / 13 dígitos
+                }`}>
+                {rawInput.length} / 13 {L('dígitos', 'digits')}
               </span>
             </div>
 
             {/* Barra de progreso de 13 dígitos */}
             <div className="w-full bg-slate-200 h-2.5 rounded-full overflow-hidden">
-              <div 
-                className={`h-full transition-all duration-300 ${
-                  rawInput.length === 13 
-                    ? matchedEmployee ? 'bg-emerald-500' : 'bg-rose-500' 
-                    : 'bg-purple-600'
-                }`}
+              <div
+                className={`h-full transition-all duration-300 ${rawInput.length === 13
+                  ? matchedEmployee ? 'bg-emerald-500' : 'bg-rose-500'
+                  : 'bg-purple-600'
+                  }`}
                 style={{ width: `${(rawInput.length / 13) * 100}%` }}
               />
             </div>
@@ -514,10 +562,13 @@ export default function AttendanceKiosk() {
             <div className="text-[11px] text-slate-500 leading-relaxed bg-white p-3 rounded-xl border border-slate-200">
               <p className="font-bold text-slate-800 mb-1 flex items-center gap-1">
                 <span className="w-2 h-2 rounded-full bg-purple-600"></span>
-                Norma de Identificación Obligatoria:
+                {L('Norma de Identificación Obligatoria:', 'Mandatory Identification Policy:')}
               </p>
               <p>
-                Cada colaborador debe ingresar manualmente su número de DPI o escanear el código de barras de su documento para identificarse. No se permite seleccionar colaboradores de forma directa ni mediante el cursor en pantalla, protegiendo la autenticidad e inviolabilidad de los registros.
+                {L(
+                  'Cada colaborador debe ingresar manualmente su número de DPI o escanear el código de barras de su documento para identificarse. No se permite seleccionar colaboradores de forma directa ni mediante el cursor en pantalla, protegiendo la autenticidad e inviolabilidad de los registros.',
+                  'Each employee must manually enter their ID number or scan their ID barcode to verify identity. Selecting employees directly from a list or via on-screen cursor is disabled to protect attendance record integrity.'
+                )}
               </p>
             </div>
           </div>
@@ -528,9 +579,9 @@ export default function AttendanceKiosk() {
           <div>
             <div className="pb-3 border-b border-slate-100 flex items-center justify-between">
               <span className="text-xs font-black text-slate-900 uppercase tracking-wider">
-                Verificación de Colaborador
+                {L('Verificación de Colaborador', 'Employee Verification')}
               </span>
-              <span className="text-[10px] text-slate-400">Terminal Segura</span>
+              <span className="text-[10px] text-slate-400">{L('Terminal Segura', 'Secure Terminal')}</span>
             </div>
 
             {matchedEmployee ? (
@@ -544,40 +595,40 @@ export default function AttendanceKiosk() {
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-1 text-[10px] font-black text-emerald-700">
                       <ShieldCheck className="w-4 h-4" />
-                      <span>Identidad Confirmada</span>
+                      <span>{L('Identidad Confirmada', 'Identity Confirmed')}</span>
                     </div>
                     <h3 className="text-sm font-black text-slate-900 truncate mt-0.5">{matchedEmployee.nombre}</h3>
                     <p className="text-xs text-purple-700 font-bold">{matchedEmployee.puesto}</p>
-                    <p className="text-[10px] text-slate-500 font-mono mt-0.5">DPI: {matchedEmployee.dpi}</p>
+                    <p className="text-[10px] text-slate-500 font-mono mt-0.5">{L('DPI:', 'ID:')} {matchedEmployee.dpi}</p>
                   </div>
                 </div>
 
                 {/* Estado del Turno de Hoy */}
                 <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-2 text-xs">
                   <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
-                    Estado de Jornada Laboral (16/11/2026):
+                    {L('Estado de Jornada Laboral (16/11/2026):', 'Shift Status (11/16/2026):')}
                   </span>
                   {asistenciaActual ? (
                     <div className="space-y-1">
                       <div className="flex justify-between items-center">
-                        <span className="text-slate-600">Hora de Entrada:</span>
+                        <span className="text-slate-600">{L('Hora de Entrada:', 'Clock-In Time:')}</span>
                         <span className="font-black text-emerald-700 font-mono text-sm">{formatTime(asistenciaActual.horaEntrada)}</span>
                       </div>
                       <div className="flex justify-between items-center">
-                        <span className="text-slate-600">Hora de Salida:</span>
+                        <span className="text-slate-600">{L('Hora de Salida:', 'Clock-Out Time:')}</span>
                         <span className="font-black text-rose-700 font-mono text-sm">{formatTime(asistenciaActual.horaSalida)}</span>
                       </div>
                       <div className="flex justify-between items-center pt-1 border-t border-slate-200">
-                        <span className="text-slate-600">Puntualidad:</span>
+                        <span className="text-slate-600">{L('Puntualidad:', 'Punctuality:')}</span>
                         <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-800">
-                          {asistenciaActual.estado}
+                          {trAttendanceStatus(asistenciaActual.estado)}
                         </span>
                       </div>
                     </div>
                   ) : (
                     <div className="flex items-center gap-2 text-amber-700">
                       <AlertCircle className="w-4 h-4 shrink-0" />
-                      <span className="font-bold">Aún no has registrado tu entrada el día de hoy.</span>
+                      <span className="font-bold">{L('Aún no has registrado tu entrada el día de hoy.', 'You have not clocked in yet today.')}</span>
                     </div>
                   )}
                 </div>
@@ -586,11 +637,10 @@ export default function AttendanceKiosk() {
                 {(() => {
                   const geoCheck = validarUbicacionMarcaje(userCoords.lat, userCoords.lng, matchedEmployee.sucursal);
                   return (
-                    <div className={`p-3 rounded-2xl border flex items-center justify-between text-xs transition-colors ${
-                      geoCheck.permitido 
-                        ? 'bg-emerald-50/70 border-emerald-200 text-emerald-950' 
-                        : 'bg-rose-50 border-rose-300 text-rose-950'
-                    }`}>
+                    <div className={`p-3 rounded-2xl border flex items-center justify-between text-xs transition-colors ${geoCheck.permitido
+                      ? 'bg-emerald-50/70 border-emerald-200 text-emerald-950'
+                      : 'bg-rose-50 border-rose-300 text-rose-950'
+                      }`}>
                       <div className="flex items-center gap-2">
                         {geoCheck.permitido ? (
                           <div className="p-1.5 rounded-lg bg-emerald-100 text-emerald-700 shrink-0">
@@ -603,22 +653,27 @@ export default function AttendanceKiosk() {
                         )}
                         <div>
                           <span className="font-extrabold block text-xs">
-                            {geoCheck.permitido ? 'Lugar de Trabajo Confirmado' : 'Fuera del Lugar de Trabajo'}
+                            {geoCheck.permitido ? L('Lugar de Trabajo Confirmado', 'Workplace Confirmed') : L('Fuera del Lugar de Trabajo', 'Outside Workplace Perimeter')}
                           </span>
                           <span className="text-[11px] text-slate-500 font-medium">
-                            {geoCheck.permitido 
-                              ? `A ${geoCheck.distanciaMetros}m de ${matchedEmployee.sucursal} (radio máx: ${geoCheck.radioPermitido}m)` 
-                              : `A ${geoCheck.distanciaMetros}m de ${matchedEmployee.sucursal} (máximo ${geoCheck.radioPermitido}m)`}
+                            {geoCheck.permitido
+                              ? L(
+                                  `A ${geoCheck.distanciaMetros}m de ${trBranchDisplay(matchedEmployee.sucursal)} (radio máx: ${geoCheck.radioPermitido}m)`,
+                                  `${geoCheck.distanciaMetros}m from ${trBranchDisplay(matchedEmployee.sucursal)} (max radius: ${geoCheck.radioPermitido}m)`
+                                )
+                              : L(
+                                  `A ${geoCheck.distanciaMetros}m de ${trBranchDisplay(matchedEmployee.sucursal)} (máximo ${geoCheck.radioPermitido}m)`,
+                                  `${geoCheck.distanciaMetros}m from ${trBranchDisplay(matchedEmployee.sucursal)} (max ${geoCheck.radioPermitido}m)`
+                                )}
                           </span>
                         </div>
                       </div>
 
-                      <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${
-                        geoCheck.permitido 
-                          ? 'bg-emerald-200 text-emerald-900 border border-emerald-300' 
-                          : 'bg-rose-200 text-rose-900 border border-rose-300 animate-pulse'
-                      }`}>
-                        {geoCheck.permitido ? 'Habilitado' : 'Bloqueado'}
+                      <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${geoCheck.permitido
+                        ? 'bg-emerald-200 text-emerald-900 border border-emerald-300'
+                        : 'bg-rose-200 text-rose-900 border border-rose-300 animate-pulse'
+                        }`}>
+                        {geoCheck.permitido ? L('Habilitado', 'Enabled') : L('Bloqueado', 'Blocked')}
                       </span>
                     </div>
                   );
@@ -632,7 +687,7 @@ export default function AttendanceKiosk() {
                     className="py-4 px-3 bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-500 hover:to-teal-600 active:scale-95 text-white font-black text-xs rounded-2xl shadow-lg shadow-emerald-600/30 transition-all flex flex-col items-center justify-center gap-1.5 cursor-pointer"
                   >
                     <CheckCircle2 className="w-6 h-6 text-emerald-200" />
-                    <span>MARCAR ENTRADA</span>
+                    <span>{L('MARCAR ENTRADA', 'CLOCK IN')}</span>
                   </button>
 
                   <button
@@ -641,25 +696,30 @@ export default function AttendanceKiosk() {
                     className="py-4 px-3 bg-gradient-to-r from-rose-600 to-red-700 hover:from-rose-500 hover:to-red-600 active:scale-95 text-white font-black text-xs rounded-2xl shadow-lg shadow-rose-600/30 transition-all flex flex-col items-center justify-center gap-1.5 cursor-pointer"
                   >
                     <Clock className="w-6 h-6 text-rose-200" />
-                    <span>MARCAR SALIDA</span>
+                    <span>{L('MARCAR SALIDA', 'CLOCK OUT')}</span>
                   </button>
                 </div>
               </div>
             ) : (
               <div className="py-12 text-center text-slate-400 space-y-3">
-                <div className={`w-16 h-16 rounded-3xl flex items-center justify-center mx-auto ${
-                  rawInput.length === 13 ? 'bg-rose-50 text-rose-500' : 'bg-slate-100 text-slate-300'
-                }`}>
+                <div className={`w-16 h-16 rounded-3xl flex items-center justify-center mx-auto ${rawInput.length === 13 ? 'bg-rose-50 text-rose-500' : 'bg-slate-100 text-slate-300'
+                  }`}>
                   {rawInput.length === 13 ? <AlertCircle className="w-8 h-8" /> : <UserCheck className="w-8 h-8" />}
                 </div>
                 <div>
                   <p className="text-xs font-black text-slate-700">
-                    {rawInput.length === 13 ? 'DPI No Registrado' : 'Esperando ingreso de DPI'}
+                    {rawInput.length === 13 ? L('DPI No Registrado', 'ID Not Found') : L('Esperando ingreso de DPI', 'Waiting for ID Entry')}
                   </p>
                   <p className="text-[11px] text-slate-400 max-w-xs mx-auto mt-1">
                     {rawInput.length === 13
-                      ? 'El DPI ingresado no coincide con ningún colaborador activo. Verifica el número o contacta a Administración.'
-                      : 'Digita los 13 dígitos de tu Documento Personal de Identificación (DPI) en el teclado numérico para validar tu identidad.'}
+                      ? L(
+                          'El DPI ingresado no coincide con ningún colaborador activo. Verifica el número o contacta a Administración.',
+                          'The entered ID does not match any active employee. Verify the number or contact Administration.'
+                        )
+                      : L(
+                          'Digita los 13 dígitos de tu Documento Personal de Identificación (DPI) en el teclado numérico para validar tu identidad.',
+                          'Enter the 13 digits of your National ID on the keypad to verify your identity.'
+                        )}
                   </p>
                 </div>
               </div>
@@ -667,7 +727,7 @@ export default function AttendanceKiosk() {
           </div>
 
           <p className="text-center text-[10px] text-slate-400 pt-3 border-t border-slate-100">
-            IntegraPro Clock Terminal • Cumplimiento Laboral de Guatemala
+            {L('IntegraPro Clock Terminal • Cumplimiento Laboral de Guatemala', 'IntegraPro Clock Terminal • Workforce Compliance')}
           </p>
         </div>
       </div>
@@ -678,22 +738,22 @@ export default function AttendanceKiosk() {
           <div>
             <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-2">
               <Clock className="w-4 h-4 text-purple-600" />
-              Marcajes Registrados en Turno de Hoy
+              {L('Marcajes Registrados en Turno de Hoy', "Today's Shift Clock-Ins")}
             </h3>
-            <p className="text-[11px] text-slate-400">Auditoría en tiempo real de colaboradores que ya marcaron asistencia</p>
+            <p className="text-[11px] text-slate-400">{L('Auditoría en tiempo real de colaboradores que ya marcaron asistencia', 'Real-time audit of employees who have clocked in')}</p>
           </div>
           <div className="flex items-center gap-3">
             <button
               type="button"
               onClick={toggleTimeFormat}
               className="px-2.5 py-1 rounded-lg text-xs font-bold bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 flex items-center gap-1.5 transition-colors cursor-pointer shadow-sm"
-              title="Alternar formato de hora en la tabla (12h / 24h)"
+              title={L('Alternar formato de hora en la tabla (12h / 24h)', 'Toggle table time format (12h / 24h)')}
             >
               <Clock className="w-3.5 h-3.5 text-indigo-600" />
-              <span className="text-[11px]">{timeFormat === '12h' ? 'Formato: 12H (AM/PM)' : 'Formato: 24 Horas'}</span>
+              <span className="text-[11px]">{timeFormat === '12h' ? L('Formato: 12H (AM/PM)', 'Format: 12H (AM/PM)') : L('Formato: 24 Horas', 'Format: 24-Hour')}</span>
             </button>
             <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200">
-              {marcajesHoy.length} registrados
+              {marcajesHoy.length} {L('registrados', 'recorded')}
             </span>
           </div>
         </div>
@@ -702,13 +762,13 @@ export default function AttendanceKiosk() {
           <table className="w-full text-left text-xs">
             <thead className="bg-slate-50 text-slate-500 uppercase tracking-wider font-semibold border-b border-slate-200">
               <tr>
-                <th className="py-3 px-4">Colaborador</th>
-                <th className="py-3 px-4">Cargo</th>
-                <th className="py-3 px-4">Sucursal</th>
-                <th className="py-3 px-4 text-center">Hora Entrada ({timeFormat.toUpperCase()})</th>
-                <th className="py-3 px-4 text-center">Hora Salida ({timeFormat.toUpperCase()})</th>
-                <th className="py-3 px-4 text-center">Estado</th>
-                <th className="py-3 px-4 text-center">Geocerca GPS</th>
+                <th className="py-3 px-4">{L('Colaborador', 'Employee')}</th>
+                <th className="py-3 px-4">{L('Cargo', 'Role')}</th>
+                <th className="py-3 px-4">{L('Sucursal', 'Branch')}</th>
+                <th className="py-3 px-4 text-center">{L('Hora Entrada', 'Clock In')} ({timeFormat.toUpperCase()})</th>
+                <th className="py-3 px-4 text-center">{L('Hora Salida', 'Clock Out')} ({timeFormat.toUpperCase()})</th>
+                <th className="py-3 px-4 text-center">{L('Estado', 'Status')}</th>
+                <th className="py-3 px-4 text-center">{L('Geocerca GPS', 'GPS Geofence')}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 font-medium">
@@ -716,22 +776,21 @@ export default function AttendanceKiosk() {
                 <tr key={m.id} className="border-b border-slate-100 select-none">
                   <td className="py-3 px-4 font-bold text-slate-800">{m.empleado}</td>
                   <td className="py-3 px-4 text-slate-600">{m.puesto}</td>
-                  <td className="py-3 px-4 text-slate-500">{m.sucursal}</td>
+                  <td className="py-3 px-4 text-slate-500">{trBranchDisplay(m.sucursal)}</td>
                   <td className="py-3 px-4 text-center font-mono font-bold text-slate-800">{formatTime(m.horaEntrada)}</td>
                   <td className="py-3 px-4 text-center font-mono text-slate-500">{formatTime(m.horaSalida)}</td>
                   <td className="py-3 px-4 text-center">
-                    <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black ${
-                      m.estado === 'Puntual' 
-                        ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' 
-                        : 'bg-amber-50 text-amber-700 border border-amber-200'
-                    }`}>
-                      {m.estado}
+                    <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black ${m.estado === 'Puntual'
+                      ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                      : 'bg-amber-50 text-amber-700 border border-amber-200'
+                      }`}>
+                      {trAttendanceStatus(m.estado)}
                     </span>
                   </td>
                   <td className="py-3 px-4 text-center">
                     <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-100">
                       <MapPin className="w-3 h-3 text-indigo-500" />
-                      <span>En Sede (a {m.ubicacionGps?.distanciaMetros || 8}m)</span>
+                      <span>{L(`En Sede (a ${m.ubicacionGps?.distanciaMetros || 8}m)`, `On-Site (${m.ubicacionGps?.distanciaMetros || 8}m away)`)}</span>
                     </span>
                   </td>
                 </tr>
@@ -751,28 +810,31 @@ export default function AttendanceKiosk() {
 
             <div className="space-y-1">
               <h3 className="text-lg font-black text-slate-900">
-                Marcaje Bloqueado por Ubicación
+                {L('Marcaje Bloqueado por Ubicación', 'Clock-In Blocked by Location')}
               </h3>
               <p className="text-xs font-semibold text-rose-600">
-                No te encuentras en tu lugar de trabajo asignado
+                {L('No te encuentras en tu lugar de trabajo asignado', 'You are not at your assigned workplace')}
               </p>
             </div>
 
             <div className="p-4 bg-rose-50/80 border border-rose-200 rounded-2xl text-left text-xs space-y-2 text-slate-700">
               <div className="flex justify-between border-b border-rose-100 pb-1.5">
-                <span className="text-slate-500 font-medium">Lugar de Trabajo Asignado:</span>
-                <span className="font-bold text-slate-900">{geoBlockedAlert.sucursalNombre}</span>
+                <span className="text-slate-500 font-medium">{L('Lugar de Trabajo Asignado:', 'Assigned Workplace:')}</span>
+                <span className="font-bold text-slate-900">{trBranchDisplay(geoBlockedAlert.sucursalNombre)}</span>
               </div>
               <div className="flex justify-between border-b border-rose-100 pb-1.5">
-                <span className="text-slate-500 font-medium">Distancia Actual a la Sede:</span>
-                <span className="font-black text-rose-700">{geoBlockedAlert.distanciaMetros} metros</span>
+                <span className="text-slate-500 font-medium">{L('Distancia Actual a la Sede:', 'Current Distance to Site:')}</span>
+                <span className="font-black text-rose-700">{geoBlockedAlert.distanciaMetros} {L('metros', 'meters')}</span>
               </div>
               <div className="flex justify-between border-b border-rose-100 pb-1.5">
-                <span className="text-slate-500 font-medium">Radio Máximo Permitido:</span>
-                <span className="font-bold text-slate-900">{geoBlockedAlert.radioPermitido} metros</span>
+                <span className="text-slate-500 font-medium">{L('Radio Máximo Permitido:', 'Maximum Allowed Radius:')}</span>
+                <span className="font-bold text-slate-900">{geoBlockedAlert.radioPermitido} {L('metros', 'meters')}</span>
               </div>
               <p className="text-[11px] text-slate-600 pt-1 leading-relaxed">
-                Por políticas laborales de control de asistencia, el sistema no te permitirá marcar entrada ni salida mientras estés fuera del perímetro de la empresa. Por favor, acércate a las instalaciones de tu sucursal.
+                {L(
+                  'Por políticas laborales de control de asistencia, el sistema no te permitirá marcar entrada ni salida mientras estés fuera del perímetro de la empresa. Por favor, acércate a las instalaciones de tu sucursal.',
+                  'Per company attendance policies, the system will not allow clocking in or out while outside the branch perimeter. Please move closer to your branch premises.'
+                )}
               </p>
             </div>
 
@@ -781,7 +843,7 @@ export default function AttendanceKiosk() {
               onClick={() => setGeoBlockedAlert(null)}
               className="w-full py-3 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl transition-colors cursor-pointer shadow-md"
             >
-              Entendido / Cerrar
+              {L('Entendido / Cerrar', 'Got It / Close')}
             </button>
           </div>
         </div>

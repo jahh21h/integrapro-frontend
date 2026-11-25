@@ -1,5 +1,6 @@
 import axios from 'axios';
 import apiClient from './client';
+import { getCurrentLang, tLang } from '../context/LanguageContext';
 
 export { apiClient };
 
@@ -188,26 +189,27 @@ export const salesApi = {
     return res.data;
   },
   fetchSalePdfBlobUrl: async (saleId: number): Promise<string> => {
+    const lang = getCurrentLang();
     const res = await apiClient.get(`/sales/${saleId}/pdf`, {
-      params: withTenantParam(),
+      params: withTenantParam({ lang }),
       responseType: 'blob'
     });
     const blob = new Blob([res.data], { type: 'application/pdf' });
     return window.URL.createObjectURL(blob);
   },
   downloadSalePdf: async (saleId: number) => {
-    // Abrir pestaña de forma síncrona (antes del await) para que Chrome/Edge nunca la bloquee
+    const lang = getCurrentLang();
     const win = window.open('', '_blank');
     if (win) {
+      const titleText = tLang('Generando Comprobante PDF...', 'Generating PDF Invoice...');
+      const bodyText = tLang(`Cargando comprobante PDF #${saleId}...`, `Loading PDF Invoice #${saleId}...`);
       win.document.write(
-        '<html><head><title>Generando Comprobante PDF...</title></head><body style="font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;color:#334155;background:#f8fafc;"><div>Cargando comprobante PDF #' +
-          saleId +
-          '...</div></body></html>'
+        `<html><head><title>${titleText}</title></head><body style="font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;color:#334155;background:#f8fafc;"><div>${bodyText}</div></body></html>`
       );
     }
     try {
       const res = await apiClient.get(`/sales/${saleId}/pdf`, {
-        params: withTenantParam(),
+        params: withTenantParam({ lang }),
         responseType: 'blob'
       });
       const blob = new Blob([res.data], { type: 'application/pdf' });
@@ -217,7 +219,7 @@ export const salesApi = {
       } else {
         const a = document.createElement('a');
         a.href = url;
-        a.download = `comprobante-venta-${saleId}.pdf`;
+        a.download = lang === 'en' ? `sales-invoice-${saleId}.pdf` : `comprobante-venta-${saleId}.pdf`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);

@@ -16,6 +16,7 @@ import {
   Video,
 } from 'lucide-react';
 import { EmpresaSaaS, NavigationTab } from '../types';
+import { useLanguage } from '../context/LanguageContext';
 
 interface FloatingGlassDockProps {
   activeTab: NavigationTab;
@@ -42,6 +43,7 @@ export default function FloatingGlassDock({
   selectedEmpresa,
   selectedEmpresaId,
 }: FloatingGlassDockProps) {
+  const { L } = useLanguage();
   const [hoveredTip, setHoveredTip] = useState<{ label: string; top: number; left: number } | null>(null);
   const [isDimmed, setIsDimmed] = useState(false);
   const isDockHoveredRef = useRef(false);
@@ -77,26 +79,31 @@ export default function FloatingGlassDock({
   const liveEnabled = !isFortexa && (mods?.live_sales ?? selectedEmpresaId === 1);
 
   const rawItems: DockModuleItem[] = [
-    { id: 'hub', label: 'Menú Principal', shortLabel: 'Módulos', icon: LayoutGrid },
+    { id: 'hub', label: L('Menú Principal', 'Main Menu'), shortLabel: L('Módulos', 'Modules'), icon: LayoutGrid },
     ...(isFortexa
-      ? [{ id: 'fortexa_apps' as NavigationTab, label: 'Suscripciones & Apps Fortexa', shortLabel: 'SaaS', icon: Cpu }]
+      ? [{ id: 'fortexa_apps' as NavigationTab, label: L('Suscripciones & Apps Fortexa', 'Fortexa Subscriptions & Apps'), shortLabel: 'SaaS', icon: Cpu }]
       : []),
     ...(posEnabled
-      ? [{ id: 'pos' as NavigationTab, label: 'Punto de Venta (POS Rápido)', shortLabel: 'POS', icon: Zap }]
+      ? [{ id: 'pos' as NavigationTab, label: L('Punto de Venta (POS Rápido)', 'Point of Sale (Quick POS)'), shortLabel: 'POS', icon: Zap }]
       : []),
     ...(liveEnabled
-      ? [{ id: 'live_sales' as NavigationTab, label: 'TikTok Live & Canastas', shortLabel: 'Live', icon: Video }]
+      ? [{ id: 'live_sales' as NavigationTab, label: L('TikTok Live & Canastas', 'TikTok Live & Baskets'), shortLabel: 'Live', icon: Video }]
       : []),
-    { id: 'inventario', label: isFortexa ? 'Hardware & Equipos' : 'Inventario & Bodega', shortLabel: 'Bodega', icon: Boxes },
-    { id: 'ventas', label: 'Ventas & Comprobantes PDF', shortLabel: 'Ventas', icon: ReceiptText },
-    { id: 'clientes', label: 'Clientes & Créditos (CxC)', shortLabel: 'CxC', icon: Users },
-    { id: 'compras', label: 'Compras & Proveedores', shortLabel: 'Compras', icon: Truck },
-    { id: 'contabilidad', label: 'Contabilidad & Control SAT', shortLabel: 'SAT', icon: Landmark },
-    { id: 'dashboard', label: 'Métricas & Telemetría', shortLabel: 'Métricas', icon: BarChart3 },
-    { id: 'rrhh', label: 'Recursos Humanos & Planillas', shortLabel: 'RRHH', icon: UserCheck },
-    { id: 'asistencia', label: 'Reloj Checador (Asistencia)', shortLabel: 'Reloj', icon: Clock3 },
-    { id: 'sucursales', label: 'Red de Sucursales', shortLabel: 'Sedes', icon: Store },
-    { id: 'configuracion', label: 'Datos de Mi Tienda', shortLabel: 'Tienda', icon: Settings },
+    {
+      id: 'inventario',
+      label: isFortexa ? L('Hardware & Equipos', 'Hardware & Equipment') : L('Inventario & Bodega', 'Inventory & Warehouse'),
+      shortLabel: L('Bodega', 'Stock'),
+      icon: Boxes,
+    },
+    { id: 'ventas', label: L('Ventas & Comprobantes PDF', 'Sales & PDF Receipts'), shortLabel: L('Ventas', 'Sales'), icon: ReceiptText },
+    { id: 'clientes', label: L('Clientes & Créditos (CxC)', 'Clients & Credit (A/R)'), shortLabel: L('CxC', 'A/R'), icon: Users },
+    { id: 'compras', label: L('Compras & Proveedores', 'Purchases & Suppliers'), shortLabel: L('Compras', 'Orders'), icon: Truck },
+    { id: 'contabilidad', label: L('Contabilidad & Control SAT', 'Accounting & Tax Compliance'), shortLabel: L('SAT', 'Tax'), icon: Landmark },
+    { id: 'dashboard', label: L('Métricas & Telemetría', 'Metrics & Telemetry'), shortLabel: L('Métricas', 'Metrics'), icon: BarChart3 },
+    { id: 'rrhh', label: L('Recursos Humanos & Planillas', 'Human Resources & Payroll'), shortLabel: L('RRHH', 'HR'), icon: UserCheck },
+    { id: 'asistencia', label: L('Reloj Checador (Asistencia)', 'Time Clock (Attendance)'), shortLabel: L('Reloj', 'Clock'), icon: Clock3 },
+    { id: 'sucursales', label: L('Red de Sucursales', 'Branch Network'), shortLabel: L('Sedes', 'Branches'), icon: Store },
+    { id: 'configuracion', label: L('Datos de Mi Tienda', 'My Store Info'), shortLabel: L('Tienda', 'Store'), icon: Settings },
   ];
 
   // Respetar módulos activos en la configuración de la empresa
@@ -110,7 +117,7 @@ export default function FloatingGlassDock({
   return (
     <>
       <nav
-        aria-label="Navegación Rápida IntegraPro"
+        aria-label={L('Navegación Rápida IntegraPro', 'IntegraPro Quick Navigation')}
         onMouseEnter={() => {
           isDockHoveredRef.current = true;
           if (idleTimerRef.current !== null) {

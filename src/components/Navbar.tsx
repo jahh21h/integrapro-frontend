@@ -16,9 +16,11 @@ import {
   Sparkles,
   Send,
   Sun,
-  Moon
+  Moon,
+  Globe
 } from 'lucide-react';
 import { useTimeFormat } from '../context/TimeFormatContext';
+import { useLanguage } from '../context/LanguageContext';
 import { getRegimenBadge } from '../utils/tax';
 import { isPlatformAdminEmail } from '../utils/tenant';
 
@@ -67,11 +69,33 @@ export default function Navbar({
   const [notifOpen, setNotifOpen] = useState(false);
   const notifRef = useRef<HTMLDivElement>(null);
   const { timeFormat, toggleTimeFormat, formatTime } = useTimeFormat();
+  const { lang, setLang, isEn, L, trRegime } = useLanguage();
+
+  const trRole = (role?: string) => {
+    if (!isEn || !role) return role || '';
+    const r = role.toLowerCase();
+    if (r === 'administrador' || r === 'admin') return 'Administrator';
+    if (r.includes('administrador de empresa')) return 'Company Admin';
+    if (r === 'cajero' || r === 'cajera') return 'Cashier';
+    if (r === 'vendedor' || r === 'vendedora') return 'Sales Rep';
+    if (r === 'contador' || r === 'contadora') return 'Accountant';
+    return role;
+  };
+
+  const trBranch = (branch?: string) => {
+    if (!isEn || !branch) return branch || '';
+    const b = branch.toLowerCase();
+    if (b === 'sucursal central - ciudad') return 'Main Branch - City';
+    if (b === 'sucursal principal') return 'Main Branch';
+    if (b === 'sede central fortexa technologies') return 'Fortexa Technologies HQ';
+    return branch;
+  };
 
   const currentEmpId = Number(selectedEmpresaId ?? selectedEmpresa?.id ?? user.empresa_id);
   const currentEmpObj = empresas?.find(e => Number(e.id) === currentEmpId) || selectedEmpresa;
   const rawReg = currentEmpObj?.regimen || user.empresa_regimen || '';
-  const { label: displayRegimenLabel, badgeClass: displayRegimenBadgeClass } = getRegimenBadge(rawReg);
+  const { badgeClass: displayRegimenBadgeClass } = getRegimenBadge(rawReg);
+  const displayRegimenLabel = trRegime(rawReg);
 
   const [readNotifIds, setReadNotifIds] = useState<string[]>(() => {
     try {
@@ -112,20 +136,23 @@ export default function Navbar({
         .forEach(emp => {
           const dueStr = emp.billing?.next_billing_date || emp.trial_ends_at;
           const diff = calcDiffDays(dueStr);
-          const cur = emp.billing?.currency || (emp.pais === 'GT' ? 'GTQ' : 'USD');
+          const cur = isEn ? 'USD' : (emp.billing?.currency || (emp.pais === 'GT' ? 'GTQ' : 'USD'));
           const sym = cur === 'GTQ' ? 'Q' : '$';
           const amt = emp.billing?.amount ?? 0;
-          const cyc = emp.billing?.cycle === 'annual' ? 'Anual' : 'Mensual';
+          const cyc = emp.billing?.cycle === 'annual' ? L('Anual', 'Annual') : L('Mensual', 'Monthly');
 
           if (diff !== null && diff <= 5) {
             list.push({
               id: `admin-due-${emp.id}-${dueStr?.slice(0, 10)}`,
               title: diff < 0
-                ? `Suscripción vencida: ${emp.nombre}`
-                : `Cobro en ${diff === 0 ? 'HOY' : `${diff} día(s)`}: ${emp.nombre}`,
-              body: `Plan ${(emp.plan || 'Estándar').toUpperCase()} (${cyc}) • ${amt > 0 ? `${sym} ${Number(amt).toFixed(2)} ${cur}` : 'Revisar cuota'} • Corte: ${String(dueStr).slice(0, 10)}`,
+                ? L(`Suscripción vencida: ${emp.nombre}`, `Overdue subscription: ${emp.nombre}`)
+                : L(
+                    `Cobro en ${diff === 0 ? 'HOY' : `${diff} día(s)`}: ${emp.nombre}`,
+                    `Due ${diff === 0 ? 'TODAY' : `in ${diff} day(s)`}: ${emp.nombre}`
+                  ),
+              body: `${L('Plan', 'Plan')} ${(emp.plan || L('Estándar', 'Standard')).toUpperCase()} (${cyc}) • ${amt > 0 ? `${sym} ${Number(amt).toFixed(2)} ${cur}` : L('Revisar cuota', 'Check fee')} • ${L('Corte:', 'Cutoff:')} ${String(dueStr).slice(0, 10)}`,
               severity: diff < 0 ? 'danger' : 'warning',
-              actionLabel: 'Gestionar en Fortexa',
+              actionLabel: L('Gestionar en Fortexa', 'Manage in Fortexa'),
               onAction: () => {
                 if (onSelectEmpresa) onSelectEmpresa(22);
                 onTabChange?.('fortexa_apps');
@@ -135,10 +162,10 @@ export default function Navbar({
           } else if (emp.subscription_status === 'trial') {
             list.push({
               id: `admin-trial-${emp.id}-${todayKey}`,
-              title: `Cliente en Prueba Gratis: ${emp.nombre}`,
-              body: `Inquilino #${emp.id} (${emp.pais || 'GT'})${dueStr ? ` • Vence: ${String(dueStr).slice(0, 10)}` : ''}`,
+              title: L(`Cliente en Prueba Gratis: ${emp.nombre}`, `Client on Free Trial: ${emp.nombre}`),
+              body: `${L('Inquilino', 'Tenant')} #${emp.id} (${emp.pais || 'GT'})${dueStr ? ` • ${L('Vence:', 'Ends:')} ${String(dueStr).slice(0, 10)}` : ''}`,
               severity: 'info',
-              actionLabel: 'Ver en Fortexa',
+              actionLabel: L('Ver en Fortexa', 'View in Fortexa'),
               onAction: () => {
                 if (onSelectEmpresa) onSelectEmpresa(22);
                 onTabChange?.('fortexa_apps');
@@ -153,13 +180,15 @@ export default function Navbar({
     if (currentEmpObj && currentEmpObj.id !== 1 && currentEmpObj.id !== 22) {
       const dueStr = currentEmpObj.billing?.next_billing_date || currentEmpObj.trial_ends_at;
       const diff = calcDiffDays(dueStr);
-      const cur = currentEmpObj.billing?.currency || (currentEmpObj.pais === 'GT' ? 'GTQ' : 'USD');
+      const cur = isEn ? 'USD' : (currentEmpObj.billing?.currency || (currentEmpObj.pais === 'GT' ? 'GTQ' : 'USD'));
       const sym = cur === 'GTQ' ? 'Q' : '$';
       const amt = currentEmpObj.billing?.amount ?? 0;
-      const cyc = currentEmpObj.billing?.cycle === 'annual' ? 'Anual' : 'Mensual';
+      const cyc = currentEmpObj.billing?.cycle === 'annual' ? L('Anual', 'Annual') : L('Mensual', 'Monthly');
 
       const openFortexaWhatsApp = () => {
-        const text = `Hola Fortexa Technologies, soy de *${currentEmpObj.nombre}* (ID #${currentEmpObj.id}). Quisiera activar/renovar mi suscripción ${cyc}${amt > 0 ? ` (${sym} ${Number(amt).toFixed(2)} ${cur})` : ''}.`;
+        const text = isEn
+          ? `Hello Fortexa Technologies, I am from *${currentEmpObj.nombre}* (ID #${currentEmpObj.id}). I would like to activate/renew my ${cyc} subscription${amt > 0 ? ` (${sym}${Number(amt).toFixed(2)} ${cur})` : ''}.`
+          : `Hola Fortexa Technologies, soy de *${currentEmpObj.nombre}* (ID #${currentEmpObj.id}). Quisiera activar/renovar mi suscripción ${cyc}${amt > 0 ? ` (${sym} ${Number(amt).toFixed(2)} ${cur})` : ''}.`;
         window.open(`https://api.whatsapp.com/send?phone=50235692070&text=${encodeURIComponent(text)}`, '_blank');
         setNotifOpen(false);
       };
@@ -168,22 +197,31 @@ export default function Navbar({
         list.push({
           id: `tenant-trial-${currentEmpObj.id}-${todayKey}`,
           title: diff <= 5
-            ? `Tu prueba gratuita vence en ${Math.max(diff, 0)} día(s)`
-            : `Prueba Gratuita Activa (${diff} días restantes)`,
-          body: `Tu período de prueba termina el ${String(dueStr).slice(0, 10)}. Activa tu plan ${cyc}${amt > 0 ? ` (${sym} ${Number(amt).toFixed(2)} ${cur})` : ''} para no perder acceso.`,
+            ? L(`Tu prueba gratuita vence en ${Math.max(diff, 0)} día(s)`, `Your free trial ends in ${Math.max(diff, 0)} day(s)`)
+            : L(`Prueba Gratuita Activa (${diff} días restantes)`, `Free Trial Active (${diff} days remaining)`),
+          body: L(
+            `Tu período de prueba termina el ${String(dueStr).slice(0, 10)}. Activa tu plan ${cyc}${amt > 0 ? ` (${sym} ${Number(amt).toFixed(2)} ${cur})` : ''} para no perder acceso.`,
+            `Your trial period ends on ${String(dueStr).slice(0, 10)}. Activate your ${cyc} plan${amt > 0 ? ` (${sym}${Number(amt).toFixed(2)} ${cur})` : ''} to keep access.`
+          ),
           severity: diff <= 5 ? 'warning' : 'info',
-          actionLabel: 'Activar por WhatsApp',
+          actionLabel: L('Activar por WhatsApp', 'Activate via WhatsApp'),
           onAction: openFortexaWhatsApp,
         });
       } else if (diff !== null && diff <= 5) {
         list.push({
           id: `tenant-due-${currentEmpObj.id}-${String(dueStr).slice(0, 10)}`,
           title: diff < 0
-            ? `Recordatorio urgente: Suscripción ${cyc} vencida`
-            : `Recordatorio de Pago (${diff === 0 ? 'Vence HOY' : `Faltan ${diff} día(s)`})`,
-          body: `Tu cuota ${cyc}${amt > 0 ? ` de ${sym} ${Number(amt).toFixed(2)} ${cur}` : ''} tiene fecha de corte el ${String(dueStr).slice(0, 10)}. Envía tu comprobante para renovar.`,
+            ? L(`Recordatorio urgente: Suscripción ${cyc} vencida`, `Urgent reminder: ${cyc} subscription overdue`)
+            : L(
+                `Recordatorio de Pago (${diff === 0 ? 'Vence HOY' : `Faltan ${diff} día(s)`})`,
+                `Payment Reminder (${diff === 0 ? 'Due TODAY' : `${diff} day(s) left`})`
+              ),
+          body: L(
+            `Tu cuota ${cyc}${amt > 0 ? ` de ${sym} ${Number(amt).toFixed(2)} ${cur}` : ''} tiene fecha de corte el ${String(dueStr).slice(0, 10)}. Envía tu comprobante para renovar.`,
+            `Your ${cyc} fee${amt > 0 ? ` of ${sym}${Number(amt).toFixed(2)} ${cur}` : ''} has a cutoff date of ${String(dueStr).slice(0, 10)}. Send your receipt to renew.`
+          ),
           severity: diff < 0 ? 'danger' : 'warning',
-          actionLabel: 'Reportar Pago (WhatsApp)',
+          actionLabel: L('Reportar Pago (WhatsApp)', 'Report Payment (WhatsApp)'),
           onAction: openFortexaWhatsApp,
         });
       }
@@ -226,7 +264,7 @@ export default function Navbar({
           type="button"
           onClick={() => onTabChange?.('hub')}
           className="flex flex-col text-left rounded-xl px-1.5 py-0.5 hover:opacity-85 transition-opacity cursor-pointer"
-          title="Ir al Menú Principal (Módulos)"
+          title={L('Ir al Menú Principal (Módulos)', 'Go to Main Menu (Modules)')}
         >
           <span className="text-sm font-black text-slate-900 tracking-tight leading-tight">IntegraPro</span>
           <span className="text-[10px] text-indigo-600 font-bold leading-tight">Cloud ERP</span>
@@ -242,7 +280,7 @@ export default function Navbar({
         >
           <div className="flex items-center gap-2">
             <Search className="w-3.5 h-3.5 text-slate-400 group-hover:text-indigo-600 transition-colors" />
-            <span className="truncate">Buscar productos, clientes, folios...</span>
+            <span className="truncate">{L('Buscar productos, clientes, folios...', 'Search products, clients, invoices...')}</span>
           </div>
           <kbd className="hidden lg:inline-flex items-center gap-0.5 px-2 py-0.5 text-[10px] font-semibold text-slate-600 bg-white border border-slate-200 rounded shadow-xs">
             Ctrl + K
@@ -260,7 +298,7 @@ export default function Navbar({
               value={currentEmpId}
               onChange={(e) => onSelectEmpresa(Number(e.target.value))}
               className="bg-transparent font-bold text-slate-800 focus:outline-none cursor-pointer max-w-[95px] xs:max-w-[130px] sm:max-w-[180px] truncate text-[11px] sm:text-xs"
-              title="Cambiar empresa asignada (Multi-Tenancy)"
+              title={L('Cambiar empresa asignada (Multi-Tenancy)', 'Switch assigned company (Multi-Tenancy)')}
             >
               {empresas.map((emp) => (
                 <option key={emp.id} value={emp.id}>
@@ -293,10 +331,10 @@ export default function Navbar({
             type="button"
             onClick={onEnterLiveMode}
             className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 bg-gradient-to-r from-rose-500 via-pink-600 to-purple-600 hover:from-rose-600 hover:to-purple-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs hover:shadow-md cursor-pointer animate-in fade-in"
-            title="Alternar al entorno exclusivo de venta por TikTok Live (sin módulos del ERP)"
+            title={L('Alternar al entorno exclusivo de venta por TikTok Live (sin módulos del ERP)', 'Switch to the dedicated TikTok Live selling workspace (without ERP modules)')}
           >
             <Video className="w-3.5 h-3.5 animate-pulse text-white" />
-            <span className="hidden sm:inline">Modo Solo Live</span>
+            <span className="hidden sm:inline">{L('Modo Solo Live', 'Live-Only Mode')}</span>
             <span className="sm:hidden">Live</span>
           </button>
         )}
@@ -304,8 +342,42 @@ export default function Navbar({
         {/* Selector de Sucursal Activa */}
         <div className="hidden lg:flex items-center gap-2 px-3 py-1.5 bg-indigo-50/70 border border-indigo-100 rounded-xl text-xs font-semibold text-indigo-900">
           <Store className="w-3.5 h-3.5 text-indigo-600" />
-          <span className="truncate max-w-[120px]">{user.sucursal_nombre}</span>
+          <span className="truncate max-w-[120px]">{trBranch(user.sucursal_nombre)}</span>
           <ChevronDown className="w-3 h-3 text-indigo-400" />
+        </div>
+
+        {/* Selector de Idioma Bilingüe ES | EN */}
+        <div
+          className="inline-flex items-center gap-0.5 p-0.5 rounded-xl bg-slate-100 border border-slate-200 shadow-xs shrink-0"
+          role="group"
+          aria-label={L('Cambiar idioma', 'Switch language')}
+          title={L('Cambiar idioma (Español Q / English $)', 'Switch language (Español Q / English $)')}
+        >
+          <Globe className="w-3 h-3 text-indigo-600 ml-1.5 mr-0.5 hidden sm:block shrink-0" />
+          <button
+            type="button"
+            onClick={() => setLang('es')}
+            className={`px-2 py-1 rounded-lg text-[10px] font-black tracking-wide transition-all cursor-pointer ${
+              lang === 'es'
+                ? 'bg-indigo-600 text-white shadow-xs'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+            title="Español (Q / GTQ)"
+          >
+            ES
+          </button>
+          <button
+            type="button"
+            onClick={() => setLang('en')}
+            className={`px-2 py-1 rounded-lg text-[10px] font-black tracking-wide transition-all cursor-pointer ${
+              lang === 'en'
+                ? 'bg-emerald-600 text-white shadow-xs'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+            title="English ($ / USD)"
+          >
+            EN
+          </button>
         </div>
 
         {/* Interruptor de Tema: Claro Neomórfico / Oscuro OLED Liquid Glass */}
@@ -318,12 +390,16 @@ export default function Navbar({
                 ? 'bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border-emerald-400/35 shadow-[0_0_16px_rgba(16,185,129,0.2)]'
                 : 'bg-slate-900 hover:bg-slate-800 text-emerald-300 border-slate-700 shadow-xs'
             }`}
-            title={themeMode === 'dark' ? 'Cambiar a Claro Neomórfico + Visores OLED' : 'Cambiar a Modo Oscuro OLED Liquid Glass'}
+            title={
+              themeMode === 'dark'
+                ? L('Cambiar a Claro Neomórfico + Visores OLED', 'Switch to Neomorphic Light + OLED Visors')
+                : L('Cambiar a Modo Oscuro OLED Liquid Glass', 'Switch to Dark OLED Liquid Glass Mode')
+            }
           >
             {themeMode === 'dark' ? (
               <>
                 <Sun className="w-3.5 h-3.5 text-amber-300" />
-                <span className="hidden xl:inline text-[11px]">Claro</span>
+                <span className="hidden xl:inline text-[11px]">{L('Claro', 'Light')}</span>
               </>
             ) : (
               <>
@@ -339,7 +415,10 @@ export default function Navbar({
           type="button"
           onClick={toggleTimeFormat}
           className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-mono font-bold border border-slate-200 transition-all cursor-pointer group shadow-xs"
-          title={`Hora del sistema: ${formatTime(navTime, true)}. Clic para alternar a formato ${timeFormat === '12h' ? '24 Horas' : '12 Horas (AM/PM)'}`}
+          title={L(
+            `Hora del sistema: ${formatTime(navTime, true)}. Clic para alternar a formato ${timeFormat === '12h' ? '24 Horas' : '12 Horas (AM/PM)'}`,
+            `System time: ${formatTime(navTime, true)}. Click to switch to ${timeFormat === '12h' ? '24-Hour' : '12-Hour (AM/PM)'} format`
+          )}
         >
           <Clock className="w-3.5 h-3.5 text-indigo-600 group-hover:rotate-45 transition-transform" />
           <span>{formatTime(navTime, false)}</span>
@@ -358,7 +437,11 @@ export default function Navbar({
                 ? 'bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200'
                 : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'
             }`}
-            title={unreadCount > 0 ? `${unreadCount} notificación(es) pendiente(s)` : 'Centro de Notificaciones'}
+            title={
+              unreadCount > 0
+                ? L(`${unreadCount} notificación(es) pendiente(s)`, `${unreadCount} unread notification(s)`)
+                : L('Centro de Notificaciones', 'Notification Center')
+            }
           >
             <Bell className="w-4 h-4" />
             {unreadCount > 0 && (
@@ -373,10 +456,10 @@ export default function Navbar({
               <div className="px-4 py-3 bg-slate-50 border-b border-slate-100 flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
                   <Bell className="w-4 h-4 text-indigo-600" />
-                  <span className="text-xs font-black text-slate-900">Centro de Notificaciones</span>
+                  <span className="text-xs font-black text-slate-900">{L('Centro de Notificaciones', 'Notification Center')}</span>
                   {unreadCount > 0 && (
                     <span className="px-1.5 py-0.5 rounded-md bg-rose-100 text-rose-700 text-[10px] font-black">
-                      {unreadCount} nueva(s)
+                      {unreadCount} {L('nueva(s)', 'new')}
                     </span>
                   )}
                 </div>
@@ -387,7 +470,7 @@ export default function Navbar({
                     className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 cursor-pointer"
                   >
                     <CheckCheck className="w-3.5 h-3.5" />
-                    <span>Marcar leídas</span>
+                    <span>{L('Marcar leídas', 'Mark all read')}</span>
                   </button>
                 )}
               </div>
@@ -398,9 +481,12 @@ export default function Navbar({
                     <div className="w-10 h-10 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto">
                       <ShieldCheck className="w-5 h-5" />
                     </div>
-                    <p className="text-xs font-bold text-slate-700">¡Todo al día!</p>
+                    <p className="text-xs font-bold text-slate-700">{L('¡Todo al día!', 'All caught up!')}</p>
                     <p className="text-[11px] text-slate-400">
-                      No tienes recordatorios de pago ni alertas pendientes en este momento.
+                      {L(
+                        'No tienes recordatorios de pago ni alertas pendientes en este momento.',
+                        'You have no payment reminders or pending alerts right now.'
+                      )}
                     </p>
                   </div>
                 ) : (
@@ -465,7 +551,7 @@ export default function Navbar({
         <div 
           onClick={onLogout}
           className="flex items-center gap-2 cursor-pointer shrink-0"
-          title="Usuario actual. Toca para cerrar sesión"
+          title={L('Usuario actual. Toca para cerrar sesión', 'Current user. Click to sign out')}
         >
           <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-gradient-to-tr from-indigo-600 to-indigo-500 text-white flex items-center justify-center font-bold text-[11px] sm:text-xs shadow-xs">
             {user.name.slice(0, 2).toUpperCase()}
@@ -476,7 +562,7 @@ export default function Navbar({
               <ShieldCheck className="w-3 h-3 text-emerald-600" />
             </p>
             <p className="text-[10px] font-medium text-slate-400 leading-tight">
-              {user.role}
+              {trRole(user.role)}
             </p>
           </div>
         </div>
@@ -486,10 +572,10 @@ export default function Navbar({
           type="button"
           onClick={onLogout}
           className="flex items-center gap-1 px-2.5 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm shrink-0 cursor-pointer"
-          title="Cerrar Sesión"
+          title={L('Cerrar Sesión', 'Sign Out')}
         >
           <LogOut className="w-3.5 h-3.5 text-white" />
-          <span className="text-[11px] sm:text-xs font-bold">Salir</span>
+          <span className="text-[11px] sm:text-xs font-bold">{L('Salir', 'Sign Out')}</span>
         </button>
       </div>
     </header>
